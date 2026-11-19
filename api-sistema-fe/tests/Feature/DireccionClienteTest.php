@@ -225,6 +225,29 @@ class DireccionClienteTest extends CreditosTestCase
         $this->assertSame($tarapoto->id, $venta->fresh()->client_address_id);
     }
 
+    public function test_editar_reenviando_la_misma_direccion_ya_desactivada_se_acepta_pero_no_si_es_nueva(): void
+    {
+        $this->emisor();
+        $cliente = $this->empresa();
+        $tarapoto = $this->sucursal($cliente);
+        $yurimaguas = $this->sucursal($cliente, 'Sucursal Yurimaguas', ['activo' => false]);
+        $venta = $this->emitirVenta($this->payloadVenta($cliente, ['client_address_id' => $tarapoto->id]));
+        $tarapoto->update(['activo' => false]);
+
+        // La pantalla de edición (T-107) reenvía la dirección guardada: corregir otra cosa no se bloquea.
+        app(SaleController::class)->update(
+            new Request($this->payloadVenta($cliente, ['client_address_id' => $tarapoto->id, 'description' => 'corregida'])), (string) $venta->id
+        );
+        $this->assertSame($tarapoto->id, $venta->fresh()->client_address_id);
+        $this->assertSame('Av. Sucursal Tarapoto 500', $venta->fresh()->direccion_cliente);
+
+        // Elegir otra dirección inactiva sigue rechazándose.
+        $this->assertRechazada(fn () => app(SaleController::class)->update(
+            new Request($this->payloadVenta($cliente, ['client_address_id' => $yurimaguas->id])), (string) $venta->id
+        ));
+        $this->assertSame($tarapoto->id, $venta->fresh()->client_address_id);
+    }
+
     public function test_al_editar_una_venta_cambiando_de_cliente_la_direccion_elegida_se_limpia(): void
     {
         $this->emisor();
@@ -358,6 +381,9 @@ class DireccionClienteTest extends CreditosTestCase
         $this->assertTrue($v(['nombre' => 'n', 'direccion' => str_repeat('d', 256)])->fails());
         $this->assertTrue($v(['nombre' => 'n', 'direccion' => 'd', 'referencia' => str_repeat('r', 201)])->fails());
         $this->assertFalse($v(['nombre' => 'n', 'direccion' => str_repeat('d', 255)])->fails());
+        // region/provincia/distrito: columnas de 50 → 422, no un 500 de Postgres.
+        $this->assertTrue($v(['nombre' => 'n', 'direccion' => 'd', 'provincia' => str_repeat('p', 51)])->fails());
+        $this->assertFalse($v(['nombre' => 'n', 'direccion' => 'd', 'provincia' => str_repeat('p', 50)])->fails());
     }
 
     private function peticion(array $datos): ClientAddressRequest

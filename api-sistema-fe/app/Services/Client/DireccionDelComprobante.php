@@ -10,10 +10,13 @@ use Illuminate\Validation\ValidationException;
 // imprimiría la dirección de otro cliente en un comprobante fiscal.
 class DireccionDelComprobante
 {
-    public const REGLA = ['nullable', 'integer'];
-
-    /** @return int|null el id validado, o null si no se eligió ninguna */
-    public static function validar(mixed $addressId, ?int $clientId): ?int
+    /**
+     * @param  int|null  $yaElegidaId  la dirección que el comprobante ya tenía (al editarlo sin
+     *                                 cambiar de cliente): se acepta aunque después se haya
+     *                                 desactivado, para que corregir otra cosa no quede bloqueado.
+     * @return int|null el id validado, o null si no se eligió ninguna
+     */
+    public static function validar(mixed $addressId, ?int $clientId, ?int $yaElegidaId = null): ?int
     {
         if ($addressId === null || $addressId === '') {
             return null;
@@ -26,7 +29,7 @@ class DireccionDelComprobante
                 'client_address_id' => 'La dirección elegida no pertenece al cliente del comprobante.',
             ]);
         }
-        if (! $direccion->activo) {
+        if (! $direccion->activo && $direccion->id !== $yaElegidaId) {
             throw ValidationException::withMessages([
                 'client_address_id' => 'La dirección elegida está desactivada. Elige otra o actívala en la ficha del cliente.',
             ]);

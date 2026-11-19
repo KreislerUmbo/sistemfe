@@ -1027,9 +1027,11 @@ public function update(Request $request, string $id)
     $this->validarCodigoDetraccion($request);
     // T-065: si llega client_address_id se valida contra el cliente nuevo; si cambió el cliente
     // y no llega una dirección suya, la elegida antes deja de aplicar (era de otro cliente).
+    // Reenviar la misma dirección ya elegida se acepta aunque se haya desactivado después.
+    $mismoCliente = (int) $request->client_id === (int) $venta->client_id;
     $direccionId = $request->has("client_address_id")
-        ? DireccionDelComprobante::validar($request->client_address_id, $request->client_id)
-        : ((int) $request->client_id === (int) $venta->client_id ? $venta->client_address_id : null);
+        ? DireccionDelComprobante::validar($request->client_address_id, $request->client_id, $mismoCliente ? $venta->client_address_id : null)
+        : ($mismoCliente ? $venta->client_address_id : null);
     $pagosPreparados = $this->prepararPagosVenta($request);
     $serieResuelta = $this->resolverSerieComprobanteUpdate($venta, $request);
 
