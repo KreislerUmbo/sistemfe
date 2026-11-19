@@ -179,6 +179,25 @@ Lo construido está bien (13 tests en verde; la cuenta de `PrecioVentaValidator`
 5. **Al desplegar** (actualizar en Resultado): antes del deploy, listar en producción los roles con
    usuarios de market, dakamu y credishirley para confirmar que los nombres del punto 2 coinciden.
 
+## Revisión 2 (Opus, 19-nov-2026) — cambios pedidos
+Puntos 1 a 3 de la primera revisión, bien resueltos: `importesIncoherentes()` coincide con
+`updateItem()` en todas las afectaciones (20 tests en verde). Falta:
+
+1. **Descuento global (decisión del usuario):** sin `cambiar_precio_venta`, `discount_global`
+   tiene que ser 0. Hoy no tiene permiso ni límite (`SaleController.php` ~801 lo guarda tal cual;
+   `TotalesVenta.vue` ~44 solo exige que no sea negativo), así que un vendedor sin el permiso baja el
+   total desde la pantalla. Backend: 422 «No tienes permiso para aplicar un descuento global» en
+   `store()` y en `update()` (en `update()`, si no cambió respecto de lo guardado, pasa: misma
+   idea que las líneas). Pantalla: sin el permiso no aparece «+ Descuento global». Tests: sin el
+   permiso → 422; sin el permiso editando una venta que ya tenía descuento sin cambiarlo → 200;
+   con el permiso → 200.
+2. **Descuento de línea:** `importesIncoherentes()` acepta descuento hasta `max_discount` aunque
+   el producto no admita descuento (`is_discount ≠ 2`); la pantalla ni muestra el botón. Si
+   `is_discount ≠ 2`, el descuento tiene que ser 0. Test.
+3. ~~Commitear `docs/backlog.md`~~: lo commiteó Opus junto con esta revisión.
+4. Los totales de la cabecera (subtotal, IGV, total) van en **T-114** (decisión del usuario):
+   no tocarlos en T-109.
+
 ## Hallazgos fuera de alcance
 - `Fila13Fase2cOperacionTest › en un viaje de varios dias solo se mueve el tour` falla en `main`
   (422 en vez de 200), sin relación con T-109. Sin analizar.

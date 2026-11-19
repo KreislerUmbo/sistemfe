@@ -8,7 +8,7 @@
 
 Cada línea: ID · qué · estado · depende de · rama o commit. El detalle está en
 `docs/tareas/T-…md` (se borra al cerrar; para una tarea hecha, el commit es la referencia).
-Próximo ID libre: **T-112**.
+Próximo ID libre: **T-115**.
 
 ## Orden de construcción (27-oct-2026)
 
@@ -49,6 +49,9 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-029 | AGE | Tour clásico desde plantilla: cada servicio nace con su tratamiento tributario; costo sin infantes (H18, H19) | por hacer: desbloqueada el 07-nov (D-AGE-035: el guía toma el valor por defecto de la agencia) | — | |
 | T-109 | VEN + PLA | Permiso `cambiar_precio_venta` (sin él: precio del sistema, sin ▾ ni precio a mano) validado en el backend; 422 en boleta > S/ 700 sin DNI y en crédito a cliente sin documento | por hacer | T-106 | |
 | T-110 | VEN | Pantalla de edición de venta con los componentes de T-106, mismo payload de `PUT sales/{id}` | por hacer | T-106, T-108, T-109 | |
+| T-112 | VEN | Elegir de nuevo un producto cuya línea ya tiene descripción o precio propios abre otra fila (si no, suma como hoy); stock validado por la suma de las líneas del producto. Opción A, elegida el 19-nov. Después de T-109 | por hacer | T-108, T-109 | |
+| T-113 | VEN + NOT | Stock validado en el backend con `lockForUpdate` (productos ordenados por `id`) al guardar y editar una venta: 422 si no alcanza (decisión del 19-nov: bloquear), suma por producto, solo descuenta lo que controla stock (criterio único con la pantalla, conecta `controla_stock`); eliminar una venta devuelve el stock; `update()` bloquea la venta | por hacer | T-112 | |
+| T-114 | VEN | Totales de la cabecera de la venta (subtotal, IGV, total, operaciones por afectación, regímenes) validados en el backend contra la suma de las líneas con la cuenta de `sumDetails()`, con y sin el permiso de precio: hoy se guardan como llegan del front. Hallazgo de la revisión de T-109 | por hacer | T-109 | |
 
 ## Por analizar
 
@@ -57,6 +60,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | Módulo | Qué | Origen |
 |---|---|---|
+| VEN | `SaleController::config()` no devuelve `es_default` de `tax_configs` (`get([...])` sin esa columna): `getIgvGeneralTasa()` de `register.vue` nunca encuentra el IGV «default» y usa 18 de respaldo. Hoy coincide con la tasa real; si el IGV general cambiara, el front calcularía mal el precio sin IGV y el backend (`PrecioVentaValidator`, que sí lee `es_default`) rechazaría la venta. Arreglo: agregar `es_default` al `get()` de `config()` | T-109 (revisión del 19-nov) |
 | NOT | Línea de nota sin texto editado: el XML dice el título (`NoteDetail::descripcionParaSunat()`) y el PDF `description ?? título`. Solo difiere en líneas de adelanto (`description` la escribe `AdvanceController`); decidir cuál vale e igualarlos | revisión de T-108, 19-nov-2026 |
 | AGE + NOT | La NC de una venta de reserva dice solo el título: `note_details` no copia `descripcion_detalle`, y la boleta decía «título - detalle». Ya pasaba antes de T-108 | revisión de T-108, 19-nov-2026 |
 | VEN | Cliente genérico «Clientes varios» por tenant (backend + migración) para vender sin identificar al cliente: hoy la venta exige un cliente con documento. La maqueta de T-106 lo suponía | hallazgo de T-106, 19-nov-2026 |
