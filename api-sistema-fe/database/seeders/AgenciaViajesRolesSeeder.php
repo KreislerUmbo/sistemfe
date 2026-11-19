@@ -88,7 +88,7 @@ class AgenciaViajesRolesSeeder extends Seeder implements RolesCatalogProvider
             'agencia.proveedores', 'agencia.destinos', 'agencia.temporadas', 'agencia.guias', 'agencia.paquetes', 'agencia.configuracion',
             'nota_electronica', 'list_nota_electronica',
             'cash.open_session', 'cash.view_all',
-            'list_sale',
+            'list_sale', 'cambiar_precio_venta',
             'register_client', 'list_client', 'edit_client',
             'list_advance', 'register_advance', 'refund_advance',
             'register_recurso',

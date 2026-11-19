@@ -253,6 +253,23 @@ final class T109PrecioYValidacionesVentaTest extends CreditosTestCase
         $this->assertFalse($vendedor->fresh()->hasPermissionTo('cambiar_precio_venta'));
     }
 
+    public function test_la_migracion_da_el_permiso_a_los_administradores_que_existen_y_no_a_los_demas(): void
+    {
+        $admin = Role::create(['name' => 'Administrador de agencia', 'guard_name' => 'api']);
+        $empresario = Role::create(['name' => 'Admin Empresario', 'guard_name' => 'api']);
+        $vendedor = Role::create(['name' => 'Vendedor de agencia', 'guard_name' => 'api']);
+        $cajero = Role::create(['name' => 'Cajero', 'guard_name' => 'api']);
+
+        (require database_path('migrations/tenant/core/2026_11_19_200000_add_cambiar_precio_venta_permission.php'))->up();
+
+        $this->assertTrue($admin->fresh()->hasPermissionTo('cambiar_precio_venta'));
+        $this->assertTrue($empresario->fresh()->hasPermissionTo('cambiar_precio_venta'));
+        $this->assertFalse($vendedor->fresh()->hasPermissionTo('cambiar_precio_venta'));
+        $this->assertFalse($cajero->fresh()->hasPermissionTo('cambiar_precio_venta'));
+        // No crea los roles que no existen en el tenant.
+        $this->assertNull(Role::where('name', 'Admin-General')->first());
+    }
+
     // ── CA6 ───────────────────────────────────────────────────────────
 
     public function test_editar_una_venta_sin_tocar_precios_pasa_sin_el_permiso(): void
