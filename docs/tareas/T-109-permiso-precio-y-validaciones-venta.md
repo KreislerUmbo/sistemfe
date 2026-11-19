@@ -5,7 +5,7 @@
 | **Módulo** | VEN + PLA (permiso nuevo) |
 | **Depende de** | T-106 (la pantalla bloquea la casilla y muestra los motivos) |
 | **Reglas** | roles Propietario (`roles:sync-propietario`); lo que la pantalla bloquea, el backend lo rechaza |
-| **Decisiones** | 18-nov-2026: solo quien tiene el permiso cambia el precio en la venta; sin permiso no hay ▾ ni precio a mano. La afectación IGV por línea queda libre por ahora. `docs/requerimientos/retail-presentaciones-y-precios.md` §7 |
+| **Decisiones** | 18-nov-2026: solo quien tiene el permiso cambia el precio en la venta; sin permiso no hay ▾ ni precio a mano. La afectación IGV por línea queda libre por ahora. `docs/requerimientos/retail-presentaciones-y-precios.md` §7. **19-nov-2026:** una venta desde cotización comercial acepta, sin el permiso, el precio cotizado de cada línea; cambiarlo respecto de la cotización sí exige el permiso |
 | **Rama** | `feat/T-109-permiso-precio-validaciones` |
 
 ## Contexto
@@ -23,6 +23,16 @@ S/ 700 sin identificar al cliente (SUNAT lo exige) y crédito a «Clientes vario
   (`register.vue` ~1192): comparar con la misma conversión y una tolerancia de redondeo de céntimos.
   Si no coincide → 422 «No tienes permiso para cambiar el precio».
   En `update()`, las líneas que no cambiaron de precio respecto de lo guardado no se rechazan.
+- **Venta desde cotización comercial** (decisión del 19-nov): `register.vue` carga cada línea con el
+  precio cotizado (`agregarProducto(..., { precio: item.unit_price })`, ~1324), y hoy el payload de
+  `POST sales` **no** lleva la cotización (se marca convertida después, con
+  `commercial-quotes/{id}/mark-converted`, ~1060). Mandar `commercial_quote_id` en el payload; en
+  `store()`, sin el permiso, una línea vale si su precio coincide con el de la línea de **esa**
+  cotización para el mismo producto (misma conversión sin IGV y tolerancia). La cotización tiene
+  que ser del mismo cliente y estar en un estado que se pueda convertir (ver qué valida hoy
+  `mark-converted` y `for-sale`); si no, se compara contra el catálogo como cualquier venta.
+- Agencia (`ReservaFacturacionController`) y adelantos (`AdvanceController`) crean la venta con
+  `Sale::create` sin pasar por `SaleController::store()`: no les aplica.
 - **Validaciones nuevas** (422 con mensaje claro):
   - Boleta (03) con total **mayor a S/ 700** (o su equivalente si es en dólares, con el T.C. de la
     venta) y cliente sin documento → «SUNAT pide el DNI del cliente en boletas de más de S/ 700».
@@ -50,6 +60,9 @@ S/ 700 sin identificar al cliente (SUNAT lo exige) y crédito a «Clientes vario
 - [ ] **CA4** — Crédito con cliente sin documento → 422 → test.
 - [ ] **CA5** — Tras `roles:sync-propietario`, el Propietario tiene el permiso; otros roles no.
 - [ ] **CA6** — Editar una venta vieja sin tocar precios, sin el permiso → 200 → test.
+- [ ] **CA7** — Sin el permiso, venta desde una cotización con el precio cotizado (distinto del
+  catálogo) → 200; con otro precio → 422; con una cotización de otro cliente → se compara contra el
+  catálogo → test.
 
 ## Seguridad y correctitud
 - [ ] Permisos: validados en backend, no solo ocultos en pantalla.
