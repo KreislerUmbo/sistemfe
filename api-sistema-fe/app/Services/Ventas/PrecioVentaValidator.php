@@ -147,7 +147,11 @@ class PrecioVentaValidator
 
         $valorVenta = $cantidad->multipliedBy($precio);
 
-        // Descuento: entre 0 y el máximo del producto (la pantalla ya lo limita con max_discount).
+        // Descuento: solo si el producto lo admite (is_discount = 2; la pantalla ni muestra el botón
+        // en los demás), y entre 0 y su máximo (la pantalla ya lo limita con max_discount).
+        if ((int) $producto->is_discount !== 2 && !$descuento->isZero()) {
+            return 'este producto no admite descuento.';
+        }
         $maximo = $valorVenta->multipliedBy((string) ((float) $producto->max_discount))->dividedBy(100, 6, RoundingMode::HALF_UP);
         if ($descuento->isNegative() || $descuento->isGreaterThan($maximo->plus(self::TOLERANCIA))) {
             return 'el descuento supera el máximo permitido del producto.';

@@ -412,6 +412,19 @@ final class T109PrecioYValidacionesVentaTest extends CreditosTestCase
             $this->assertStringContainsString('descuento global', $e->getMessage());
         }
     }
+
+    // ── Descuento de línea (revisión 2, punto 2) ──────────────────────
+
+    public function test_un_producto_que_no_admite_descuento_no_puede_llevarlo(): void
+    {
+        $this->entrarComo(['emitir_nota_venta']);
+        // max_discount 10 pero is_discount ≠ 2: la pantalla ni muestra el botón.
+        $sinDescuento = $this->producto(['price_general' => 50, 'max_discount' => 10, 'is_discount' => false]);
+        $diezPorCiento = ['discount' => 10, 'subtotal' => 90, 'mto_base_igv' => 90, 'igv' => 16.2, 'total_impuestos' => 16.2, 'price_final' => 53.1];
+
+        $this->assertRechazo($this->ventaConImportes($sinDescuento, $diezPorCiento), 'descuento');
+    }
+
     public function test_el_descuento_no_puede_pasar_del_maximo_del_producto(): void
     {
         $this->entrarComo(['emitir_nota_venta']);
