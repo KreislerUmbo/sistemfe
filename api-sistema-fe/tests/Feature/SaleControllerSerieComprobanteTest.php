@@ -215,8 +215,8 @@ class SaleControllerSerieComprobanteTest extends TestCase
             'title' => 'Producto Test',
             'sku' => 'SKU-TEST-' . uniqid(),
             'categorie_id' => $categoria->id,
-            'price_general' => 10,
-            'price_company' => 10,
+            'price_general' => 50, // T-109: el precio de la línea (50) tiene que ser el del catálogo
+            'price_company' => 50,
             'state' => 1,
             'unidad_medida' => 'NIU',
             'stock' => 50,
@@ -268,7 +268,7 @@ class SaleControllerSerieComprobanteTest extends TestCase
                 'mto_valor_venta' => 100,
                 'mto_base_igv' => 100,
                 'porcentaje_igv' => 18,
-                'igv' => 18,
+                'igv' => 18, 'total_impuestos' => 18,
                 'tip_afe_igv' => '10',
             ]],
             'payments' => [], // 100% a crédito, sin pago inicial — no exige caja abierta

@@ -58,6 +58,8 @@ class PermissionsDemoSeeder extends Seeder
         'register_cash_concept', 'list_cash_concept', 'edit_cash_concept', 'delete_cash_concept',
         'register_serie_comprobante', 'list_serie_comprobante', 'edit_serie_comprobante',
         'can_switch_branch', 'emitir_factura', 'emitir_boleta', 'emitir_nota_venta',
+        // T-109: ningún rol operativo lo recibe solo; el Propietario, con roles:sync-propietario.
+        'cambiar_precio_venta',
         'register_commercial_quote', 'list_commercial_quote', 'edit_commercial_quote', 'convert_commercial_quote',
         'anular-cuota-credito', 'anular-pago-credito', 'liquidar-devolucion-credito', 'reemplazar-comprobante-credito',
 

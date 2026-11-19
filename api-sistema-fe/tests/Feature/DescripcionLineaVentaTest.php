@@ -258,7 +258,7 @@ class DescripcionLineaVentaTest extends CreditosTestCase
         $id = $venta->sale_details()->first()->id;
 
         // 1) la pantalla vieja no manda el campo (cambia la cantidad, por ejemplo)
-        app(SaleController::class)->update(new Request($this->payload($cliente, ['id' => $id, 'quantity' => 3])), (string) $venta->id);
+        app(SaleController::class)->update(new Request($this->payload($cliente, ['id' => $id, 'quantity' => 3, 'subtotal' => 150, 'mto_valor_venta' => 150, 'mto_base_igv' => 150, 'igv' => 27, 'total_impuestos' => 27])), (string) $venta->id);
         $this->assertSame(self::TEXTO, SaleDetail::find($id)->descripcion_linea);
         $this->assertSame(3.0, (float) SaleDetail::find($id)->quantity);
 

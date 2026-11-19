@@ -61,6 +61,12 @@ describe('motivo del botón Cobrar (CA5)', () => {
         expect(motivoBloqueoCobro({ ...base, clienteNDocumento: '00000000', total: 701 })).toMatch(/DNI/));
     it('boleta ≤ 700 sin DNI pasa', () =>
         expect(motivoBloqueoCobro({ ...base, clienteNDocumento: '00000000', total: 700 })).toBe(''));
+    it('boleta en USD se convierte con el T.C. (T-109)', () => {
+        const usd = { ...base, clienteNDocumento: '00000000', moneda: 'USD', tipoCambioVenta: 3.75 };
+        expect(motivoBloqueoCobro({ ...usd, total: 200 })).toMatch(/DNI/); // S/ 750
+        expect(motivoBloqueoCobro({ ...usd, total: 186 })).toBe(''); // S/ 697,50
+        expect(motivoBloqueoCobro({ ...usd, total: 900, tipoCambioVenta: null })).toBe(''); // sin T.C. no bloquea
+    });
     it('crédito sin cliente identificado', () =>
         expect(motivoBloqueoCobro({ ...base, esCredito: true, clienteNDocumento: '' })).toMatch(/identificado/));
     it('caja cerrada solo bloquea si hay que cobrar', () => {

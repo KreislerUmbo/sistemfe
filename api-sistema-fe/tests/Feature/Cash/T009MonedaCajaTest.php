@@ -107,7 +107,7 @@ final class T009MonedaCajaTest extends CreditosTestCase
                 'product' => ['id' => $producto->id, 'categorie_id' => $producto->categorie_id],
                 'unidad_medida' => 'NIU', 'quantity' => 2, 'price_base' => 50, 'price_final' => 59, 'discount' => 0,
                 'subtotal' => 100, 'mto_valor_venta' => 100, 'mto_base_igv' => 100, 'porcentaje_igv' => 18,
-                'igv' => 18, 'tip_afe_igv' => '10',
+                'igv' => 18, 'total_impuestos' => 18, 'tip_afe_igv' => '10',
             ]],
             'payments' => [['method_payment' => 'EFECTIVO', 'amount' => 118.00, 'date_payment' => '2026-01-01']],
             'advance_applications' => [],

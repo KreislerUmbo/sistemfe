@@ -192,7 +192,7 @@ class AdvanceIntegridadTest extends TestCase
                 'mto_valor_venta' => 100,
                 'mto_base_igv' => 100,
                 'porcentaje_igv' => 18,
-                'igv' => 18,
+                'igv' => 18, 'total_impuestos' => 18,
                 'tip_afe_igv' => '10',
             ]],
             'payments' => [],

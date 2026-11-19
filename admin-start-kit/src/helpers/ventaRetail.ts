@@ -67,6 +67,8 @@ export type EntradaMotivoCobro = {
     clienteNDocumento?: string | null;
     total: number;
     moneda: string;
+    /** Último T.C. SUNAT (venta) para convertir un total en USD; null = no hay, no se bloquea. */
+    tipoCambioVenta?: number | null;
     esCredito: boolean;
     /** null = no se pudo saber (p. ej. sin permiso de caja): no se bloquea. */
     cajaAbierta: boolean | null;
@@ -95,7 +97,9 @@ export const motivoBloqueoCobro = (e: EntradaMotivoCobro): string => {
     if (e.tipoComprobante === '01' && (e.clienteTipoDocumento !== 'RUC' || !conDoc)) {
         return 'La factura necesita un cliente con RUC.';
     }
-    if (e.tipoComprobante === '03' && !conDoc && e.moneda === 'PEN' && e.total > LIMITE_BOLETA_SIN_DNI) {
+    // En dólares se convierte con el último T.C. SUNAT (el backend valida con el mismo valor, T-109).
+    const totalEnSoles = e.moneda === 'USD' ? (e.tipoCambioVenta ? e.total * e.tipoCambioVenta : 0) : e.total;
+    if (e.tipoComprobante === '03' && !conDoc && totalEnSoles > LIMITE_BOLETA_SIN_DNI) {
         return `SUNAT pide el DNI del cliente en boletas de más de S/ ${LIMITE_BOLETA_SIN_DNI}.`;
     }
     if (e.esCredito && !conDoc) return 'La venta a crédito necesita un cliente identificado.';

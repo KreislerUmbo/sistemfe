@@ -26,7 +26,11 @@ use App\Services\AdvanceApplicationService;
 use App\Services\CashCorrectionService;
 use App\Services\Cobro\CobroVentaService;
 use App\Services\CronogramaCreditoValidator;
+use App\Services\HoraPeru;
 use App\Services\QrCodeService;
+use App\Services\TipoCambio\TipoCambioSunatResolver;
+use App\Services\Ventas\PrecioVentaValidator;
+use Brick\Math\BigDecimal;
 use App\Services\SerieComprobanteService;
 use App\Services\StorageUrl;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -359,10 +363,76 @@ class SaleController extends Controller
     // — mismo criterio que el resto de este controlador: los totales
     // financieros se confían del frontend, no se recalculan acá. El
     // cronograma se valida contra ESE monto, no contra el total bruto.
+    // ── T-109 ─────────────────────────────────────────────────────────
+
+    /** Documento real: ni vacío ni solo ceros (los «Clientes varios» llevan 00000000). */
+    private static function tieneDocumentoReal(?string $nDocumento): bool
+    {
+        $d = trim((string) $nDocumento);
+        return $d !== '' && !preg_match('/^0+$/', $d);
+    }
+
+    // Sin el permiso cambiar_precio_venta, cada línea debe traer el precio que le corresponde
+    // (catálogo según el cliente, o el de la cotización comercial de origen). Ver PrecioVentaValidator.
+    private function validarPrecioDeVenta(Request $request, ?Sale $venta = null): void
+    {
+        if (auth('api')->user()->can('cambiar_precio_venta')) {
+            return;
+        }
+
+        // Rebajar el total con el descuento global es otra forma de cambiar el precio: mismo permiso.
+        // En update(), si no cambió respecto de lo guardado, pasa (igual que las líneas).
+        $global = BigDecimal::of(is_numeric($request->discount_global) ? (string) $request->discount_global : '0');
+        $guardado = BigDecimal::of((string) ($venta?->discount_global ?? 0));
+        if (!$global->isZero() && $global->minus($guardado)->abs()->isGreaterThan('0.0001')) {
+            throw new HttpException(422, 'No tienes permiso para aplicar un descuento global.');
+        }
+
+        $validador = app(PrecioVentaValidator::class);
+        $cliente = Client::find($request->client_id);
+        // La cotización solo vale al crear la venta (decisión del 19-nov); en update() no.
+        $cotizacion = $venta ? null : $validador->cotizacionValida($request->commercial_quote_id, $cliente);
+        $guardados = $venta
+            ? SaleDetail::where('sale_id', $venta->id)->get(['id', 'price_base', 'quantity', 'discount', 'tip_afe_igv'])
+                ->keyBy('id')->map->only(['price_base', 'quantity', 'discount', 'tip_afe_igv'])->all()
+            : [];
+
+        $validador->validar((array) $request->sale_details, $cliente, $cotizacion, $guardados);
+    }
+
+    // SUNAT exige identificar al comprador en boletas de más de S/ 700. En dólares se convierte con
+    // el último tipo de cambio SUNAT a la fecha de hoy; si no hay ninguno cargado no se bloquea
+    // (mismo criterio que TipoCambioSunatResolver: nunca frena la emisión por falta de T.C.).
+    private function validarBoletaSinDocumento(Request $request, ?string $tipoComprobante): void
+    {
+        if ($tipoComprobante !== '03'
+            || self::tieneDocumentoReal(Client::find($request->client_id)?->n_document)) {
+            return;
+        }
+
+        $total = BigDecimal::of((string) ($request->total ?? 0));
+        if (($request->currency ?? 'PEN') === 'USD') {
+            $tc = app(TipoCambioSunatResolver::class)->resolverParaFecha(HoraPeru::hoy());
+            if (!$tc) {
+                return;
+            }
+            $total = $total->multipliedBy((string) $tc->venta);
+        }
+
+        if ($total->isGreaterThan('700')) {
+            throw new HttpException(422, 'SUNAT pide el DNI del cliente en boletas de más de S/ 700.');
+        }
+    }
+
     private function validarConfiguracionCredito(Request $request): void
     {
         if ((int) $request->type_payment !== 2) {
             return;
+        }
+
+        // T-109: una venta a crédito es una deuda de alguien: el cliente tiene que estar identificado.
+        if (!self::tieneDocumentoReal(Client::find($request->client_id)?->n_document)) {
+            throw new HttpException(422, 'La venta a crédito necesita un cliente identificado (con documento).');
         }
 
         // La regla vive en App\Services\CronogramaCreditoValidator (24-oct-2026),
@@ -583,6 +653,9 @@ class SaleController extends Controller
             // Agrupados por tipo: { "IGV": [...], "IVAP": [...], "ICBPER": [...], "ISC": [...] }
             "parametros_tributarios" => $parametros_tributarios,
             "codigos_detraccion"     => $codigos_detraccion,
+            // T-109: para avisar en pantalla de la boleta en USD > S/ 700 sin DNI (el backend la valida
+            // con este mismo valor). null si no hay ningún T.C. cargado.
+            "tipo_cambio_venta"      => app(TipoCambioSunatResolver::class)->resolverParaFecha($fecha_hoy)?->venta,
             "company_mora_defaults"  => [
                 "mora_habilitada_default" => $empresa?->mora_habilitada_default ?? false,
                 "tasa_mora_default"       => $empresa?->tasa_mora_default,
@@ -673,6 +746,8 @@ class SaleController extends Controller
         $sesionCaja = $pagosPreparados ? $this->cobro->sesionAbierta(auth('api')->user()) : null;
         $this->validarConfiguracionCredito($request);
         $serieResuelta = $this->resolverSerieComprobante($request);
+        $this->validarBoletaSinDocumento($request, $serieResuelta['tipo']->codigo);
+        $this->validarPrecioDeVenta($request);
 
         $detalles_venta       = $request->sale_details;
         $aplicaciones_adelanto = $request->advance_applications ?? [];
@@ -1063,6 +1138,8 @@ public function update(Request $request, string $id)
         : ($mismoCliente ? $venta->client_address_id : null);
     $pagosPreparados = $this->prepararPagosVenta($request);
     $serieResuelta = $this->resolverSerieComprobanteUpdate($venta, $request);
+    $this->validarBoletaSinDocumento($request, $serieResuelta['tipo']?->codigo);
+    $this->validarPrecioDeVenta($request, $venta);
 
     $detalles_nuevos = $request->sale_details ?? [];
     $this->validarDescripcionesLinea($detalles_nuevos);
