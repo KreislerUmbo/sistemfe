@@ -136,9 +136,16 @@ selector llega con T-107).
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:** (nuevos / suite completa)
+- **Commits:** ver `git log feat/T-065-cliente-otras-direcciones` (un commit: `feat(clientes): otras direcciones del cliente y dirección elegida en el comprobante (T-065)`).
+- **Tests:** nuevos: `tests/Feature/DireccionClienteTest.php` (11: CA1–CA7, edición cambiando de cliente, CRUD, validación, FK) y 2 en `Fila13Fase1cFacturacionTest` (factura de reserva: CA5 y CA2). Suite completa: 2345 pasan, 0 fallan. `type-check`: sin errores nuevos (los 47 existentes son de archivos ajenos: portal, fake-backend). Migración aplicada con `tenants:migrate-verticales` en los tenants locales y en `sistemafe_test_migrations`.
+- **CA8 (prueba funcional):** hecha con Playwright en **agencia-demo** (cliente RUC id 3): agregar 2 sucursales, editar, desactivar (queda atenuada al final) y reactivar; sin errores de consola. **Falta umbo (retail)**: no hay contraseña documentada de ningún usuario de umbo y no se reseteó; la ficha y el componente son los mismos para todos los giros. Pendiente que la pruebes tú o me pases la credencial.
 - **Desviaciones de la tarea y por qué:**
+  - El card "Otras direcciones" es un componente propio (`components/Clientes/OtrasDireccionesCliente.vue`) montado en `ficha.vue`, para no engordar el archivo de 530 líneas.
+  - `AdvanceController::corregir()` (reemisión de un anticipo corregido) conserva el `client_address_id` del comprobante original; sin eso la corrección imprimiría la dirección fiscal sin avisar. No estaba en la tarea.
+  - En `SaleController::update()`: si no llega `client_address_id` y el cliente no cambió, se conserva la dirección ya elegida (la tarea solo definía el caso de cambio de cliente).
+  - Validación centralizada en `App\Services\Client\DireccionDelComprobante` (los 5 endpoints la usan). La factura de reserva responde 422 en JSON; los demás lanzan `ValidationException`.
+  - El paso de `client_address_id` en `VentaDirectaController::facturarYCobrar()` (reenvío) no tiene test propio; lo cubre el de `ReservaFacturacionController`.
 
 ## Hallazgos fuera de alcance
-- 
+- `LimpiarOperacionPrueba` no necesita cambios: borra `sales`/`notes` (hijas) y conserva `client_addresses`.
+- Local: los 4 tenants retail + creditos tenían `client_addresses` vacía; al desplegar, contar filas en cada tenant de producción antes (ya en la lista de seguridad de la tarea).

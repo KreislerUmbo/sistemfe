@@ -76,6 +76,7 @@ use App\Http\Controllers\Central\TenantRestoreController;
 use App\Http\Controllers\Central\TenantSubscriptionController;
 use App\Http\Controllers\Central\TenantSunatController;
 use App\Http\Controllers\Client\ClientController;
+use App\Http\Controllers\Client\ClientAddressController;
 use App\Http\Controllers\Client\CrmActividadController;
 use App\Http\Controllers\Client\ClienteLineaTiempoController;
 use App\Http\Controllers\Client\CrmAccionController;
@@ -568,6 +569,14 @@ Route::group([
     Route::get("clients/{id}/perfil-viajero", [ClientePerfilViajeroController::class, 'show'])->whereNumber('id')
         ->middleware('permission:list_client|edit_client|cotizaciones.ver|cotizaciones.ver_todas|cotizaciones.editar');
     Route::put("clients/{id}/perfil-viajero", [ClientePerfilViajeroController::class, 'update'])->whereNumber('id')
+        ->middleware('permission:edit_client');
+    // T-065: otras direcciones del cliente. Listar y agregar también desde las pantallas de
+    // emisión (como los clientes en Agencia); editar y desactivar solo con edit_client. Sin DELETE.
+    Route::get("clients/{id}/direcciones", [ClientAddressController::class, 'index'])->whereNumber('id')
+        ->middleware('permission:list_client|edit_client|register_sale|edit_sale|nota_electronica|register_advance|reservas.editar');
+    Route::post("clients/{id}/direcciones", [ClientAddressController::class, 'store'])->whereNumber('id')
+        ->middleware('permission:edit_client|register_sale|edit_sale|nota_electronica|register_advance|reservas.editar');
+    Route::put("client-direcciones/{id}", [ClientAddressController::class, 'update'])->whereNumber('id')
         ->middleware('permission:edit_client');
     Route::resource("clients", ClientController::class)
         ->middlewareFor('store', 'permission:register_client')

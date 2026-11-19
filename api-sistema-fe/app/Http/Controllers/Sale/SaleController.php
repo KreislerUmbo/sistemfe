@@ -21,6 +21,7 @@ use App\Models\Sale\SaleDetail;
 use App\Models\Sale\SalePayment;
 use App\Models\Sale\SerieComprobante;
 use App\Models\Sale\TipoComprobante;
+use App\Services\Client\DireccionDelComprobante;
 use App\Services\AdvanceApplicationService;
 use App\Services\CashCorrectionService;
 use App\Services\Cobro\CobroVentaService;
@@ -639,6 +640,8 @@ class SaleController extends Controller
     {
         $this->validarRegimenEspecial($request);
         $this->validarCodigoDetraccion($request);
+        // T-065: otra dirección del cliente elegida para el comprobante (opcional).
+        $direccionId = DireccionDelComprobante::validar($request->client_address_id, $request->client_id);
         $this->validarAdelantosPayload($request);
         $pagosPreparados = $this->prepararPagosVenta($request);
         $sesionCaja = $pagosPreparados ? $this->cobro->sesionAbierta(auth('api')->user()) : null;
@@ -684,6 +687,7 @@ class SaleController extends Controller
                 // Relaciones
                 "user_id"         => auth('api')->user()->id,
                 "client_id"       => $request->client_id,
+                "client_address_id" => $direccionId,
                 "type_client"     => $request->type_client,
 
                 // Tipo de documento del cliente (Catálogo 06 SUNAT)
@@ -1021,6 +1025,11 @@ public function update(Request $request, string $id)
 
     $this->validarRegimenEspecial($request);
     $this->validarCodigoDetraccion($request);
+    // T-065: si llega client_address_id se valida contra el cliente nuevo; si cambió el cliente
+    // y no llega una dirección suya, la elegida antes deja de aplicar (era de otro cliente).
+    $direccionId = $request->has("client_address_id")
+        ? DireccionDelComprobante::validar($request->client_address_id, $request->client_id)
+        : ((int) $request->client_id === (int) $venta->client_id ? $venta->client_address_id : null);
     $pagosPreparados = $this->prepararPagosVenta($request);
     $serieResuelta = $this->resolverSerieComprobanteUpdate($venta, $request);
 
@@ -1048,6 +1057,7 @@ public function update(Request $request, string $id)
 
             // Cliente
             "client_id"            => $request->client_id,
+            "client_address_id"    => $direccionId,
             "type_client"          => $request->type_client,
             "cod_tipo_doc_cliente" => $request->cod_tipo_doc_cliente,
 
