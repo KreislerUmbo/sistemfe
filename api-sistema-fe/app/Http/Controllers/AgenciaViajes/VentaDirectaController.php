@@ -100,6 +100,8 @@ class VentaDirectaController extends Controller
             'branch_id' => 'nullable|integer',
             'pagos' => 'nullable|array',
             'vuelto_moneda' => 'nullable|string|in:PEN,USD',
+            // T-065: otra dirección del cliente; la valida ReservaFacturacionController::store().
+            'client_address_id' => 'nullable|integer',
         ] + $this->reglasLineas($legacy), [
             'tipo_comprobante_codigo.in' => 'El comprobante de una venta directa es boleta o factura.',
         ]);
@@ -131,6 +133,7 @@ class VentaDirectaController extends Controller
             'branch_id' => $validado['branch_id'] ?? null,
             'pagos' => $request->input('pagos'),
             'vuelto_moneda' => $validado['vuelto_moneda'] ?? null,
+            'client_address_id' => $validado['client_address_id'] ?? null,
         ], fn ($v) => $v !== null) : null;
 
         try {

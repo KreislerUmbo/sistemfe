@@ -152,6 +152,8 @@ class AdvanceController extends Controller
     {
         $request->validate([
             'client_id'      => 'required|integer|exists:clients,id',
+            // T-065: otra dirección del cliente para el comprobante (se valida abajo).
+            'client_address_id' => 'nullable|integer',
             'amount'         => 'required|numeric|min:0.01',
             'currency'       => 'required|string|in:PEN,USD',
             'payment_method' => 'required|string',
@@ -196,12 +198,13 @@ class AdvanceController extends Controller
         }
 
         $cliente = Client::findOrFail($request->client_id);
+        $direccionId = \App\Services\Client\DireccionDelComprobante::validar($request->client_address_id, $cliente->id);
         $amount  = round((float) $request->amount, 2);
 
         try {
             DB::beginTransaction();
 
-            $venta = $this->crearComprobanteAdelanto($cliente, $amount, $request->currency, $request->tip_afe_igv, $request->notes);
+            $venta = $this->crearComprobanteAdelanto($cliente, $amount, $request->currency, $request->tip_afe_igv, $request->notes, $direccionId);
             // T-010: el adelanto se paga en su propia moneda (tipo de cambio 1); la referencia de pago
             // va a comments (completa) y a nro_operacion (primeros 50 caracteres).
             SalePayment::create([
@@ -261,7 +264,7 @@ class AdvanceController extends Controller
     // nuevo, la plata ya entró una sola vez. store() sigue siendo el único
     // lugar que cobra de verdad (guard de caja + SalePayment + CashMovement,
     // fuera de este método).
-    private function crearComprobanteAdelanto(Client $cliente, float $amount, string $currency, string $tipAfeIgv, ?string $notes): Sale
+    private function crearComprobanteAdelanto(Client $cliente, float $amount, string $currency, string $tipAfeIgv, ?string $notes, ?int $direccionId = null): Sale
     {
         $producto = Product::where('sku', self::SKU_PRODUCTO_ADELANTO)->first();
         if (!$producto) {
@@ -291,6 +294,7 @@ class AdvanceController extends Controller
             "n_transaction"        => Sale::siguienteNumeroTransaccion(),
             "user_id"              => auth('api')->user()->id,
             "client_id"            => $cliente->id,
+            "client_address_id"    => $direccionId,
             "type_client"          => $cliente->type_client,
             "cod_tipo_doc_cliente" => $cliente->cod_tipo_doc_sunat,
             "currency"             => $currency,
@@ -506,7 +510,9 @@ class AdvanceController extends Controller
                 (float) $adelanto->amount,
                 $adelanto->currency,
                 $request->tip_afe_igv,
-                $adelanto->notes
+                $adelanto->notes,
+                // T-065: la reemisión conserva la dirección elegida del comprobante que corrige.
+                $adelanto->sale->client_address_id
             );
 
             // Mismo Advance.id — preserva AdvanceApplication/historial

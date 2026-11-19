@@ -76,6 +76,12 @@ class Client extends Authenticatable implements JWTSubject
     }
 
     // Módulo Amortizaciones — plan-modulo-amortizaciones.md §6.2
+    // T-065: otras direcciones (sucursales) además de la fiscal (clients.address).
+    public function direcciones()
+    {
+        return $this->hasMany(ClientAddress::class, 'client_id');
+    }
+
     public function paymentReceipts()
     {
         return $this->hasMany(\App\Models\Credit\PaymentReceipt::class, "client_id");

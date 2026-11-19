@@ -662,6 +662,39 @@ class Fila13Fase1cFacturacionTest extends TestCase
         $this->assertTrue($previewP1['partes_tour'][0]['cierra']);
     }
 
+    // T-065 (CA5): la factura de reserva copia la dirección elegida del cliente.
+    public function test_t065_la_factura_de_reserva_copia_la_direccion_elegida_del_cliente(): void
+    {
+        $alternativa = $this->crearAlternativa([['adulto', 30]]);
+        $this->cargar($alternativa, $this->tourGravado(100, null));
+        $reserva = $this->aceptar($alternativa);
+        $cliente = Client::factory()->empresa()->create(['address' => 'Jr. Fiscal 100']);
+        $sucursal = $cliente->direcciones()->create(['nombre' => 'Sucursal Tarapoto', 'direccion' => 'Av. Sucursal 500', 'activo' => true]);
+
+        $venta = $this->facturarOk($reserva, null, ['client_id' => $cliente->id, 'client_address_id' => $sucursal->id]);
+
+        $this->assertSame($sucursal->id, $venta->client_address_id);
+        $this->assertSame('Av. Sucursal 500', $venta->direccion_cliente);
+    }
+
+    // T-065 (CA2): dirección de otro cliente o inactiva → 422 y no se emite nada.
+    public function test_t065_la_factura_de_reserva_rechaza_direccion_ajena_o_inactiva(): void
+    {
+        $alternativa = $this->crearAlternativa([['adulto', 30]]);
+        $this->cargar($alternativa, $this->tourGravado(100, null));
+        $reserva = $this->aceptar($alternativa);
+        $cliente = Client::factory()->empresa()->create();
+        $ajena = Client::factory()->empresa()->create()->direcciones()->create(['nombre' => 'Ajena', 'direccion' => 'X 1', 'activo' => true]);
+        $inactiva = $cliente->direcciones()->create(['nombre' => 'Inactiva', 'direccion' => 'Y 2', 'activo' => false]);
+        $antes = Sale::count();
+
+        foreach ([$ajena, $inactiva] as $direccion) {
+            $respuesta = $this->facturar($reserva, null, ['client_id' => $cliente->id, 'client_address_id' => $direccion->id]);
+            $this->assertSame(422, $respuesta->getStatusCode());
+        }
+        $this->assertSame($antes, Sale::count());
+    }
+
     private function facturarSinCapturar(Reserva $reserva, array $pasajeroIds, array $manual): int
     {
         try {

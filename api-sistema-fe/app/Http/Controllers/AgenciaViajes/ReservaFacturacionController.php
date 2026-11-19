@@ -337,6 +337,8 @@ class ReservaFacturacionController extends Controller
             'reserva_item_ids_excluidos' => 'nullable|array',
             'reserva_item_ids_excluidos.*' => 'integer',
             'client_id' => 'required|integer|exists:clients,id',
+            // T-065: otra dirección del cliente para el comprobante; se valida abajo contra el cliente.
+            'client_address_id' => 'nullable|integer',
             'tipo_comprobante_codigo' => 'required|string|in:01,03',
             'texto_personalizado' => 'nullable|string|max:2000',
             // Solo tiene efecto si el usuario tiene can_switch_branch (ver
@@ -416,6 +418,12 @@ class ReservaFacturacionController extends Controller
             throw new HttpException(422, 'No se puede emitir Factura a un cliente sin RUC. Selecciona Boleta o cambia el cliente.');
         }
 
+        try {
+            $direccionId = \App\Services\Client\DireccionDelComprobante::validar($validado['client_address_id'] ?? null, $cliente->id);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json(['code' => 422, 'message' => $e->validator->errors()->first()], 422);
+        }
+
         $infoMoneda = $this->resolverMonedaFacturacion($request, $reserva);
         if ($infoMoneda instanceof \Illuminate\Http\JsonResponse) {
             return $infoMoneda;
@@ -483,6 +491,7 @@ class ReservaFacturacionController extends Controller
 
         try {
             [$venta, $lineas, $cobrado] = DB::transaction(function () use (
+                $direccionId,
                 $pagosPreparados,
                 $traspasosSolicitados,
                 $sesionCobro,
@@ -596,6 +605,7 @@ class ReservaFacturacionController extends Controller
                     'n_transaction' => Sale::siguienteNumeroTransaccion(),
                     'user_id' => $usuario->id,
                     'client_id' => $cliente->id,
+                    'client_address_id' => $direccionId,
                     'type_client' => $cliente->type_client,
                     'cod_tipo_doc_cliente' => $cliente->cod_tipo_doc_sunat,
                     'currency' => $infoMoneda['moneda_facturacion'],

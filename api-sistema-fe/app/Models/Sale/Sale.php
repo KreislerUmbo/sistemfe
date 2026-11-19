@@ -39,6 +39,7 @@ class Sale extends Model
         // ── Relaciones ────────────────────────────────────────────────
         "user_id",          // vendedor que registró la venta
         "client_id",        // cliente de la venta
+        "client_address_id", // T-065: otra dirección del cliente elegida para el comprobante
         "type_client",      // 1=Final, 2=Empresa, 3=Cualquiera
 
         // ── Tipo de documento del cliente (Catálogo 06 SUNAT) ─────────

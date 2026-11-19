@@ -52,6 +52,7 @@ class Note extends Model
 
         // ── Cliente y moneda (copiados de la venta al crear) ─────────────
         "client_id",
+        "client_address_id", // T-065
         "cod_tipo_doc_cliente",
         // T-064: los de la venta afectada (CopiaDatosDelCliente)
         "tipo_doc_cliente",

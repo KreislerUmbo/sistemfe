@@ -3,6 +3,7 @@
 namespace App\Models\Concerns;
 
 use App\Models\Client\Client;
+use App\Models\Client\ClientAddress;
 
 /**
  * T-064 (obs. 18, H60) — el comprobante guarda una copia de los datos del
@@ -39,7 +40,20 @@ trait CopiaDatosDelCliente
         $this->tipo_doc_cliente = $cliente->type_document;
         $this->num_doc_cliente = $cliente->n_document;
         $this->razon_social_cliente = $cliente->full_name;
-        $this->direccion_cliente = $cliente->address;
+        $this->direccion_cliente = $this->direccionElegida()?->direccion ?? $cliente->address;
+    }
+
+    // T-065: la dirección extra elegida para este comprobante. Se lee aunque después se haya
+    // desactivado (`activo` solo filtra lo que se puede elegir) y solo si es del mismo cliente.
+    private function direccionElegida(): ?ClientAddress
+    {
+        if (! $this->client_address_id) {
+            return null;
+        }
+
+        return ClientAddress::where('id', $this->client_address_id)
+            ->where('client_id', $this->client_id)
+            ->first();
     }
 
     /**

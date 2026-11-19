@@ -8,8 +8,10 @@ use App\Http\Resources\Product\ProductCollection;
 use App\Models\Advance\Advance;
 use App\Models\Advance\AdvanceRefund;
 use App\Models\AgenciaViajes\ReservaVenta;
+use App\Models\Client\ClientAddress;
 use App\Models\Company;
 use App\Models\Product\Product;
+use App\Services\Client\DireccionDelComprobante;
 use App\Models\Sale\Note;
 use App\Models\Sale\NoteDetail;
 use App\Models\Sale\NoteMotivo;
@@ -236,9 +238,17 @@ class NotaElectronicaController extends Controller
         // modifica (su copia), no lo que el cliente tenga hoy.
         $clienteDeLaVenta = $sale->datosClienteImpresos();
 
+        // T-065: sin client_address_id la nota hereda la dirección de la venta (y su texto, que ya
+        // viene en la copia); con uno, debe ser una dirección activa del cliente de la venta.
+        $direccionNotaId = $sale->client_address_id;
+        if ($request->filled('client_address_id')) {
+            $direccionNotaId = DireccionDelComprobante::validar($request->input('client_address_id'), $sale->client_id);
+            $clienteDeLaVenta['direccion'] = ClientAddress::findOrFail($direccionNotaId)->direccion;
+        }
+
         $nota = DB::transaction(function () use (
             $sale, $tipo_doc, $tipo_doc_afectado, $motivo, $des_motivo,
-            $tipo_afectacion, $datos, $lineasNota, $request, $descuentoGlobalNota, $clienteDeLaVenta
+            $tipo_afectacion, $datos, $lineasNota, $request, $descuentoGlobalNota, $clienteDeLaVenta, $direccionNotaId
         ) {
             $nota = Note::create([
                 'sale_id'              => $sale->id,
@@ -251,6 +261,7 @@ class NotaElectronicaController extends Controller
                 'des_motivo'           => $des_motivo,
                 'tipo_afectacion'      => $tipo_afectacion,
                 'client_id'            => $sale->client_id,
+                'client_address_id'    => $direccionNotaId,
                 'cod_tipo_doc_cliente' => $sale->cod_tipo_doc_cliente,
                 'tipo_doc_cliente'     => $clienteDeLaVenta['tipo_doc'],
                 'num_doc_cliente'      => $clienteDeLaVenta['num_doc'],

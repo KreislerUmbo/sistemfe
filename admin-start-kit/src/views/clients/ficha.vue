@@ -29,6 +29,11 @@
             </div>
           </div>
 
+          <!-- T-065: otras direcciones (sucursales) para el comprobante; todos los giros. -->
+          <OtrasDireccionesCliente v-if="clienteId" :cliente-id="clienteId"
+            :puede-agregar="['edit_client', 'register_sale', 'edit_sale', 'nota_electronica', 'register_advance', 'reservas.editar'].some(puede)"
+            :puede-editar="puede('edit_client')" />
+
           <template v-if="esAgencia && clienteId">
             <PreferenciasViajero :cliente-id="clienteId" :puede-editar="puede('edit_client')" />
             <LineaTiempoCliente ref="lineaTiempo" :cliente-id="clienteId" :puede-anotar="puede('edit_client')"
@@ -304,6 +309,7 @@ import DocumentosCliente from '@/components/Clientes/DocumentosCliente.vue'
 import SaldoAFavorCliente from '@/components/Clientes/SaldoAFavorCliente.vue'
 import AccionesPendientes from '@/components/Clientes/AccionesPendientes.vue'
 import ResumenClienteAgencia from '@/components/Clientes/ResumenClienteAgencia.vue'
+import OtrasDireccionesCliente from '@/components/Clientes/OtrasDireccionesCliente.vue'
 import PreferenciasViajero from '@/components/Clientes/PreferenciasViajero.vue'
 import LineaTiempoCliente from '@/components/Clientes/LineaTiempoCliente.vue'
 import { useToast } from '@/composables/useToast'
