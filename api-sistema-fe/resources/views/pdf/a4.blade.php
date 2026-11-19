@@ -360,11 +360,16 @@
                         <td>{{ $detalle->unidad_medida }}</td>
                         <td>{{ $detalle->product->sku ?? '-' }}</td>
                         <td>
+                            {{-- T-108: la descripción editada REEMPLAZA al título (escapada y con saltos de línea) --}}
+                            @if ($detalle->tieneDescripcionEditada())
+                                {!! nl2br(e($detalle->descripcionLineaLimpia())) !!}
+                            @else
                             {{ $detalle->product->title }}
                             {{-- Reserva de Agencia (24-oct-2026): los servicios con su fecha, o el texto
                                  del vendedor. Es lo mismo que va en el XML (SaleDetail::descripcionParaSunat()). --}}
                             @if (trim((string) $detalle->descripcion_detalle) !== '')
                                 <div style="font-size: 9px; color: #555;">{{ $detalle->descripcion_detalle }}</div>
+                            @endif
                             @endif
                         </td>
                         <td class="right">{{ number_format($detalle->price_base, 3) }}</td>

@@ -2,6 +2,7 @@
 
 namespace App\Models\Sale;
 
+use App\Models\Concerns\ConDescripcionLinea;
 use App\Models\Product\Product;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -12,6 +13,7 @@ class NoteDetail extends Model
 {
     use HasFactory;
     use SoftDeletes;
+    use ConDescripcionLinea;
 
     protected $table = "note_details";
 
@@ -48,7 +50,16 @@ class NoteDetail extends Model
 
         "unidad_medida",
         "description",
+        // T-108: copia de sale_details.descripcion_linea (reemplaza al título).
+        "descripcion_linea",
     ];
+
+    // Lo que dice la línea en el XML de la nota. GreenterService::getDetallesComprobante()
+    // llama a este método igual que en SaleDetail (note_details expone los mismos nombres).
+    public function descripcionParaSunat(): string
+    {
+        return $this->descripcionLineaLimpia() ?? (string) ($this->product?->title ?? '');
+    }
 
     // ── Relaciones ───────────────────────────────────────────────────────
     public function note()

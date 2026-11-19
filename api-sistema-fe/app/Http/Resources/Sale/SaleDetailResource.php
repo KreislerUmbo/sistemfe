@@ -36,6 +36,7 @@ class SaleDetailResource extends JsonResource
             'porcentaje_igv' => (float) $this->resource->porcentaje_igv,
             'total_impuestos' => (float) $this->resource->total_impuestos,
             'description' => $this->resource->description,
+            'descripcion_linea' => $this->resource->descripcion_linea,
 
             'tip_afe_igv' =>  $this->resource->tip_afe_igv,
             'per_icbper' => (float) $this->resource->per_icbper,

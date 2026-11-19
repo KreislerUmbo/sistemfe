@@ -251,6 +251,30 @@ class SaleController extends Controller
     // haya sido enviado a SUNAT se validan dentro de la transacción (ver
     // store()), con lockForUpdate() para evitar condiciones de carrera si
     // dos ventas aplican el mismo adelanto al mismo tiempo.
+    // T-108 — la descripción editada de cada línea: texto de hasta 500 caracteres.
+    // Corre ANTES de DB::beginTransaction(): un 422 no deja nada a medias.
+    private function validarDescripcionesLinea(array $detalles): void
+    {
+        foreach ($detalles as $i => $detalle) {
+            $texto = $detalle["descripcion_linea"] ?? null;
+            if ($texto === null) {
+                continue;
+            }
+            if (!is_string($texto) || mb_strlen($texto) > 500) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    "sale_details.$i.descripcion_linea" => ["La descripción de la línea debe ser un texto de máximo 500 caracteres."],
+                ]);
+            }
+        }
+    }
+
+    // T-108 — null si está vacía (la línea vuelve a mostrar el nombre del catálogo).
+    private function descripcionLineaParaGuardar(array $detalle): ?string
+    {
+        $texto = trim(str_replace(["\r\n", "\r"], "\n", (string) ($detalle["descripcion_linea"] ?? "")));
+        return $texto === "" ? null : $texto;
+    }
+
     private function validarAdelantosPayload(Request $request): void
     {
         $aplicaciones = $request->advance_applications ?? [];
@@ -642,6 +666,7 @@ class SaleController extends Controller
         $this->validarCodigoDetraccion($request);
         // T-065: otra dirección del cliente elegida para el comprobante (opcional).
         $direccionId = DireccionDelComprobante::validar($request->client_address_id, $request->client_id);
+        $this->validarDescripcionesLinea((array) $request->sale_details);
         $this->validarAdelantosPayload($request);
         $pagosPreparados = $this->prepararPagosVenta($request);
         $sesionCaja = $pagosPreparados ? $this->cobro->sesionAbierta(auth('api')->user()) : null;
@@ -873,6 +898,9 @@ class SaleController extends Controller
 
                     // Total de impuestos de la línea = IGV + ISC + ICBPER
                     "total_impuestos"      => $detalle["total_impuestos"] ?? 0,
+
+                    // T-108: texto que reemplaza al nombre del catálogo (null = sale el nombre)
+                    "descripcion_linea"    => $this->descripcionLineaParaGuardar($detalle),
                 ];
 
                 $campos_detalle = $this->sanitizeIscForDetail($campos_detalle, $detalle["product"]["id"]);
@@ -1036,6 +1064,7 @@ public function update(Request $request, string $id)
     $serieResuelta = $this->resolverSerieComprobanteUpdate($venta, $request);
 
     $detalles_nuevos = $request->sale_details ?? [];
+    $this->validarDescripcionesLinea($detalles_nuevos);
 
     // Módulo Caja — Fase 3: toda la validación/decisión (incluido el
     // permiso de supervisor sobre sesión cerrada) corre acá, antes de abrir
@@ -1201,6 +1230,12 @@ public function update(Request $request, string $id)
                 "per_icbper"           => $detalle["per_icbper"] ?? 0,
                 "icbper"               => $detalle["icbper"] ?? 0,
             ];
+
+            // T-108: si la línea trae la clave se guarda (vacío = null); si NO la trae (pantalla
+            // vieja edit.vue hasta T-110) se conserva la que ya tenía — editar no la borra.
+            if (array_key_exists("descripcion_linea", $detalle)) {
+                $campos_detalle["descripcion_linea"] = $this->descripcionLineaParaGuardar($detalle);
+            }
 
             $campos_detalle = $this->sanitizeIscForDetail($campos_detalle, $detalle["product"]["id"]);
 

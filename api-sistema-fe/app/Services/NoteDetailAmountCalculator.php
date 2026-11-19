@@ -38,6 +38,7 @@ class NoteDetailAmountCalculator
             'price_final'    => $original->price_final,  // ya es valor unitario
             'unidad_medida'  => $original->unidad_medida,
             'description'    => $original->description,
+            'descripcion_linea' => $original->descripcion_linea,
 
             // ── Montos de línea — escalados proporcionalmente por cantidad ──
             'quantity'        => $cantidadNota,
@@ -97,6 +98,7 @@ class NoteDetailAmountCalculator
             'per_icbper'     => $original->per_icbper,
             'unidad_medida'  => $original->unidad_medida,
             'description'    => $original->description,
+            'descripcion_linea' => $original->descripcion_linea,
 
             // ── Montos de línea — el monto ingresado ES el valor de la
             // nota; la cantidad queda informativa (no hay devolución

@@ -136,10 +136,15 @@
         @foreach ($venta->sale_details as $detalle)
             <tr>
                 <td class="desc" colspan="2">
+                    {{-- T-108: la descripción editada REEMPLAZA al título (escapada y con saltos de línea) --}}
+                    @if ($detalle->tieneDescripcionEditada())
+                        {!! nl2br(e($detalle->descripcionLineaLimpia())) !!}
+                    @else
                     {{ $detalle->product->title }}
                     {{-- Reserva de Agencia (24-oct-2026): mismo detalle que el XML (SaleDetail::descripcionParaSunat()). --}}
                     @if (trim((string) $detalle->descripcion_detalle) !== '')
                         <div style="font-size: 9px;">{{ $detalle->descripcion_detalle }}</div>
+                    @endif
                     @endif
                 </td>
             </tr>
