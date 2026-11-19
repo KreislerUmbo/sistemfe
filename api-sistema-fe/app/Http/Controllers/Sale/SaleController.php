@@ -260,7 +260,8 @@ class SaleController extends Controller
             if ($texto === null) {
                 continue;
             }
-            if (!is_string($texto) || mb_strlen($texto) > 500) {
+            // Se mide ya normalizado (\r\n cuenta como 1), igual que lo que se guarda.
+            if (!is_string($texto) || mb_strlen(str_replace(["\r\n", "\r"], "\n", $texto)) > 500) {
                 throw \Illuminate\Validation\ValidationException::withMessages([
                     "sale_details.$i.descripcion_linea" => ["La descripción de la línea debe ser un texto de máximo 500 caracteres."],
                 ]);
