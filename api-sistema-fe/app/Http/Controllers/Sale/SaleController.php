@@ -384,7 +384,10 @@ class SaleController extends Controller
         $cliente = Client::find($request->client_id);
         // La cotización solo vale al crear la venta (decisión del 19-nov); en update() no.
         $cotizacion = $venta ? null : $validador->cotizacionValida($request->commercial_quote_id, $cliente);
-        $guardados = $venta ? SaleDetail::where('sale_id', $venta->id)->pluck('price_base', 'id')->all() : [];
+        $guardados = $venta
+            ? SaleDetail::where('sale_id', $venta->id)->get(['id', 'price_base', 'quantity', 'discount', 'tip_afe_igv'])
+                ->keyBy('id')->map->only(['price_base', 'quantity', 'discount', 'tip_afe_igv'])->all()
+            : [];
 
         $validador->validar((array) $request->sale_details, $cliente, $cotizacion, $guardados);
     }

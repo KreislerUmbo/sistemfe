@@ -33,6 +33,7 @@ final class T109PrecioYValidacionesVentaTest extends CreditosTestCase
 {
     private Branch $sede;
     private Categorie $categoria;
+    private ?Client $clienteCompartido = null;
 
     protected function setUp(): void
     {
@@ -304,6 +305,97 @@ final class T109PrecioYValidacionesVentaTest extends CreditosTestCase
         $respuesta = app(SaleController::class)->update(new Request($payload), (string) $idVenta);
 
         return json_decode($respuesta->getContent(), true);
+    }
+
+    // ── Coherencia de importes (punto 3 de la revisión) ───────────────
+
+    /** Venta de una línea de 2 × S/ 50 con los importes que se indican (los que calcularía updateItem()). */
+    private function ventaConImportes(Product $producto, array $linea): array
+    {
+        $payload = $this->payload($producto, $this->clienteCompartido ??= $this->clienteT109(), 50, [], 2);
+        $payload['sale_details'][0] = array_merge($payload['sale_details'][0], $linea);
+
+        return $payload;
+    }
+
+    public function test_cada_afectacion_con_sus_importes_correctos_pasa(): void
+    {
+        $this->entrarComo(['emitir_nota_venta']);
+        $producto = $this->producto(['price_general' => 50, 'price_company' => 50]);
+        $sinIgv = ['igv' => 0, 'total_impuestos' => 0, 'porcentaje_igv' => 0, 'price_final' => 50];
+
+        foreach ([
+            'gratuita 11' => ['tip_afe_igv' => '11', 'igv' => 18, 'total_impuestos' => 18, 'porcentaje_igv' => 18, 'price_final' => 59],
+            'exonerada 20' => ['tip_afe_igv' => '20'] + $sinIgv,
+            'inafecta 30' => ['tip_afe_igv' => '30'] + $sinIgv,
+            'exportación 40' => ['tip_afe_igv' => '40'] + $sinIgv,
+            'IVAP 17' => ['tip_afe_igv' => '17', 'igv' => 4, 'total_impuestos' => 4, 'porcentaje_igv' => 4, 'price_final' => 52],
+        ] as $caso => $linea) {
+            $this->assertSame(200, $this->guardar($this->ventaConImportes($producto, $linea))['code'], $caso);
+        }
+    }
+
+    public function test_isc_al_valor_e_icbper_con_sus_importes_correctos_pasan(): void
+    {
+        $this->entrarComo(['emitir_nota_venta']);
+
+        // ISC 10 % al valor: isc 10, IGV (100 + 10) × 18 % = 19,80, price_final (100 + 29,80) / 2.
+        $conIsc = $this->producto(['price_general' => 50, 'is_isc' => true, 'percentage_isc' => 10, 'tipo_isc' => '01']);
+        $linea = ['isc' => 10, 'igv' => 19.8, 'total_impuestos' => 29.8, 'price_final' => 64.9, 'percentage_isc' => 10, 'tipo_isc' => '01'];
+        $this->assertSame(200, $this->guardar($this->ventaConImportes($conIsc, $linea))['code']);
+
+        // Sin el ISC en la línea, el importe no coincide.
+        $this->assertRechazo($this->ventaConImportes($conIsc, ['igv' => 18, 'total_impuestos' => 18, 'price_final' => 59]), 'No tienes permiso');
+
+        // ICBPER 2 bolsas × S/ 0,50 = 1,00; impuestos 19; price_final 119 / 2.
+        $bolsa = $this->producto(['price_general' => 50, 'is_icbper' => 2]);
+        $linea = ['icbper' => 1, 'per_icbper' => 0.5, 'total_impuestos' => 19, 'price_final' => 59.5];
+        $this->assertSame(200, $this->guardar($this->ventaConImportes($bolsa, $linea))['code']);
+    }
+
+    public function test_con_el_subtotal_o_el_igv_rebajados_da_422_y_con_el_permiso_pasa(): void
+    {
+        $this->entrarComo(['emitir_nota_venta']);
+        $producto = $this->producto(['price_general' => 50]);
+
+        $this->assertRechazo($this->ventaConImportes($producto, ['subtotal' => 40, 'mto_base_igv' => 40]), 'No tienes permiso');
+        $this->assertRechazo($this->ventaConImportes($producto, ['igv' => 5, 'total_impuestos' => 5]), 'el IGV');
+        $this->assertRechazo($this->ventaConImportes($producto, ['price_final' => 20]), 'el precio final');
+        $this->assertSame(0, Sale::count());
+
+        $this->entrarComo(['emitir_nota_venta', 'cambiar_precio_venta']);
+        $this->assertSame(200, $this->guardar($this->ventaConImportes($producto, ['subtotal' => 40, 'mto_base_igv' => 40]))['code']);
+    }
+
+    public function test_el_descuento_no_puede_pasar_del_maximo_del_producto(): void
+    {
+        $this->entrarComo(['emitir_nota_venta']);
+        $producto = $this->producto(['price_general' => 50, 'max_discount' => 10]);
+
+        // 10 % de 100 = 10: base 90, IGV 16,20, price_final 53,10.
+        $diezPorCiento = ['discount' => 10, 'subtotal' => 90, 'mto_base_igv' => 90, 'igv' => 16.2, 'total_impuestos' => 16.2, 'price_final' => 53.1];
+        $this->assertSame(200, $this->guardar($this->ventaConImportes($producto, $diezPorCiento))['code']);
+
+        // 50 % de 100 = 50: coherente en importes, pero pasa del máximo.
+        $mitad = ['discount' => 50, 'subtotal' => 50, 'mto_base_igv' => 50, 'igv' => 9, 'total_impuestos' => 9, 'price_final' => 29.5];
+        $this->assertRechazo($this->ventaConImportes($producto, $mitad), 'descuento');
+    }
+
+    public function test_al_editar_solo_se_revisan_las_lineas_que_cambiaron(): void
+    {
+        $this->entrarComo(['emitir_nota_venta', 'edit_sale', 'cambiar_precio_venta']);
+        $producto = $this->producto(['price_general' => 50]);
+        $cliente = $this->clienteT109();
+        // Línea vieja con importes que hoy no cuadrarían (se guardó con otra cuenta).
+        $payload = $this->payload($producto, $cliente, 50, [], 2);
+        $payload['sale_details'][0]['igv'] = 15;
+        $payload['sale_details'][0]['total_impuestos'] = 15;
+        $idVenta = $this->guardar($payload)['sale_id'];
+        $idLinea = SaleDetail::where('sale_id', $idVenta)->value('id');
+
+        $this->entrarComo(['emitir_nota_venta', 'edit_sale']);
+        $payload['sale_details'][0]['id'] = $idLinea;
+        $this->assertSame(200, $this->actualizar($idVenta, $payload)['code']);
     }
 
     // ── CA7 ───────────────────────────────────────────────────────────

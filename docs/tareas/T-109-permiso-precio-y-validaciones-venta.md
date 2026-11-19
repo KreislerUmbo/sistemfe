@@ -84,7 +84,7 @@ Usuario vendedor sin el permiso y Propietario, en un tenant retail.
 - **Commits:** rama `feat/T-109-permiso-precio-validaciones` (ver `git log main..`).
 - **Tests:** `tests/Feature/Ventas/T109PrecioYValidacionesVentaTest.php` (13 tests: CA1-CA7, más
   igv incluido con tolerancia, boleta en USD y cotización no convertible) y 1 caso nuevo en
-  `ventaRetail.test.ts` (boleta en USD). Suite completa del backend: 2374 pasan y 1 falla
+  `ventaRetail.test.ts` (boleta en USD). Suite completa del backend (primera entrega): 2374 pasan y 1 falla
   (`Fila13Fase2cOperacionTest › en un viaje de varios dias solo se mueve el tour`, 422 en vez de 200);
   falla igual sin mis cambios, así que es previo (ver Hallazgos). Type-check:
   sin errores en los archivos tocados (los errores que quedan son previos, p. ej. `fake-backend.ts`).
@@ -110,7 +110,44 @@ Usuario vendedor sin el permiso y Propietario, en un tenant retail.
     vendía a 50; ahora el catálogo es 50 (la regla nueva lo habría rechazado).
 - **Efecto a tener en cuenta:** la pantalla vieja `sale/edit.vue` deja editar el precio libremente;
   sin el permiso, el backend ahora rechaza ese cambio en `update()`. Se resuelve con T-110.
-- **Al desplegar:** `tenants:migrate-verticales` y `roles:sync-propietario`.
+- **Revisión (19-nov), puntos 0 a 5:** hechos en commits separados.
+  1. **Catálogo en 0 = precio libre:** `PrecioVentaValidator` no compara si el precio de catálogo que
+     corresponde (general, o empresa si > 0) es 0; en pantalla `TablaLineasVenta` deja escribir el
+     precio de esas líneas aunque no haya permiso (`precioEditable()`). Test incluido.
+  2. **Roles administradores:** la migración (aún sin merge, por eso se editó) da el permiso a los
+     roles que EXISTAN entre `Admin-General`, `Administrador de agencia` y `Admin Empresario`; no los
+     crea. `AgenciaViajesRolesSeeder` lo lista en `PERMISOS` y se lo da solo al Administrador de
+     agencia (provisioning nuevo). No incluí «Administrador de créditos»: ese giro no tiene
+     `register_sale` y no vende por esta pantalla. En retail no hay rol administrador en los seeders.
+     CA5 cubre Propietario (sync) y la migración (admins sí, vendedor y cajero no, sin crear roles).
+  3. **Coherencia de importes (sin el permiso):** `importesIncoherentes()` recalcula cada línea con la
+     cuenta de `updateItem()` (leída entera) y compara `mto_valor_venta`, `mto_base_igv`, `subtotal`,
+     `igv`, `isc`, `icbper`, `total_impuestos`, `porcentaje_igv` y `price_final × cantidad`, con
+     tolerancia de S/ 0,01 por línea (más 0,00005 × cantidad en `price_final`, que es unitario y se
+     redondea a 4 decimales). Cubre gratuita 11, exonerada 20, inafecta 30, exportación 40, IVAP 17,
+     ISC 01/02/03 e ICBPER; la tasa debe corresponder a la afectación elegida (que sigue libre). Los
+     datos del producto (ISC, litros, `is_icbper`, `max_discount`) salen de la BD, no del payload. No
+     hubo ningún tipo de línea que no se pudiera reproducir con seguridad. **Añadido que la tarea no
+     pedía:** el descuento tiene que estar entre 0 y `max_discount` del producto (la pantalla ya lo
+     limitaba; sin esto el descuento era una forma de rebajar el precio). En `update()`, una línea con
+     `id` que no cambió en precio, cantidad, descuento ni afectación no se revisa (ventas viejas
+     guardadas con otra cuenta). Con el permiso no cambia nada.
+     **Fixtures:** 4 tests existentes mandaban líneas sin `total_impuestos` o con cantidad 3 y montos
+     de cantidad 2 (la pantalla real siempre manda importes coherentes); se corrigieron
+     (`SaleControllerSerieComprobanteTest`, `AdvanceIntegridadTest`, `T009MonedaCajaTest`,
+     `DescripcionLineaVentaTest`). Tests nuevos: uno por afectación, ISC, ICBPER, `subtotal`/IGV/
+     `price_final` rebajados → 422 (y con el permiso → 200), descuento sobre el máximo, y edición de
+     línea sin cambios.
+  4. **Backlog:** el hallazgo de `es_default` pasó a «Por analizar». `docs/backlog.md` además
+     trae cambios tuyos sin commitear (T-112, T-113, próximo ID): no lo commiteé, queda para ti.
+  5. **Al desplegar:** ver abajo.
+- **Suite completa del backend (tras los puntos 1 a 3):** 2381 pasan y 1 falla, la misma previa
+  (`Fila13Fase2cOperacionTest`).
+- **Al desplegar:** `tenants:migrate-verticales` y `roles:sync-propietario`. **Antes del deploy**, en
+  producción, listar los roles que tienen usuarios en market, dakamu y credishirley y confirmar que los
+  nombres de la migración (`Admin-General`, `Administrador de agencia`, `Admin Empresario`) coinciden;
+  si un tenant llama distinto a su administrador, esa migración no le da el permiso (no crea ni adivina
+  roles) y habría que asignarlo a mano.
 
 ## Revisión (Opus, 19-nov-2026) — cambios pedidos, decididos por el usuario
 Lo construido está bien (13 tests en verde; la cuenta de `PrecioVentaValidator` coincide con
