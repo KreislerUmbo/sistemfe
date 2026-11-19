@@ -88,13 +88,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, watch } from 'vue';
 import httpClient from '@/helpers/http-client';
 import Swal from 'sweetalert2';
 
 const is_ivap = ref(1);
 const is_icbper = ref(1);
 const percentage_isc = ref<number>(0);
+// T-106: el buscador de la venta pasa el texto buscado como nombre inicial.
+const props = defineProps<{ initialData?: { title?: string } | null }>();
 const emit = defineEmits(['saved', 'cancel']);
 
 const form = ref({
@@ -121,6 +123,8 @@ const form = ref({
 });
 
 const categories = ref<any[]>([]);
+
+watch(() => props.initialData, (d) => { if (d?.title) form.value.title = d.title; }, { immediate: true });
 
 onMounted(async () => {
   try {
