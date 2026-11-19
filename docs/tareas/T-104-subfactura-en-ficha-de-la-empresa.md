@@ -88,9 +88,10 @@ enlace; el resumen suma el monto. La ficha del que cotizó no la muestra.
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:** (nuevos / suite completa)
-- **Desviaciones de la tarea y por qué:**
+- **Commits:** ver `git log feat/T-104-subfactura-ficha-empresa`.
+- **Tests:** 4 nuevos en `CrmFichaClienteTest` (CA1+CA2, CA3, CA4, CA5); el archivo, 14/14. Suite completa desde el worktree: 2348 pasan, 2 errores de entorno (`certificate-demo.pem` no está en el `storage/` del worktree; esos 2 tests pasan en el repo principal). `type-check`: los 47 errores de siempre, ninguno en archivos tocados.
+- **CA6 (prueba funcional):** pendiente; se hace en agencia-demo después del merge (Apache sirve el repo principal, no el worktree).
+- **Desviaciones de la tarea y por qué:** ninguna. El recorrido es una actualización del 66 (§2.2 y §2.3), que ya explicaba esta parte de la ficha, en vez de uno nuevo.
 
 ## Hallazgos fuera de alcance
-- 
+- Ninguno.

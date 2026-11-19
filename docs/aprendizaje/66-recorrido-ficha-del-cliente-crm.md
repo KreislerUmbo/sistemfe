@@ -81,7 +81,7 @@ usuario no tiene permiso, no se muestra.
 - **Viaje realizado** = reserva `activa` con `fecha_viaje_hasta` anterior a hoy en Perú (no existe un
   estado «realizada»). **Último viaje** = la reserva activa con el `fecha_viaje_desde` más reciente que ya
   empezó.
-- **Total comprado**, por moneda = comprobantes de sus reservas (factura, boleta, NV **y adelanto**)
+- **Total comprado**, por moneda = comprobantes emitidos a él en reservas visibles (§2.3; factura, boleta, NV **y adelanto**)
   − notas de crédito + notas de débito (las NC rechazadas no restan). El adelanto se suma porque la
   factura final se guarda **neta** de los adelantos aplicados; la devolución de un adelanto es una NC sobre
   su comprobante y se resta sola.
@@ -91,7 +91,9 @@ usuario no tiene permiso, no se muestra.
 
 ### 2.3 Qué comprobantes son «de una reserva»
 
-`FichaClienteAgencia::ventasDeReservas()` une tres caminos (en una sola consulta con `union`):
+`FichaClienteAgencia::ventasDeReservas()` **parte de las ventas del cliente** (`sales.client_id` = este
+cliente, sin borrar) y busca a qué reserva pertenece cada una por tres caminos (en una sola consulta con
+`union`):
 
 ```
 reserva_ventas                                 (el enlace normal)
@@ -99,9 +101,19 @@ sale_details → sale_detail_items → reserva_items (sobrevive a la NC total, q
 advances → reserva_anticipos                   (los comprobantes de adelanto)
 ```
 
-y se queda solo con los que tienen `sales.client_id` = este cliente. Con «Facturación múltiple por grupo»,
-la sub-factura emitida a otra empresa **no** aparece en la ficha del que cotizó: no es una compra suya
-(aceptado en la revisión; mostrarla en la ficha de esa empresa es T-104).
+y se queda con las de reservas **visibles** para el usuario (`Reserva::propias()`), las haya cotizado
+este cliente u otro.
+
+**Sub-facturas (T-104, 18-nov-2026).** Con «Facturación múltiple por grupo», una reserva cotizada por A
+puede emitir una sub-factura a la empresa B. Esa sub-factura:
+- **sale en la ficha de B** (comprobante, pagos y total comprado), con «Reserva de A» en el detalle
+  (`reserva_de`, de `reservasDeOtros()`) y el enlace a la reserva;
+- **no sale en la ficha de A**: no es una compra suya (el filtro por `client_id`);
+- no cuenta como viaje de B (`viajes_realizados` y `ultimo_viaje` siguen mirando solo las reservas que
+  cotizó B).
+
+Hasta T-104 la función partía de las reservas del cliente; como B no cotizó nada, la sub-factura no
+aparecía en ninguna ficha.
 
 Las ventas directas sí traen su reserva, comprobantes y pagos, pero su cotización interna
 (`origen = 'venta_directa'`) no aparece ni cuenta (`delCotizador()`).

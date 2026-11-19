@@ -91,11 +91,11 @@ class CrmFichaClienteTest extends TestCase
         return $user;
     }
 
-    private function cliente(): int
+    private function cliente(string $nombre = 'Ana Pérez'): int
     {
         return DB::table('clients')->insertGetId([
             'type_document' => 'DNI', 'n_document' => (string) random_int(10_000_000, 99_999_999),
-            'full_name' => 'Ana Pérez', 'email' => 'ana@cliente.test', 'phone' => '987654321',
+            'full_name' => $nombre, 'email' => 'ana@cliente.test', 'phone' => '987654321',
             'created_at' => now(), 'updated_at' => now(),
         ]);
     }
@@ -515,6 +515,125 @@ class CrmFichaClienteTest extends TestCase
         $this->assertContains("comprobante-{$venta}", $ids);
         $this->assertCount(2, $ids, 'la factura y su NC');
         $this->assertEquals([['moneda' => 'PEN', 'monto' => 0]], $this->resumen($clienteId)['resumen']['total_comprado']);
+    }
+
+    // ── T-104: sub-factura a otra empresa ────────────────────────────
+
+    // CA1 + CA2
+    public function test_t104_la_subfactura_sale_en_la_ficha_de_la_empresa_y_no_en_la_del_que_cotizo(): void
+    {
+        $vendedor = $this->usuario();
+        $ana = $this->cliente('Ana Pérez');
+        $empresa = $this->cliente('Transportes Selva SAC');
+        $reserva = $this->reserva($this->cotizacion($ana, $vendedor->id));
+        $propia = $this->venta($reserva, $ana, 500);
+        $sub = $this->venta($reserva, $empresa, 300, ['serie' => 'F001', 'tipo_comprobante_codigo' => '01']);
+        $pagoSub = $this->pago($sub, 300);
+
+        // Ficha de la empresa: el comprobante y su pago, con «Reserva de Ana Pérez», enlazados a la reserva.
+        $eventos = collect($this->linea($empresa)['eventos'])->keyBy('id');
+        $this->assertEqualsCanonicalizing(["comprobante-{$sub}", "pago-{$pagoSub}"], $eventos->keys()->all());
+        $this->assertSame('Ana Pérez', $eventos["comprobante-{$sub}"]['reserva_de']);
+        $this->assertSame($reserva->id, $eventos["comprobante-{$sub}"]['enlace']['reserva_id']);
+        $this->assertSame($reserva->id, $eventos["pago-{$pagoSub}"]['enlace']['reserva_id']);
+        $resumenEmpresa = $this->resumen($empresa)['resumen'];
+        $this->assertEquals([['moneda' => 'PEN', 'monto' => 300.0]], $resumenEmpresa['total_comprado']);
+        $this->assertSame(0, $resumenEmpresa['viajes_realizados'], 'pagó, pero la reserva no es suya');
+
+        // Ficha de Ana: su comprobante sin «Reserva de», sin la sub-factura ni su monto.
+        $deAna = collect($this->linea($ana, ['tipo' => 'comprobante'])['eventos'])->keyBy('id');
+        $this->assertSame(["comprobante-{$propia}"], $deAna->keys()->all());
+        $this->assertNull($deAna["comprobante-{$propia}"]['reserva_de']);
+        $this->assertEquals([['moneda' => 'PEN', 'monto' => 500.0]], $this->resumen($ana)['resumen']['total_comprado']);
+    }
+
+    // CA3
+    public function test_t104_un_vendedor_que_no_ve_la_reserva_no_ve_la_subfactura(): void
+    {
+        $otro = $this->usuario(self::PERMISOS_VENDEDOR);
+        $yo = $this->usuario(self::PERMISOS_VENDEDOR, sesion: false);
+        $ana = $this->cliente('Ana Pérez');
+        $empresa = $this->cliente('Transportes Selva SAC');
+        $reserva = $this->reserva($this->cotizacion($ana, $otro->id));
+        $sub = $this->venta($reserva, $empresa, 300);
+        $this->pago($sub, 300);
+
+        Auth::guard('api')->setUser($yo->fresh());
+        $this->assertSame([], $this->linea($empresa)['eventos']);
+        $this->assertSame([], $this->resumen($empresa)['resumen']['total_comprado']);
+
+        // El vendedor de la reserva sí la ve.
+        Auth::guard('api')->setUser($otro->fresh());
+        $this->assertCount(2, $this->linea($empresa)['eventos']);
+    }
+
+    // CA4
+    public function test_t104_la_subfactura_anulada_con_nc_total_sigue_en_la_ficha_de_la_empresa(): void
+    {
+        $vendedor = $this->usuario();
+        $ana = $this->cliente('Ana Pérez');
+        $empresa = $this->cliente('Transportes Selva SAC');
+        $alternativa = $this->cotizacion($ana, $vendedor->id);
+        $alternativaItem = AlternativaItem::create([
+            'alternativa_id' => $alternativa->id, 'origen_tipo' => AlternativaItem::ORIGEN_MANUAL,
+            'modo_precio' => 'tarifa_fija', 'cantidad' => 1, 'moneda_costo' => 'PEN',
+            'costo_snapshot' => 250, 'precio_venta_snapshot' => 300, 'precio_convertido' => 300,
+            'tip_afe_igv' => '10', 'destino_tributario' => 'nacional',
+        ]);
+        $reserva = $this->reserva($alternativa);
+        $item = DB::table('reserva_items')->insertGetId([
+            'reserva_id' => $reserva->id, 'alternativa_item_id' => $alternativaItem->id, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $sub = $this->venta($reserva, $empresa, 300, ['serie' => 'F001', 'tipo_comprobante_codigo' => '01']);
+        $detalle = DB::table('sale_details')->insertGetId([
+            'sale_id' => $sub, 'product_id' => DB::table('products')->value('id'),
+            'product_categorie_id' => DB::table('categories')->value('id'), 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('sale_detail_items')->insert(['sale_detail_id' => $detalle, 'reserva_item_id' => $item, 'created_at' => now(), 'updated_at' => now()]);
+        $this->avanzar();
+        DB::table('notes')->insert([
+            'sale_id' => $sub, 'tipo_doc' => '07', 'tipo_doc_afectado' => '01', 'serie_afectada' => 'F001', 'correlativo_afectado' => '1', 'serie' => 'FC01', 'cod_motivo' => '01', 'des_motivo' => 'Anulación',
+            'tipo_afectacion' => 'total', 'client_id' => $empresa, 'cod_tipo_doc_cliente' => '6', 'user_id' => $vendedor->id, 'currency' => 'PEN', 'mto_imp_venta' => 300,
+            'status' => 'pendiente', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('reserva_ventas')->where('sale_id', $sub)->delete();
+
+        $eventos = $this->linea($empresa, ['tipo' => 'comprobante'])['eventos'];
+        $this->assertCount(2, $eventos, 'la sub-factura y su NC, por sus líneas');
+        $this->assertSame(['Ana Pérez', 'Ana Pérez'], array_column($eventos, 'reserva_de'));
+        $this->assertEquals([['moneda' => 'PEN', 'monto' => 0]], $this->resumen($empresa)['resumen']['total_comprado']);
+    }
+
+    // CA5
+    public function test_t104_las_subfacturas_no_suman_consultas(): void
+    {
+        $vendedor = $this->usuario();
+        $empresa = $this->cliente('Transportes Selva SAC');
+
+        $armar = function (int $veces) use ($empresa, $vendedor) {
+            for ($i = 0; $i < $veces; $i++) {
+                $reserva = $this->reserva($this->cotizacion($this->cliente('Cliente ' . $i), $vendedor->id));
+                $this->pago($this->venta($reserva, $empresa, 100), 100);
+            }
+        };
+        $contar = function () use ($empresa): int {
+            $this->linea($empresa);
+            $this->resumen($empresa);
+            DB::flushQueryLog();
+            DB::enableQueryLog();
+            $this->linea($empresa);
+            $this->resumen($empresa);
+            $consultas = count(DB::getQueryLog());
+            DB::disableQueryLog();
+
+            return $consultas;
+        };
+
+        $armar(2);
+        $pocas = $contar();
+        $armar(6);
+        $this->assertSame($pocas, $contar(), 'la cantidad de consultas no crece con las sub-facturas');
+        $this->assertCount(16, $this->linea($empresa)['eventos'], '8 comprobantes + 8 pagos');
     }
 
     // ── CA5 (backend): fuera de Agencia ──────────────────────────────

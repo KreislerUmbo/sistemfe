@@ -169,7 +169,7 @@ const linea2 = (e: EventoLineaTiempo): string => {
             partes.push(e.detalle, e.viaje?.desde ? `Viaje ${formatFecha(e.viaje.desde)}${e.viaje.hasta ? ` – ${formatFecha(e.viaje.hasta)}` : ''}` : null);
             break;
         case 'comprobante':
-            partes.push(formatoMoneda(e.monto, e.moneda), e.detalle, e.usuario);
+            partes.push(formatoMoneda(e.monto, e.moneda), e.detalle, e.reserva_de ? `Reserva de ${e.reserva_de}` : null, e.usuario);
             break;
         case 'pago':
             partes.push(e.titulo, e.detalle ? `de ${e.detalle}` : null, e.nro_operacion ? `Op. ${e.nro_operacion}` : null);

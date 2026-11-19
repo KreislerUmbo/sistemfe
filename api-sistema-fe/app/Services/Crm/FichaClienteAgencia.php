@@ -27,10 +27,12 @@ use Illuminate\Support\Facades\DB;
 //
 // Ventas directas: su cotización interna no aparece ni cuenta (delCotizador()); su reserva sí.
 //
-// Comprobantes de una reserva: por reserva_ventas, por sus líneas (sale_detail_items →
-// reserva_items: sobrevive a la NC total, que borra la fila de reserva_ventas) y los de adelanto
-// (reserva_anticipos). Solo los emitidos a ESTE cliente (una sub-factura a otra empresa no es una
-// compra suya).
+// Comprobantes: los emitidos a ESTE cliente (sales.client_id) en cualquier reserva visible, la haya
+// cotizado él u otro. T-104: con «Facturación múltiple por grupo», la sub-factura de una reserva de A
+// emitida a la empresa B sale en la ficha de B (con «Reserva de A») y no en la de A (no es una compra
+// suya). El enlace a la reserva es por reserva_ventas, por sus líneas (sale_detail_items →
+// reserva_items: sobrevive a la NC total, que borra la fila de reserva_ventas) y por los adelantos
+// (reserva_anticipos).
 //
 // Consultas: una cantidad fija por tipo de evento, nunca una por elemento (CA4). Cada tipo trae
 // solo los primeros (offset + página + 1) por fecha; los primeros N de la mezcla están siempre
@@ -70,40 +72,58 @@ class FichaClienteAgencia
         $this->cache[$clienteId] = [
             'reservas' => $reservas,
             'cotizacionIds' => $cotizacionIds,
-            'ventas' => $this->ventasDeReservas($clienteId, $reservas->pluck('id')->all()),
+            'ventas' => $this->ventasDeReservas($clienteId),
         ];
 
         return $this->cache[$clienteId];
     }
 
-    /** sale_id => reserva_id de los comprobantes de esas reservas emitidos a este cliente. */
-    private function ventasDeReservas(int $clienteId, array $reservaIds): Collection
+    /**
+     * sale_id => reserva_id de los comprobantes emitidos a este cliente en reservas visibles para el
+     * usuario (Reserva::propias()), sean de sus cotizaciones o de las de otro cliente (T-104).
+     * Parte de las ventas del cliente, no de sus reservas: una sola consulta.
+     */
+    private function ventasDeReservas(int $clienteId): Collection
     {
-        if (! $reservaIds) {
-            return collect();
-        }
+        $ventasDelCliente = DB::table('sales')->where('client_id', $clienteId)->whereNull('deleted_at')->select('id');
 
-        $porVenta = DB::table('reserva_ventas')->whereIn('reserva_id', $reservaIds)->select('sale_id', 'reserva_id')
+        $porVenta = DB::table('reserva_ventas')->whereIn('sale_id', $ventasDelCliente)->select('sale_id', 'reserva_id')
             ->union(
                 DB::table('sale_details as sd')
                     ->join('sale_detail_items as sdi', 'sdi.sale_detail_id', '=', 'sd.id')
                     ->join('reserva_items as ri', 'ri.id', '=', 'sdi.reserva_item_id')
-                    ->whereIn('ri.reserva_id', $reservaIds)
+                    ->whereIn('sd.sale_id', $ventasDelCliente)
                     ->select('sd.sale_id', 'ri.reserva_id')
             )
             ->union(
                 DB::table('advances as a')
                     ->join('reserva_anticipos as ra', 'ra.advance_id', '=', 'a.id')
-                    ->whereIn('ra.reserva_id', $reservaIds)
-                    ->whereNotNull('a.sale_id')
+                    ->whereIn('a.sale_id', $ventasDelCliente)
                     ->select('a.sale_id', 'ra.reserva_id')
             );
 
         return DB::query()->fromSub($porVenta, 'v')
-            ->join('sales as s', 's.id', '=', 'v.sale_id')
-            ->where('s.client_id', $clienteId)
-            ->whereNull('s.deleted_at')
+            ->whereIn('v.reserva_id', Reserva::query()->propias()->select((new Reserva())->getQualifiedKeyName()))
             ->pluck('v.reserva_id', 'v.sale_id');
+    }
+
+    /**
+     * reserva_id => nombre del cliente que la cotizó, solo para las reservas de OTRO cliente
+     * (sub-facturas, T-104). Una consulta para todas.
+     */
+    private function reservasDeOtros(int $clienteId, Collection $ventas): Collection
+    {
+        if ($ventas->isEmpty()) {
+            return collect();
+        }
+
+        return DB::table((new Reserva())->getTable() . ' as r')
+            ->join('alternativas as a', 'a.id', '=', 'r.alternativa_id')
+            ->join('cotizaciones as c', 'c.id', '=', 'a.cotizacion_id')
+            ->join('clients as cl', 'cl.id', '=', 'c.cliente_id')
+            ->whereIn('r.id', $ventas->values()->unique()->all())
+            ->where('c.cliente_id', '<>', $clienteId)
+            ->pluck('cl.full_name', 'r.id');
     }
 
     private function filtrarReferencias(Builder $query, int $clienteId): Builder
@@ -315,6 +335,9 @@ class FichaClienteAgencia
             return collect();
         }
 
+        $deOtros = $this->reservasDeOtros($clienteId, $ventas);
+        $reservaDe = fn (int $saleId) => $deOtros[$ventas[$saleId] ?? 0] ?? null;
+
         $comprobantes = Sale::query()->whereIn('id', $ventas->keys()->all())
             ->with('user:id,name,surname')
             ->orderByDesc('created_at')->orderByDesc('id')->limit($limite)
@@ -326,6 +349,7 @@ class FichaClienteAgencia
                 'moneda' => $s->currency ?: 'PEN',
                 'enviado' => (bool) $s->n_operacion,
                 'usuario' => self::nombre($s->user),
+                'reserva_de' => $reservaDe($s->id),
                 'enlace' => ['reserva_id' => $ventas[$s->id] ?? null],
             ]));
 
@@ -339,6 +363,7 @@ class FichaClienteAgencia
                 'monto' => (float) $n->mto_imp_venta,
                 'moneda' => $n->currency ?: 'PEN',
                 'enviado' => (bool) $n->n_operacion,
+                'reserva_de' => $reservaDe($n->sale_id),
                 'enlace' => ['reserva_id' => $ventas[$n->sale_id] ?? null],
             ]));
 
