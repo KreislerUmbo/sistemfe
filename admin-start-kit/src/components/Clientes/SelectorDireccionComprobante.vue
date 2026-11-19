@@ -1,23 +1,24 @@
 <template>
-  <!-- T-107: elige qué dirección imprime el comprobante (fiscal por defecto, sin preguntar).
-       Solo muestra el select si el cliente tiene otras direcciones; el enlace «+ Agregar dirección»
-       se ve siempre que hay cliente. `modelValue` = client_address_id (null = la fiscal). -->
-  <div v-if="clienteId" class="selector-direccion-comprobante">
-    <template v-if="hayOpciones">
-      <label class="form-label mb-1 small fw-semibold text-secondary" :for="idSelect">
-        <i class="fas fa-map-marker-alt me-1"></i>Dirección del comprobante
-      </label>
-      <select :id="idSelect" class="form-select form-select-sm" :value="modelValue ?? ''" @change="elegir">
-        <option value="">Fiscal{{ direccionFiscal ? ' — ' + direccionFiscal : '' }}</option>
-        <option v-for="d in opciones" :key="d.id" :value="d.id">
-          {{ d.nombre }} — {{ d.direccion }}{{ d.activo ? '' : ' (desactivada)' }}
-        </option>
-      </select>
+  <!-- T-107: la dirección que imprime el comprobante, elegida de la lista del cliente: la fiscal (por
+       defecto, sin preguntar) o una de sus otras direcciones; si no está, «+ Agregar dirección» la crea
+       y la deja elegida. Siempre visible (decisión del usuario, 19-nov-2026: un solo campo de dirección,
+       en vez de un texto editable más el selector). `modelValue` = client_address_id (null = la fiscal). -->
+  <div class="selector-direccion-comprobante">
+    <label class="form-label mb-1 small fw-semibold text-secondary" :for="idSelect">
+      <i class="fas fa-map-marker-alt me-1"></i>Dirección del comprobante
+    </label>
+    <select :id="idSelect" class="form-select form-select-sm" :value="modelValue ?? ''" :disabled="!clienteId" @change="elegir">
+      <option value="">{{ clienteId ? 'Fiscal' + (direccionFiscal ? ' — ' + direccionFiscal : '') : 'Elige un cliente' }}</option>
+      <option v-for="d in opciones" :key="d.id" :value="d.id">
+        {{ d.nombre }} — {{ d.direccion }}{{ d.activo ? '' : ' (desactivada)' }}
+      </option>
+    </select>
+    <template v-if="clienteId">
+      <a href="#" class="small d-inline-block mt-1" @click.prevent="modalAbierto = true">
+        <i class="fas fa-plus me-1"></i>Agregar dirección
+      </a>
+      <DireccionClienteModal v-model="modalAbierto" :cliente-id="clienteId" @guardada="alGuardar" />
     </template>
-    <a href="#" class="small d-inline-block mt-1" @click.prevent="modalAbierto = true">
-      <i class="fas fa-plus me-1"></i>Agregar dirección
-    </a>
-    <DireccionClienteModal v-model="modalAbierto" :cliente-id="clienteId" @guardada="alGuardar" />
   </div>
 </template>
 
@@ -30,7 +31,7 @@ const props = defineProps<{
   clienteId?: number | null
   modelValue: number | null
   /** Texto de la dirección fiscal (clients.address), solo para mostrarla en la primera opción. */
-  direccionFiscal?: string
+  direccionFiscal?: string | null
 }>()
 const emit = defineEmits<{ (e: 'update:modelValue', id: number | null): void }>()
 
@@ -40,7 +41,6 @@ const modalAbierto = ref(false)
 
 // Activas, más la ya elegida aunque se haya desactivado después (venta guardada que se edita).
 const opciones = computed(() => direcciones.value.filter((d) => d.activo || d.id === props.modelValue))
-const hayOpciones = computed(() => opciones.value.length > 0)
 
 async function cargar(id: number | null | undefined) {
   direcciones.value = []
@@ -50,7 +50,7 @@ async function cargar(id: number | null | undefined) {
     // Si el cliente cambió mientras llegaba la respuesta, se descarta.
     if (props.clienteId === id) direcciones.value = lista
   } catch {
-    direcciones.value = [] // sin selector: la emisión sigue con la fiscal
+    direcciones.value = [] // solo la fiscal: la emisión sigue igual
   }
 }
 

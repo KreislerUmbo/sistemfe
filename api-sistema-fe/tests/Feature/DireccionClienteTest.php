@@ -308,6 +308,36 @@ class DireccionClienteTest extends CreditosTestCase
         $this->assertSame($tarapoto->id, Note::find($misma->getData(true)['note']['id'])->client_address_id);
     }
 
+    // Revisión de T-107: la pantalla manda null también cuando la venta usó la fiscal. Esa NC debe
+    // llevar la dirección copiada en la venta (T-064), no la fiscal de hoy si el cliente se editó.
+    // Lo mismo con la misma sucursal: conserva el texto de la venta aunque la sucursal se haya editado.
+    public function test_la_nota_con_la_misma_direccion_que_la_venta_conserva_el_texto_de_la_venta(): void
+    {
+        $this->emisor();
+        $cliente = $this->empresa();
+        $tarapoto = $this->sucursal($cliente);
+        $conFiscal = Sale::find($this->anticipo($cliente)['sale_id']);
+        $conSucursal = Sale::find($this->anticipo($cliente, $tarapoto->id)['sale_id']);
+        foreach ([$conFiscal, $conSucursal] as $i => $venta) {
+            Sale::where('id', $venta->id)->update(['correlativo' => $i + 1, 'n_operacion' => 'F001-0000000' . ($i + 1), 'xml' => '<x/>', 'cdr' => 'cdr']);
+        }
+
+        // Después de emitir, se corrigen la fiscal del cliente y la sucursal.
+        $cliente->update(['address' => 'Av. Fiscal Corregida 999']);
+        $tarapoto->update(['direccion' => 'Av. Tarapoto Corregida 777']);
+
+        $nota = Note::find($this->notaDe($conFiscal, ['client_address_id' => null])->getData(true)['note']['id']);
+        $this->assertNull($nota->client_address_id);
+        $this->assertSame(self::FISCAL, $nota->direccion_cliente, 'la de la venta, no la fiscal de hoy');
+
+        $nota2 = Note::find($this->notaDe($conSucursal, ['client_address_id' => $tarapoto->id])->getData(true)['note']['id']);
+        $this->assertSame('Av. Sucursal Tarapoto 500', $nota2->direccion_cliente, 'el texto que imprimió la venta');
+
+        // Cambiar de sucursal a la fiscal: no hay copia de la fiscal en la venta, va la de hoy.
+        $nota3 = Note::find($this->notaDe($conSucursal, ['client_address_id' => null])->getData(true)['note']['id']);
+        $this->assertSame('Av. Fiscal Corregida 999', $nota3->direccion_cliente);
+    }
+
     // CA5 (anticipo; la factura de reserva está en Fila13Fase1cFacturacionTest)
     public function test_ca5_el_anticipo_con_direccion_elegida_la_copia(): void
     {

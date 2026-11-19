@@ -17,8 +17,11 @@ usuario pueda elegirla en las pantallas donde emite. Esta tarea es solo frontend
 - Componente nuevo `components/Clientes/SelectorDireccionComprobante.vue`:
   - Props: `clienteId`, `v-model` (`client_address_id`, `null` = fiscal), `direccionFiscal` (texto).
   - Carga `GET clients/{id}/direcciones` al cambiar el cliente; si cambia el cliente, vuelve a `null`.
-  - **Solo se muestra si el cliente tiene otras direcciones activas.** Opciones: "Fiscal — <dirección>"
-    (por defecto) y cada dirección extra como "<nombre> — <dirección>".
+  - ~~Solo se muestra si el cliente tiene otras direcciones activas.~~ **Cambio del usuario en la
+    revisión (19-nov-2026): se muestra siempre**, como el único campo de dirección (sin cliente,
+    deshabilitado con «Elige un cliente»). Opciones: "Fiscal — <dirección>" (por defecto) y cada
+    dirección extra como "<nombre> — <dirección>". En venta y edición reemplaza al texto «Dirección»,
+    que no se enviaba al backend.
   - Enlace "+ Agregar dirección": abre `DireccionClienteModal.vue`; al guardar, la deja elegida.
     Como el selector está oculto sin otras direcciones, el enlace se muestra solo, debajo del
     cliente (sin alertas ni preguntas).
@@ -42,7 +45,7 @@ usuario pueda elegirla en las pantallas donde emite. Esta tarea es solo frontend
 - `register.vue` (2176 líneas) y `edit.vue`: buscar `client_selected` y `client_id:` con grep, no leerlos enteros
 
 ## Criterios de aceptación
-- [ ] **CA1** — Cliente sin otras direcciones → el selector no aparece; solo "+ Agregar dirección". → prueba funcional
+- [ ] **CA1** — Cliente sin otras direcciones → el selector muestra solo la fiscal, con "+ Agregar dirección" (cambio de la revisión: antes no aparecía). → prueba funcional
 - [ ] **CA2** — Cliente con 2 sucursales → venta retail con "Sucursal Tarapoto" → PDF con esa dirección; la siguiente sin tocar el selector → fiscal. → prueba funcional
 - [ ] **CA3** — "+ Agregar dirección" desde la emisión → queda en el cliente (se ve en la ficha) y en el comprobante. → prueba funcional
 - [ ] **CA4** — NC de esa venta → propone "Sucursal Tarapoto"; cambiarla a la fiscal → la NC sale con la fiscal. → prueba funcional
@@ -83,5 +86,11 @@ Verificar el PDF A4 de cada comprobante (Ghostscript solo al final).
   3. `components.d.ts` se regeneró solo (registra el selector).
 - **Detalles de diseño:** el selector solo vuelve a `null` cuando cambia de un cliente a otro (no en la primera carga), para respetar el valor hidratado al editar; muestra la dirección ya elegida aunque esté desactivada. En `register.vue`/`edit.vue` solo hay el uso del componente, la variable y el campo del payload.
 
+- **Revisión (Opus, 19-nov-2026):**
+  - **Regresión corregida:** con `has()`, la NC desde la pantalla (que manda `null` cuando la venta usó la fiscal) copiaba la fiscal **actual** del cliente: deshacía T-064 para toda NC. Ahora, si la dirección elegida es la misma de la venta, la nota conserva el texto copiado en la venta; solo al cambiar se copia de nuevo (de sucursal a fiscal: la fiscal de hoy, la única que hay). Test `test_la_nota_con_la_misma_direccion_que_la_venta_conserva_el_texto_de_la_venta`.
+  - **Un solo campo de dirección** (pedido del usuario): el selector se muestra siempre y en venta/edición reemplaza al texto «Dirección», que no se enviaba (se quitó `client_address` de `register.vue` y `edit.vue`).
+  - En los modales de factura de reserva la opción dice solo «Fiscal»: el cliente que reciben no trae `address` (habría que tocar dos endpoints); queda así.
+  - Prueba funcional en agencia-demo (Chromium por script): venta nueva sin cliente (deshabilitado), con ECORUTAS (fiscal + 2 sucursales) y con SELVA TOURS (solo fiscal + agregar); edición de la NV 27 abre con «Sucursal Tarapoto»; NC de la venta 26 la propone; PDF A4 de la NV 27 imprime «Jr. Lima 150 (editada)». Quedan en agencia-demo la NV 27 (NV01 sin número, a ECORUTAS, S/ 118, por cobrar) y el anticipo 26 de Sonnet. Sin probar: factura de reserva y venta directa con cobro en pantalla (el backend lo cubren los tests), CA6 y umbo.
+
 ## Hallazgos fuera de alcance
-- La NC con «fiscal» usa la dirección fiscal **actual** del cliente, no la que tuviera al emitir la venta.
+- Ninguno (el de la NC era una regresión de esta tarea: corregida en la revisión).
