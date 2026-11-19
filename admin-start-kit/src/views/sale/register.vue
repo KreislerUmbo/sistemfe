@@ -2,735 +2,118 @@
     <DefaultLayout>
 
         <!-- ═══════════════════════════════════════════════════
-             TOPBAR — Tipo de transacción
+             CABECERA — estado de la venta + «Datos de la venta» (T-106)
         ═══════════════════════════════════════════════════ -->
-        <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-4">
-            <div>
-                <h5 class="fw-bold mb-0 text-dark">
-                    <i class="fas fa-cash-register me-2 text-primary"></i>
-                    Nueva Venta
-                </h5>
-                <small class="text-muted">Completa los pasos — los totales se actualizan en tiempo real</small>
-            </div>
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+            <h5 class="fw-bold mb-0 text-dark me-2">
+                <i class="fas fa-cash-register me-2 text-primary"></i>Nueva venta
+            </h5>
+            <span v-if="cajaAbierta === true" class="chip text-success" title="Sesión de caja">
+                <i class="fas fa-circle small me-1"></i>Caja abierta<template v-if="cajaDesde"> desde <b>{{ cajaDesde }}</b></template>
+            </span>
+            <span v-else-if="cajaAbierta === false" class="chip chip-alerta"><i class="fas fa-circle small me-1"></i>Caja cerrada</span>
+            <button type="button" class="chip" @click="datosAbiertos = true">Fecha <b>{{ formatFecha(today) }}</b></button>
+            <button type="button" class="chip" :class="{ 'chip-alerta': currency !== 'PEN' }" @click="datosAbiertos = true">
+                Moneda <b>{{ currency === 'PEN' ? 'Soles' : 'Dólares' }}</b>
+            </button>
+            <button v-if="puedeCambiarSucursal && nombreSucursal" type="button" class="chip" @click="datosAbiertos = true">
+                Sucursal <b>{{ nombreSucursal }}</b>
+            </button>
+            <button v-if="tipoEsFiscal && condicion_especial !== 'exportacion'" type="button" class="chip" @click="datosAbiertos = true">
+                Destino <b>{{ destino === 'amazonia' ? 'Amazonía' : 'Fuera' }}</b>
+            </button>
+            <button v-if="etiquetaCondicion" type="button" class="chip chip-alerta" @click="datosAbiertos = true">{{ etiquetaCondicion }}</button>
+            <button type="button" class="btn btn-link btn-sm fw-semibold" @click="datosAbiertos = !datosAbiertos">
+                Datos de la venta
+                <span v-if="noHabituales" class="badge bg-warning-subtle text-warning ms-1">{{ noHabituales }} no habitual{{ noHabituales > 1 ? 'es' : '' }}</span>
+                <i class="fas ms-1" :class="datosAbiertos ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+            </button>
+            <button type="button" class="btn btn-link btn-sm text-secondary ms-auto" @click="router.push({ name: 'sale.list' })">
+                Ver ventas →
+            </button>
         </div>
 
-        <!-- ═══════════════════════════════════════════════════
-             PASO 1 — DATOS GENERALES
-        ═══════════════════════════════════════════════════ -->
-        <div class="card border-0 shadow-sm mb-3">
-            <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-2">
-                <span class="badge bg-primary rounded-pill">1</span>
-                <span class="fw-semibold text-dark">Datos Generales</span>
-            </div>
-            <div class="card-body py-3">
-                <div class="row g-3 align-items-end">
+        <DatosVentaPanel v-if="datosAbiertos" v-model:moneda="currency" v-model:fecha="today"
+            v-model:sucursal-id="branch_id_seleccionado" v-model:destino="destino" v-model:condicion="condicion_especial"
+            v-model:codigo-detraccion="codigo_detraccion_sel" :puede-cambiar-sucursal="puedeCambiarSucursal"
+            :sucursales="branches" :es-fiscal="tipoEsFiscal" :codigos-detraccion="codigos_detraccion"
+            @detraccion-cambio="onDetractionCodeChange" @listo="cerrarDatos" />
 
-                    <!-- ── Condiciones especiales de venta ─────────────────
-                         Selector simple que despliega solo lo necesario.
-                         Reemplaza los 4 botones de retención/detracción/percepción/anticipo
-                    ───────────────────────────────────────────────────── -->
-                    <div class="col-6 col-md-4" v-if="is_exportacion == 0 && tipoEsFiscal">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">
-                            <i class="fas fa-sliders-h me-1"></i>Condiciones Especiales
-                        </label>
-                        <div>
-                            <select v-model="condicion_especial" class="form-select form-select-sm">
-                                <option value="0">— Ninguna (venta normal) —</option>
-                                <option value="anticipo">Aplicar adelanto(s) del cliente</option>
-                                <option value="exportacion">Exportación (0% IGV)</option>
-                                <option value="1">Retención IGV 3% (R.S. 037-2002)</option>
-                                <option value="2">Detracción SPOT (R.S. 183-2004)</option>
-                                <option value="3">Percepción (R.S. 058-2006)</option>
-                            </select>
-                        </div> <small class="text-muted">
-                            <i class="fas fa-info-circle me-1"></i>Retenciones, detracciones, percepciones y anticipos
-                            ...
-                        </small>
-                    </div>
-                    <div class="col-3 col-md-2">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">
-                            <i class="fas fa-sliders-h me-1"></i>Moneda
-                        </label>
-                        <select v-model="currency" class="form-select form-select-sm">
-                            <option value="PEN">—Soles —</option>
-                            <option value="USD">Dolares</option>
-                        </select>
-                        <small><i class="fas fa-money-bill me-1"></i>Moneda de venta </small>
-                    </div>
-
-                    <!-- Destino (Ley 27037) -->
-                    <div class="col-3 col-md-3" v-if="condicion_especial !== 'exportacion' && tipoEsFiscal">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">
-                            <i class="fas fa-map-marker-alt me-1"></i>Destino
-                        </label>
-                        <div class="btn-group w-100" role="group">
-                            <input type="radio" class="btn-check" name="destino-c" id="dest-amazonia" value="amazonia"
-                                :checked="destino == 'amazonia'" @click="destino = 'amazonia'" autocomplete="off">
-                            <label class="btn btn-outline-success btn-sm" for="dest-amazonia">
-                                <i class="fas fa-tree me-1"></i>Amazonía
-                            </label>
-                            <input type="radio" class="btn-check" name="destino-c" id="dest-nacional" value="nacional"
-                                :checked="destino == 'nacional'" @click="destino = 'nacional'" autocomplete="off">
-                            <label class="btn btn-outline-secondary btn-sm" for="dest-nacional">
-                                <i class="fas fa-truck me-1"></i>Fuera
-                            </label>
-                        </div>
-                        <small class="text-muted">
-                            {{ destino == 'amazonia' ? 'Exonerado IGV (Ley 27037)' : 'Gravado IGV normal' }}
-                        </small>
-                    </div>
-
-
-                    <!-- ── CLIENTE con búsqueda inteligente ─────────────────── -->
-                    <div class="row g-3 align-items-end mt-1">
-                        <div class="col-12 col-md-8 position-relative">
-                            <label for="client-search" class="form-label mb-1 small fw-semibold text-secondary">
-                                <i class="fas fa-user me-1"></i>Cliente
-                                <span v-if="client_selected" class="badge ms-1 fw-semibold" :class="client_selected.type_document === 'RUC'
-                                    ? 'bg-info-subtle text-info border border-info-subtle'
-                                    : 'bg-success-subtle text-success border border-success-subtle'">
-                                    {{ client_selected.type_document === 'RUC' ? 'RUC → Factura' : 'DNI → Boleta' }}
-                                </span>
-                            </label>
-                            <div class="input-group input-group-sm">
-                                <input type="text" id="client-search" class="form-control" v-model="clientSearchText"
-                                    placeholder="Buscar por DNI, RUC, nombre o teléfono..." @input="onClientSearchInput"
-                                    @keydown.enter="searchClientByDocument" @focus="onClientSearchFocus"
-                                    @blur="onClientSearchBlur" autocomplete="off" />
-                                <button class="btn btn-outline-primary" type="button" @click="searchClientByDocument"
-                                    title="Buscar por DNI/RUC">
-                                    <i class="fas fa-search"></i>
-                                </button>
-                                <button v-if="client_selected" class="btn btn-outline-danger" type="button"
-                                    @click="clearClientSelection" title="Quitar cliente">
-                                    <i class="fas fa-times"></i>
-                                </button>
-                                <button class="btn btn-success" type="button" @click="openQuickClientModal"
-                                    title="Registrar nuevo cliente">
-                                    <i class="fas fa-user-plus"></i>
-                                </button>
-                            </div>
-                            <!-- Sugerencias -->
-                            <div v-if="clientSuggestions.length > 0 && !client_selected"
-                                class="list-group mt-1 position-absolute"
-                                style="max-height:220px;overflow-y:auto;z-index:1050;width:calc(100% - 2px);box-shadow:0 4px 8px rgba(0,0,0,.1)">
-                                <button type="button" class="list-group-item list-group-item-action"
-                                    v-for="client in clientSuggestions" :key="client.id"
-                                    @mousedown.prevent="selectClient(client)">
-                                    <div class="d-flex justify-content-between">
-                                        <span>{{ client.full_name }}</span>
-                                        <small class="text-muted">{{ client.n_document }}</small>
-                                    </div>
-                                    <small class="text-muted">{{ client.distrito }}, {{ client.region }}</small>
-                                </button>
-                            </div>
-                            <div v-if="clientNotFound && !client_selected && clientSearchText.length > 2"
-                                class="text-danger small mt-1">
-                                <i class="fas fa-exclamation-circle me-1"></i>
-                                No se encontró — <a href="#" @click.prevent="openQuickClientModal">regístralo
-                                    ahora</a>
-                            </div>
-                        </div>
-                        <div class="col-12 col-md-4">
-                            <!-- T-107: un solo campo; el texto «Dirección» que había no se enviaba al backend. -->
-                            <SelectorDireccionComprobante v-model="client_address_id" :cliente-id="client_selected?.id"
-                                :direccion-fiscal="client_selected?.address" />
-                        </div>
-                    </div>
-
-
-                    <!-- Sucursal — solo visible con permiso can_switch_branch; -->
-                    <!-- el resto de usuarios emite siempre desde su sucursal fija (users.branch_id). -->
-                    <div class="col-6 col-md-2" v-if="puedeCambiarSucursal">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">
-                            <i class="fas fa-store me-1"></i>Sucursal
-                        </label>
-                        <select v-model="branch_id_seleccionado" class="form-select form-select-sm">
-                            <option v-for="b in branches" :key="b.id" :value="b.id">{{ b.name }}</option>
-                        </select>
-                    </div>
-
-                    <!-- Comprobante — tipo de documento, autocompletado según cliente -->
-                    <!-- Solo lista lo que activo_greenter=true (tipos fiscales soportados -->
-                    <!-- hoy por GreenterService) o codigo='NV' Y el usuario puede emitir -->
-                    <!-- (permiso emitir_factura/emitir_boleta/emitir_nota_venta) — la -->
-                    <!-- serie real la resuelve el backend según sucursal+tipo+moneda. -->
-                    <div class="col-6 col-md-2">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">
-                            <i class="fas fa-file-invoice me-1"></i>Tipo de Documento
-                        </label>
-                        <select v-model="tipo_comprobante_codigo" class="form-select form-select-sm">
-                            <option v-for="t in tiposComprobanteVisibles" :key="t.codigo" :value="t.codigo">
-                                {{ t.nombre }}
-                            </option>
-                        </select>
-                        <small class="text-muted d-block" v-if="serieResuelta">
-                            Serie: <strong>{{ serieResuelta.serie }}</strong> (próx. correlativo #{{ serieResuelta.siguiente_correlativo }})
-                        </small>
-                        <small class="text-danger d-block" v-else-if="errorSeriePreview">
-                            {{ errorSeriePreview }}
-                        </small>
-                        <small class="text-muted" v-if="client_selected">
-                            Auto según cliente
-                        </small>
-                    </div>
-
-                    <!-- N° Documento interno -->
-                    <div class="col-6 col-md-2">
-                        <label for="n-transaction" class="form-label mb-1 small fw-semibold text-secondary">
-                            N° Documento
-                        </label>
-                        <b-form-input type="text" id="n-transaction" v-model="n_transaction" placeholder="000000"
-                            size="sm" />
-                    </div>
-
-                    <!-- Fecha de emisión -->
-                    <div class="col-6 col-md-2">
-                        <label for="n-f-emision" class="form-label mb-1 small fw-semibold text-secondary">
-                            Fecha Emisión
-                        </label>
-                        <b-form-input type="date" id="n-f-emision" v-model="today" size="sm" />
-                    </div>
-
-                    <!-- Exportación
-                    <div class="col-6 col-md-2">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">
-                            <i class="fas fa-globe me-1"></i>Exportación
-                        </label>
-                        <div class="btn-group w-100" role="group">
-                            <input type="radio" class="btn-check" name="is_exportacion-c" id="exp-no" value="0"
-                                :checked="is_exportacion == 0" @click="is_exportacion = 0" autocomplete="off">
-                            <label class="btn btn-outline-secondary btn-sm" for="exp-no">No</label>
-                            <input type="radio" class="btn-check" name="is_exportacion-c" id="exp-si" value="1"
-                                :checked="is_exportacion == 1" @click="is_exportacion = 1" autocomplete="off">
-                            <label class="btn btn-outline-warning btn-sm" for="exp-si">Sí</label>
-                        </div>
-                    </div> -->
-
-
-
-                    <!-- Campos que aparecen según condición seleccionada -->
-
-                    <!-- Adelantos disponibles del cliente -->
-                    <div class="col-12" v-if="condicion_especial === 'anticipo'">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">
-                            <i class="fas fa-hand-holding-usd me-1"></i>Adelantos disponibles
-                        </label>
-                        <div v-if="!client_selected" class="text-muted small">
-                            Selecciona un cliente primero.
-                        </div>
-                        <div v-else-if="loadingAdvances" class="text-muted small">
-                            <span class="spinner-border spinner-border-sm me-1"></span>Buscando adelantos...
-                        </div>
-                        <div v-else-if="availableAdvances.length === 0" class="text-muted small">
-                            Este cliente no tiene adelantos disponibles.
-                        </div>
-                        <div v-else-if="adelantosDisponiblesFiltrados.length === 0" class="text-muted small">
-                            Este cliente tiene adelantos, pero en otra moneda — solo se pueden aplicar
-                            adelantos en la misma moneda de esta venta ({{ currency === 'USD' ? 'US$' : 'S/' }}).
-                        </div>
-                        <table v-else class="table table-sm table-bordered align-middle mb-1">
-                            <thead class="table-light">
-                                <tr>
-                                    <th style="width:36px;"></th>
-                                    <th>Adelanto</th>
-                                    <th class="text-end" style="width:130px;">Disponible</th>
-                                    <th style="width:140px;">Monto a aplicar</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr v-for="a in adelantosDisponiblesFiltrados" :key="a.id">
-                                    <td>
-                                        <input type="checkbox" v-model="a.seleccionado" @change="onAdvanceToggle(a)">
-                                    </td>
-                                    <td>
-                                        Adelanto #{{ a.id }}
-                                        ({{ a.currency === 'USD' ? 'US$' : 'S/' }} {{ Number(a.amount).toFixed(2) }})
-                                    </td>
-                                    <td class="text-end">
-                                        {{ a.currency === 'USD' ? 'US$' : 'S/' }} {{ a.available_balance.toFixed(2) }}
-                                    </td>
-                                    <td>
-                                        <input type="number" class="form-control form-control-sm" min="0"
-                                            :max="a.available_balance" step="0.01" v-model.number="a.monto_aplicado"
-                                            :disabled="!a.seleccionado">
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                        <small class="text-danger d-block" v-if="totalAdelantosAplicados() > sale_total">
-                            La suma de adelantos aplicados no puede superar el total de la venta.
-                        </small>
-                        <small class="text-muted d-block" v-if="totalAdelantosAplicados() > 0">
-                            Total a pagar con adelanto aplicado:
-                            {{ currency === 'USD' ? 'US$' : 'S/' }}
-                            {{ Math.max(0, sale_total - totalAdelantosAplicados()).toFixed(2) }}
-                        </small>
-                    </div>
-
-                    <!-- Detracción — selector de código del Anexo SUNAT -->
-                    <div class="col-12 col-md-5" v-if="condicion_especial == '2'">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">
-                            <i class="fas fa-list-ol me-1"></i>Código de Detracción (Anexo SUNAT)
-                        </label>
-                        <select v-model="codigo_detraccion_sel" class="form-select form-select-sm"
-                            @change="onDetractionCodeChange">
-                            <option value="">— Seleccionar código —</option>
-                            <option v-for="d in codigos_detraccion" :key="d.codigo" :value="d.codigo">
-                                [{{ d.codigo }}] {{ d.nombre }} ({{ Number(d.tasa_porcentaje).toFixed(1) }}%)
-                            </option>
-                        </select>
-                        <small class="text-muted" v-if="porcentaje_detraccion_sel > 0">
-                            <i class="fas fa-info-circle me-1"></i>
-                            Monto mínimo para aplicar detracción:
-                            S/ {{codigos_detraccion.find(d => d.codigo === codigo_detraccion_sel)?.monto_minimo ??
-                                700
-                            }}
-                        </small>
-                    </div>
-
-                </div>
-
-
-            </div>
+        <!-- Caja cerrada: se puede armar la venta, pero para cobrar hay que abrirla -->
+        <div v-if="cajaAbierta === false"
+            class="alert alert-warning d-flex justify-content-between align-items-center flex-wrap gap-2 py-2">
+            <span><b>Tu caja está cerrada.</b> Puedes armar la venta, pero para cobrar al contado tienes que abrirla.</span>
+            <button type="button" class="btn btn-outline-secondary btn-sm" @click="abrirCaja">Abrir caja</button>
         </div>
 
-        <!-- ═══════════════════════════════════════════════════
-             PASO 2 — BUSCAR PRODUCTO
-        ═══════════════════════════════════════════════════ -->
-        <div class="card border-0 shadow-sm mb-3">
-            <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-2">
-                <span class="badge bg-success rounded-pill">2</span>
-                <span class="fw-semibold text-dark">Buscar Producto</span>
-                <span class="badge bg-light text-secondary border ms-auto">{{ sale_details.length }} ítem(s)</span>
-            </div>
-            <div class="card-body py-3">
-                <div class="row g-3 align-items-end">
-                    <div class="col-12 col-md-6 position-relative">
-                        <label for="product-search" class="form-label mb-1 small fw-semibold text-secondary">
-                            <i class="fas fa-box me-1"></i>Producto / Servicio
-                        </label>
-                        <div class="input-group input-group-sm">
-                            <input type="text" id="product-search" class="form-control" v-model="productSearchText"
-                                placeholder="Buscar por nombre o SKU..." @input="onProductSearchInput"
-                                @focus="onProductSearchFocus" @blur="onProductSearchBlur" autocomplete="off" />
-                            <button class="btn btn-success" type="button" @click="openQuickProductModal"
-                                title="Nuevo producto">
-                                <i class="fas fa-plus"></i>
-                            </button>
-                        </div>
-                        <div v-if="productSuggestions.length > 0 && !productSelected"
-                            class="list-group mt-1 position-absolute"
-                            style="max-height:220px;overflow-y:auto;z-index:1050;width:100%;box-shadow:0 4px 8px rgba(0,0,0,.1)">
-                            <button type="button" class="list-group-item list-group-item-action"
-                                v-for="product in productSuggestions" :key="product.id"
-                                @mousedown.prevent="selectAndAddProduct(product)">
-                                <div class="d-flex justify-content-between">
-                                    <span>{{ product.title }}</span>
-                                    <small :style="{ color: product.stock <= 5 ? 'red' : '#6b7280' }">
-                                        stock: {{ product.stock }}
-                                    </small>
-                                </div>
-                                <small class="text-muted">{{ product.sku }} | {{ currency }} {{
-                                    product.price_general
-                                }}</small>
-                            </button>
-                        </div>
-                        <div v-if="productNotFound && !productSelected && productSearchText.length > 2"
-                            class="text-danger small mt-1">
-                            <i class="fas fa-exclamation-circle me-1"></i>
-                            No encontrado — <a href="#" @click.prevent="openQuickProductModal">regístralo ahora</a>
-                        </div>
-                    </div>
-                    <div class="col-6 col-md-2">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">Cantidad por defecto</label>
-                        <b-form-input type="number" v-model.number="default_quantity" min="1" size="sm" />
-                    </div>
-                    <div class="col-6 col-md-2">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">Precio por defecto</label>
-                        <b-input-group size="sm">
-                            <b-input-group-text>{{ currency }}</b-input-group-text>
-                            <b-form-input type="number" v-model.number="default_price" step="0.01" size="sm" />
-                        </b-input-group>
-                    </div>
+        <div class="grid-venta">
+            <!-- ═════════ IZQUIERDA: productos ═════════ -->
+            <div class="card border-0 shadow-sm">
+                <div class="p-3 border-bottom">
+                    <BuscadorProductosVenta ref="buscador" :moneda="currency" @agregar="agregarProducto"
+                        @crear="openQuickProductModal" />
+                </div>
+                <TablaLineasVenta :items="sale_details" :moneda="currency" :afe-defecto="resolverTipAfeIgv"
+                    :tipo-cliente="tipoClienteElegido" :resaltado="lineaResaltada" @cambio="updateItem"
+                    @quitar="removeItem" @elegir-precio="elegirPrecioLinea" />
+                <div class="p-3 border-top">
+                    <label class="form-label small fw-semibold text-secondary mb-1" for="venta-obs">Observaciones</label>
+                    <textarea id="venta-obs" v-model="description" rows="2" class="form-control form-control-sm"
+                        placeholder="Notas internas que no salen en el comprobante (opcional)"></textarea>
                 </div>
             </div>
-        </div>
 
-        <!-- ═══════════════════════════════════════════════════
-             PASO 3 — DETALLE DE LA VENTA
-        ═══════════════════════════════════════════════════ -->
-        <div class="card border-0 shadow-sm mb-3">
-            <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-2">
-                <span class="badge bg-warning text-dark rounded-pill">3</span>
-                <span class="fw-semibold text-dark">Detalle de Venta</span>
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-hover table-sm mb-0 align-middle">
-                        <thead class="table-light">
-                            <tr class="small text-secondary text-uppercase">
-                                <th class="ps-3">#</th>
-                                <th>Producto</th>
-                                <th style="min-width:90px">Cant.</th>
-                                <th style="min-width:110px">P. Base</th>
-                                <th class="text-center">Desc.%</th>
-                                <th class="text-end">IGV</th>
-                                <th class="text-end">Subtotal</th>
-                                <th class="text-center">Afect.</th>
-                                <th class="pe-3"></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr v-if="sale_details.length === 0">
-                                <td colspan="9" class="text-center text-muted py-4 fst-italic">
-                                    <i class="fas fa-box-open me-2 opacity-50"></i>
-                                    Sin productos — busca uno en el paso 2
-                                </td>
-                            </tr>
-                            <tr v-for="(item, index) in sale_details" :key="index">
-                                <td class="ps-3 text-muted small">{{ index + 1 }}</td>
-                                <td>
-                                    <span class="fw-semibold">{{ item.product.title }}</span>
-                                    <br>
-                                    <small class="text-muted">{{ item.unidad_medida }}</small>
-                                </td>
-                                <!-- Cantidad editable -->
-                                <td>
-                                    <b-form-input type="number" v-model.number="item.quantity" min="1" size="sm"
-                                        style="width:80px" @input="updateItem(index)" />
-                                </td>
-                                <!-- Precio base editable -->
-                                <td>
-                                    <div class="input-group input-group-sm" style="width:110px">
-                                        <span class="input-group-text text-muted px-1 small">{{ currency }}</span>
-                                        <b-form-input type="number" v-model.number="item.price_base" step="0.01"
-                                            size="sm" @input="updateItem(index)" />
-                                    </div>
-                                </td>
-                                <!-- Descuento % editable -->
-                                <td class="text-center">
-                                    <b-form-input type="number" v-model.number="item.discount_percent" min="0"
-                                        :max="item.product.max_discount || 0" size="sm" style="width:70px"
-                                        @input="updateItem(index)" :disabled="item.product.is_discount != 2" />
-                                </td>
-                                <td class="text-end small text-muted">{{ currency }} {{ item.igv.toFixed(2) }}</td>
-                                <td class="text-end fw-bold">{{ currency }} {{ item.subtotal.toFixed(2) }}</td>
-                                <!-- Tipo de afectación IGV — editable por el vendedor -->
-                                <td class="text-center">
-                                    <select v-model="item.tip_afe_igv" class="form-select form-select-sm"
-                                        style="width:110px; font-size:.75rem" @change="updateItem(index)"
-                                        :title="'tip_afe_igv: ' + item.tip_afe_igv">
-                                        <option value="10">Grav. 10</option>
-                                        <option value="20">Exon. 20</option>
-                                        <option value="30">Inaf. 30</option>
-                                        <option value="17">IVAP 17</option>
-                                        <option value="40">Exp. 40</option>
-                                        <option value="11">Grat. 11</option>
-                                    </select>
-                                </td>
-                                <td class="pe-3">
-                                    <button type="button" class="btn btn-outline-danger btn-sm py-0 px-2"
-                                        @click="removeItem(index)">
-                                        <i class="fas fa-trash-alt small"></i>
-                                    </button>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
+            <!-- ═════════ DERECHA: cobro ═════════ -->
+            <div class="panel-cobro">
+                <div class="card border-0 shadow-sm">
+                    <div class="p-3 border-bottom">
+                        <PanelClienteComprobante :cliente="client_selected" v-model:direccion-id="client_address_id"
+                            v-model:tipo="tipo_comprobante_codigo" :tipos="tiposComprobanteVisibles"
+                            :serie="serieResuelta" :error-serie="errorSeriePreview" @seleccionar="selectClient"
+                            @limpiar="clearClientSelection" @registrar="openQuickClientModalWithData" />
+                    </div>
 
-                <!-- Descuento global + totales -->
-                <div class="row g-0 border-top">
-                    <div class="col-12 col-md-6 p-3 border-end">
-                        <label class="form-label small fw-semibold text-secondary mb-1">
-                            <i class="fas fa-tag me-1"></i>Descuento Global
-                        </label>
-                        <div class="input-group input-group-sm" style="max-width:200px">
-                            <span class="input-group-text text-muted small">{{ currency }}</span>
-                            <b-form-input type="number" id="n-discount-global" v-model.number="discount_global"
-                                placeholder="0.00" size="sm" />
+                    <div class="p-3 border-bottom">
+                        <TotalesVenta v-model:descuento-global="discount_global" :filas="filasTotales"
+                            :total="totalAPagar" :simbolo="simbolo" :etiqueta-total="etiquetaTotal" />
+                    </div>
+
+                    <div v-if="condicion_especial === 'anticipo'" class="p-3 border-bottom">
+                        <AdelantosVenta :adelantos="adelantosDisponiblesFiltrados" :total-del-cliente="availableAdvances.length"
+                            :hay-cliente="!!client_selected" :cargando="loadingAdvances" :simbolo="simbolo"
+                            :excede="adelantosExceden" />
+                    </div>
+
+                    <div class="p-3 border-bottom d-flex flex-column gap-2">
+                        <div class="btn-group btn-group-sm w-100" role="group">
+                            <button type="button" class="btn" :class="type_payment == 1 ? 'btn-success' : 'btn-outline-secondary'"
+                                @click="type_payment = 1">Contado</button>
+                            <button type="button" class="btn" :class="type_payment == 2 ? 'btn-success' : 'btn-outline-secondary'"
+                                @click="type_payment = 2">Crédito</button>
                         </div>
+                        <CobroContado v-if="type_payment == 1" v-model:pagos="sale_payments" :metodos="paymentMethods"
+                            :total-a-pagar="totalAPagar" :simbolo="simbolo" />
+                        <CobroCredito v-else v-model:pagos="sale_payments" v-model:cronograma="cronograma"
+                            v-model:num-cuotas="num_cuotas" v-model:periodicidad="periodicidad"
+                            v-model:aplica-mora="aplica_mora" v-model:tasa-mora="tasa_mora" v-model:tipo-mora="tipo_mora"
+                            :metodos="paymentMethods" :moneda="currency" :fecha-base="today"
+                            :monto-a-financiar="montoAFinanciar()" :total-a-pagar="totalAPagar" />
                     </div>
-                    <div class="col-12 col-md-6 p-3">
-                        <table class="table table-sm table-borderless mb-0 small">
-                            <tbody>
-                                <tr>
-                                    <td class="text-muted">Valor Venta</td>
-                                    <td class="text-end">{{ currency }} {{ sale_subtotal.toFixed(2) }}</td>
-                                </tr>
-                                <tr class="text-danger" v-if="(discount_total + discount_global) > 0">
-                                    <td>(-) Descuento</td>
-                                    <td class="text-end">{{ currency }} {{ (discount_total +
-                                        discount_global).toFixed(2)
-                                    }}</td>
-                                </tr>
-                                <tr>
-                                    <td class="text-muted">Base Imponible</td>
-                                    <td class="text-end">{{ currency }} {{ getSubTotalSale().toFixed(2) }}</td>
-                                </tr>
-                                <tr>
-                                    <td class="text-muted">IGV ({{ getTasaIgvGlobal() }}%)</td>
-                                    <td class="text-end">{{ currency }} {{ getIgvTotal().toFixed(2) }}</td>
-                                </tr>
-                                <tr v-if="icbper_total > 0">
-                                    <td class="text-muted">ICBPER (bolsas)</td>
-                                    <td class="text-end">{{ currency }} {{ icbper_total.toFixed(2) }}</td>
-                                </tr>
-                                <tr v-if="isc_total > 0">
-                                    <td class="text-muted">ISC</td>
-                                    <td class="text-end">{{ currency }} {{ isc_total.toFixed(2) }}</td>
-                                </tr>
-                                <tr class="border-top fw-semibold">
-                                    <td>Total Factura</td>
-                                    <td class="text-end">
-                                        {{ currency }} {{ (getSubTotalSale() + getIgvTotal() + icbper_total +
-                                            isc_total).toFixed(2) }}
-                                    </td>
-                                </tr>
-                                <!-- Condiciones especiales — solo si aplica -->
-                                <tr v-if="condicion_especial == '3'" class="text-info">
-                                    <td>(+) Percepción {{ (porcentaje_percepcion_sel * 100).toFixed(1) }}%</td>
-                                    <td class="text-end">{{ currency }} {{ monto_percepcion.toFixed(2) }}</td>
-                                </tr>
-                                <tr v-if="condicion_especial == '1'" class="text-danger">
-                                    <td>(-) Retención {{ (porcentaje_retencion_sel * 100).toFixed(1) }}%</td>
-                                    <td class="text-end">-{{ currency }} {{ monto_retencion.toFixed(2) }}</td>
-                                </tr>
-                                <tr v-if="condicion_especial == '2'" class="text-warning">
-                                    <td>(-) Detracción {{ (porcentaje_detraccion_sel * 100).toFixed(1) }}% [{{
-                                        codigo_detraccion_sel }}]</td>
-                                    <td class="text-end">{{ currency }} {{ monto_detraccion.toFixed(2) }}</td>
-                                </tr>
-                            </tbody>
-                            <tfoot>
-                                <tr v-if="condicion_especial == 'anticipo'" class="bg-primary text-white">
-                                    <td class="fw-bold fs-6 ps-2">MONTO A PAGAR - ANTICIPOS</td>
-                                    <td class="fw-bold fs-6 text-end pe-2">
-                                        {{ currency === 'USD' ? 'US$' : 'S/' }}
-                                        {{ Math.max(0, sale_total - totalAdelantosAplicados()).toFixed(2) }}
-                                    </td>
-                                </tr>
-                                <tr v-else class="bg-primary text-white">
-                                    <td class="fw-bold fs-6 ps-2">MONTO A PAGAR</td>
-                                    <td class="fw-bold fs-6 text-end pe-2">
-                                        {{ currency }} {{ getTotalSales().toFixed(2) }}
-                                    </td>
-                                </tr>
-                                <tr class="text-success fw-semibold">
-                                    <td class="pt-1">Total Pagado</td>
-                                    <td class="text-end pt-1">{{ currency }} {{ total_payments.toFixed(2) }}</td>
-                                </tr>
-                            </tfoot>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
 
-        <!-- ═══════════════════════════════════════════════════
-             PASO 4 — PAGOS + OBSERVACIONES + GUARDAR
-        ═══════════════════════════════════════════════════ -->
-        <div class="card border-0 shadow-sm mb-4">
-            <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-2">
-                <span class="badge bg-danger rounded-pill">4</span>
-                <span class="fw-semibold text-dark">Pagos</span>
-            </div>
-            <div class="card-body py-3">
-                <!-- Fila de entrada de pago -->
-                <div class="row g-3 align-items-end pb-3 border-bottom mb-3">
-                    <div class="col-12 col-md-3">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">Tipo de Pago</label>
-                        <div class="btn-group w-100" role="group">
-                            <input type="radio" class="btn-check" name="type-pay-c" id="pay-contado" value="1"
-                                :checked="type_payment == 1" @click="type_payment = 1" autocomplete="off">
-                            <label class="btn btn-outline-success btn-sm fw-semibold" for="pay-contado">
-                                <i class="fas fa-money-bill-wave me-1"></i>Contado
-                            </label>
-                            <input type="radio" class="btn-check" name="type-pay-c" id="pay-credito" value="2"
-                                :checked="type_payment == 2" @click="type_payment = 2" autocomplete="off">
-                            <label class="btn btn-outline-warning btn-sm fw-semibold" for="pay-credito">
-                                <i class="fas fa-calendar-alt me-1"></i>Crédito
-                            </label>
-                        </div>
-                    </div>
-                    <div class="col-12" v-if="type_payment == 2">
-                        <p class="small text-muted mb-0">
-                            <i class="fas fa-info-circle me-1"></i>
-                            Esto registra un <strong>pago inicial (cuota inicial) opcional</strong>, no el cobro
-                            completo de la venta — se descuenta del monto que se financiará con el cronograma de
-                            cuotas. El seguimiento de cobros de la venta a crédito se hace después, desde
-                            Cuentas por Cobrar.
-                        </p>
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">
-                            {{ type_payment == 2 ? 'Método (pago inicial)' : 'Método' }}
-                        </label>
-                        <select v-model="method_payment" class="form-select form-select-sm">
-                            <option v-for="pm in paymentMethods" :key="pm.id" :value="pm.code">{{ pm.name }}</option>
-                        </select>
-                    </div>
-                    <div class="col-6 col-md-2">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">
-                            {{ type_payment == 2 ? 'Monto (pago inicial)' : 'Monto' }}
-                        </label>
-                        <b-input-group size="sm">
-                            <b-input-group-text>{{ currency }}</b-input-group-text>
-                            <b-form-input type="number" v-model.number="amount" placeholder="0.00" size="sm" />
-                        </b-input-group>
-                    </div>
-                    <div class="col-6 col-md-2">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">N.º de operación</label>
-                        <input type="text" v-model="nro_operacion" maxlength="50" class="form-control form-control-sm"
-                            placeholder="Opcional" />
-                    </div>
-                    <div class="col-6 col-md-2">
-                        <button type="button" class="btn btn-primary btn-sm w-100 fw-semibold" @click="addPayment()">
-                            <i class="fas fa-plus me-1"></i>{{ type_payment == 2 ? 'Agregar Pago Inicial' : 'Agregar Pago' }}
+                    <div class="p-3 d-flex flex-column gap-1">
+                        <button type="button" class="btn btn-success fw-bold py-2" :disabled="!!motivoCobro || guardando"
+                            @click="cobrar">
+                            <span v-if="guardando" class="spinner-border spinner-border-sm me-2"></span>{{ textoBotonCobrar }}
                         </button>
-                    </div>
-                </div>
-
-                <!-- Configuración de Crédito (Módulo Amortizaciones — Fase 8) -->
-                <div class="row g-3 align-items-end pb-3 border-bottom mb-3" v-if="type_payment == 2">
-                    <div class="col-12">
-                        <div class="alert alert-warning py-2 px-3 mb-2 small">
-                            <i class="fas fa-info-circle me-1"></i>
-                            Venta a crédito — genera un cronograma de cuotas fijas (módulo de
-                            Amortizaciones). Por ahora solo se soporta <strong>cuotas fijas</strong>
-                            desde este formulario.
+                        <div class="text-center small" :class="motivoCobro ? 'text-warning' : 'text-muted'">
+                            {{ motivoCobro || 'Ctrl + Enter' }}
                         </div>
-                    </div>
-                    <!-- Cuotas: components/CronogramaCuotasCampos.vue (compartido con edit.vue y la facturación de reservas). -->
-                    <CronogramaCuotasCampos v-model="cronograma" v-model:num-cuotas="num_cuotas" v-model:periodicidad="periodicidad"
-                        :monto-a-financiar="montoAFinanciar()" :moneda="currency" :fecha-base="today" />
-                    <div class="col-6 col-md-2">
-                        <div class="form-check form-switch pt-4">
-                            <input class="form-check-input" type="checkbox" role="switch" id="aplica-mora"
-                                v-model="aplica_mora">
-                            <label class="form-check-label small fw-semibold text-secondary"
-                                for="aplica-mora">Aplica mora</label>
-                        </div>
-                    </div>
-                    <template v-if="aplica_mora">
-                        <div class="col-6 col-md-2">
-                            <label class="form-label mb-1 small fw-semibold text-secondary">Tasa de mora</label>
-                            <b-form-input type="number" v-model.number="tasa_mora" step="0.01" min="0" size="sm" />
-                        </div>
-                        <div class="col-6 col-md-3">
-                            <label class="form-label mb-1 small fw-semibold text-secondary">Tipo de mora</label>
-                            <select v-model="tipo_mora" class="form-select form-select-sm">
-                                <option value="fijo_por_cuota">Monto fijo por cuota vencida</option>
-                                <option value="porcentaje_diario">% diario sobre saldo vencido</option>
-                                <option value="porcentaje_fijo_unico">% fijo único sobre saldo vencido</option>
-                            </select>
-                        </div>
-                    </template>
-                </div>
-
-                <!-- Lista de pagos + observaciones + botones -->
-                <div class="row g-3 align-items-start">
-                    <!-- Tabla de pagos -->
-                    <div class="col-12 col-md-5">
-                        <p class="small fw-semibold text-secondary mb-1">
-                            <i class="fas fa-list-ul me-1"></i>
-                            {{ type_payment == 2 ? 'Pago(s) inicial(es) registrado(s)' : 'Pagos registrados' }}
-                        </p>
-                        <div class="table-responsive">
-                            <table class="table table-sm table-hover align-middle mb-0">
-                                <thead class="table-light">
-                                    <tr class="small text-secondary text-uppercase">
-                                        <th>#</th>
-                                        <th>Método</th>
-                                        <th>N.º operación</th>
-                                        <th class="text-end">Monto</th>
-                                        <th></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr v-if="sale_payments.length === 0">
-                                        <td colspan="5" class="text-center text-muted fst-italic py-3 small">
-                                            {{ type_payment == 2 ? 'Sin pago inicial' : 'Sin pagos aún' }}
-                                        </td>
-                                    </tr>
-                                    <tr v-for="(p, index) in sale_payments" :key="index">
-                                        <td class="text-muted small">{{ index + 1 }}</td>
-                                        <td class="fw-semibold small">{{ p.method_payment }}</td>
-                                        <td class="small text-muted">{{ p.nro_operacion || "—" }}</td>
-                                        <td class="text-end fw-bold">{{ currency }} {{ p.amount }}</td>
-                                        <td>
-                                            <button type="button" class="btn btn-outline-danger btn-sm py-0 px-2"
-                                                @click="removePayment(index)">
-                                                <i class="fas fa-trash-alt small"></i>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <!-- Observaciones -->
-                    <div class="col-12 col-md-4">
-                        <label class="form-label small fw-semibold text-secondary mb-1">
-                            <i class="fas fa-comment-alt me-1"></i>Observaciones
-                        </label>
-                        <b-form-textarea v-model="description" rows="4"
-                            placeholder="Notas internas, referencias, instrucciones..."
-                            class="form-control form-control-sm" />
-                    </div>
-
-                    <!-- Botones -->
-                    <div class="col-12 col-md-3 d-flex flex-column gap-2 pt-md-4">
-                        <button type="button" class="btn btn-success fw-bold py-2 shadow-sm" @click="store()">
-                            <i class="fas fa-check-circle me-2"></i>
-                            Guardar Venta
-                        </button>
-                        <button type="button" class="btn btn-outline-secondary fw-semibold py-2"
-                            @click="$router.push({ name: 'sale.list' })">
-                            <i class="fas fa-undo me-2"></i>Listar Ventas
-                        </button>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- BARRA FIJA INFERIOR -->
-        <div class="sv-bottom-bar">
-            <div class="sv-bottom-inner">
-                <div class="sv-bottom-chip">
-                    <span class="sv-bottom-label">Ítems</span>
-                    <span class="sv-bottom-value text-primary fw-bold">{{ sale_details.length }}</span>
-                </div>
-                <div class="sv-bottom-divider"></div>
-                <div class="sv-bottom-chip">
-                    <span class="sv-bottom-label">Base</span>
-                    <span class="sv-bottom-value">{{ currency }} {{ getSubTotalSale().toFixed(2) }}</span>
-                </div>
-                <div class="sv-bottom-divider d-none d-md-block"></div>
-                <div class="sv-bottom-chip d-none d-md-flex">
-                    <span class="sv-bottom-label">IGV</span>
-                    <span class="sv-bottom-value">{{ currency }} {{ getIgvTotal().toFixed(2) }}</span>
-                </div>
-                <div class="sv-bottom-divider d-none d-md-block"></div>
-                <div class="sv-bottom-chip d-none d-md-flex" v-if="total_payments > 0">
-                    <span class="sv-bottom-label">Pagado</span>
-                    <span class="sv-bottom-value text-success fw-semibold">{{ currency }} {{
-                        total_payments.toFixed(2)
-                    }}</span>
-                </div>
-                <div class="sv-bottom-divider d-none d-md-block" v-if="total_payments > 0"></div>
-                <div class="sv-bottom-total ms-auto">
-                    <span class="sv-bottom-total-label">TOTAL</span>
-                    <span class="sv-bottom-total-amount">{{ currency }} {{ getTotalSales().toFixed(2) }}</span>
-                </div>
-                <button type="button" class="btn btn-success fw-bold px-4 shadow-sm sv-bottom-save" @click="store()">
-                    <i class="fas fa-check-circle me-2"></i>
-                    <span class="d-none d-sm-inline">Guardar </span>Venta
-                </button>
-            </div>
-        </div>
+        <AvisoVenta ref="aviso" />
 
         <!-- MODALES clientes y productos -->
         <Teleport to="body">
@@ -753,8 +136,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue';
-import { useRoute } from 'vue-router';
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import type { AxiosResponse } from 'axios';
 import httpClient from '@/helpers/http-client';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
@@ -766,10 +149,20 @@ import type { Client } from '@/types/clients';
 import type { Product } from '@/types/products';
 import ClientFormQuick from '@/components/Sales/ClientFormQuick.vue';
 import ProductFormQuick from '@/components/Sales/ProductFormQuick.vue';
-import CronogramaCuotasCampos from '@/components/CronogramaCuotasCampos.vue';
-import SelectorDireccionComprobante from '@/components/Clientes/SelectorDireccionComprobante.vue';
-import { imprimirComprobante } from '@/composables/usePrintComprobante';
+import BuscadorProductosVenta from '@/components/Sales/BuscadorProductosVenta.vue';
+import TablaLineasVenta, { type LineaVenta } from '@/components/Sales/TablaLineasVenta.vue';
+import PanelClienteComprobante from '@/components/Sales/PanelClienteComprobante.vue';
+import DatosVentaPanel from '@/components/Sales/DatosVentaPanel.vue';
+import TotalesVenta from '@/components/Sales/TotalesVenta.vue';
+import CobroContado from '@/components/Sales/CobroContado.vue';
+import CobroCredito from '@/components/Sales/CobroCredito.vue';
+import AdelantosVenta from '@/components/Sales/AdelantosVenta.vue';
+import AvisoVenta from '@/components/Sales/AvisoVenta.vue';
+import { imprimirDirecto, verPdfComprobante, type FormatoImpresion } from '@/composables/usePrintComprobante';
 import { getPrecioBaseSinIgv } from '@/composables/useProductPricing';
+import { controlaStock, motivoBloqueoCobro, precioCatalogoPorCliente, redondear2 } from '@/helpers/ventaRetail';
+import { formatFecha, partesFechaHoraPeru } from '@/helpers/fecha';
+import type { CashStatusResponse } from '@/types/cash-session';
 import { useAuthStore } from '@/stores/auth';
 import { resolverTipAfeIgv as resolverTipAfeIgvPuro } from '@/utils/resolverTipAfeIgv';
 import type { Branch } from '@/types/cash-session';
@@ -779,6 +172,7 @@ type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 
 const authStore = useAuthStore();
 const route = useRoute();
+const router = useRouter();
 
 // ── Prellenado desde una Cotización Comercial (?from_quote=<id>) ────
 // Módulo "Cotizaciones Comerciales": el botón "Convertir en venta" del
@@ -803,20 +197,18 @@ const PERMISOS_EMISION: Record<string, string> = {
 const clients = ref<Client[]>([]);
 const products = ref<Product[]>([]);
 const client_selected = ref<Client | undefined>(undefined);
-const productSelected = ref<Product | undefined>(undefined);
-
-// ── Búsqueda de clientes ──────────────────────────────────────────
-const clientSearchText = ref<string>('');
-const clientSuggestions = ref<Client[]>([]);
 const client_address_id = ref<number | null>(null); // T-107: null = dirección fiscal
-let clientSearchTimeout: any = null;
-const clientNotFound = ref<boolean>(false);
 
-// ── Búsqueda de productos ─────────────────────────────────────────
-const productSearchText = ref<string>('');
-const productSuggestions = ref<Product[]>([]);
-let productSearchTimeout: any = null;
-const productNotFound = ref<boolean>(false);
+// ── Estado de la pantalla (T-106) ─────────────────────────────────
+const datosAbiertos = ref<boolean>(false);          // panel «Datos de la venta»
+const lineaResaltada = ref<number | null>(null);    // última línea agregada
+const buscador = ref<InstanceType<typeof BuscadorProductosVenta> | null>(null);
+const aviso = ref<InstanceType<typeof AvisoVenta> | null>(null);
+const guardando = ref<boolean>(false);
+let siguienteUid = 1;
+// Caja: null = no se pudo saber (p. ej. usuario sin permiso de caja) → no se bloquea.
+const cajaAbierta = ref<boolean | null>(null);
+const cajaDesde = ref<string>('');
 
 // ── Modales rápidos ───────────────────────────────────────────────
 const showQuickClientModal = ref<boolean>(false);
@@ -951,20 +343,15 @@ const currency_symbol = ref<string>('S/.'); // S/. o $ para mostrar
 
 
 // ── Detalle y pagos ───────────────────────────────────────────────
-const sale_details = ref<SaleDetail[]>([]);
+const sale_details = ref<LineaVenta[]>([]);
 const currency = ref<string>('PEN');   // código ISO — Greenter requiere 'PEN' o 'USD'
 const discount_total = ref<number>(0);
 const discount_global = ref<number>(0);
-const default_quantity = ref<number>(1);
-const default_price = ref<number>(0);
 const description = ref<string>('');
 
-// Pagos
+// Pagos — los escriben CobroContado.vue / CobroCredito.vue con el formato de siempre
+// (method_payment, amount, date_payment, nro_operacion).
 const type_payment = ref<number>(1);
-const method_payment = ref<string>('EFECTIVO');
-const amount = ref<number>(0);
-const date_payment = ref<string>('');
-const nro_operacion = ref<string>(''); // T-010: opcional, max 50
 const sale_payments = ref<any[]>([]);
 
 // Módulo Caja — Fase 0 (plan-modulo-caja.md §3): picker dinámico en vez del
@@ -1000,95 +387,48 @@ const total_payments = ref<number>(0);
 // global con la misma proporción que ya usa el IGV.
 const subtotalBrutoCobro = ref<number>(0);
 
-// ── Métodos de cliente ────────────────────────────────────────────
+// ── Aviso flotante (sin ventana que cerrar) ───────────────────────
+const avisar = (texto: string, acciones: { texto: string; fn: () => void }[] = [], ms = 6000) =>
+    aviso.value?.mostrar(texto, acciones, ms);
 
-const onClientSearchInput = () => {
-    clearTimeout(clientSearchTimeout);
-    const query = clientSearchText.value.trim();
-    clientNotFound.value = false;
+// ── Precio según el cliente ───────────────────────────────────────
+// Precio base (sin IGV) de un producto para el cliente dado: el precio crudo del catálogo puede venir CON IGV
+// incluido (product.include_igv), así que se revierte para obtener el P. BASE real, igual que el registro de producto.
+const precioBaseDe = (product: Product, cliente?: Client): number =>
+    Number(getPrecioBaseSinIgv(precioCatalogoPorCliente(product, cliente?.type_client).valor, product, {
+        igvGeneral: getIgvGeneralTasa(),
+        ivap: getIvapTasa(),
+    }));
 
-    if (client_selected.value && query.length > 0) clearClientSelection();
-    if (query.length === 0) { clientSuggestions.value = []; return; }
-
-    if (/^\d{8}$/.test(query) || /^\d{11}$/.test(query)) {
-        searchClientByDocument(); return;
-    }
-    if (query.length >= 2) {
-        clientSearchTimeout = setTimeout(() => searchClients(query), 300);
-    }
-};
-
-const onClientSearchFocus = () => {
-    if (client_selected.value) return;
-    const query = clientSearchText.value.trim();
-    if (query.length >= 2) searchClients(query);
-};
-
-const onClientSearchBlur = () => {
-    setTimeout(() => {
-        clientSuggestions.value = [];
-        if (clientSearchText.value.trim().length > 2 && !client_selected.value) {
-            clientNotFound.value = true;
+// Al cambiar de cliente se recalculan las líneas SIN precio puesto a mano y se avisa cuántas cambiaron.
+const recalcularPreciosPorCliente = () => {
+    let cambiadas = 0;
+    sale_details.value.forEach((d, i) => {
+        if (d.precio_manual) return;
+        const nuevo = precioBaseDe(d.product, client_selected.value);
+        if (Math.abs(nuevo - Number(d.price_base)) > 0.0001) {
+            d.price_base = nuevo;
+            updateItem(i);
+            cambiadas++;
         }
-    }, 200);
+    });
+    if (cambiadas) avisar(`Se actualizó el precio de ${cambiadas} producto${cambiadas > 1 ? 's' : ''} según el cliente.`);
 };
 
-const searchClients = async (query: string) => {
-    try {
-        const res = await httpClient.get(`clients?search=${encodeURIComponent(query)}&take=10`);
-        clientSuggestions.value = res.data.clients.data;
-        clientNotFound.value = clientSuggestions.value.length === 0;
-    } catch {
-        clientSuggestions.value = [];
-        clientNotFound.value = true;
-    }
+// Precio elegido con el ▾ de la línea (General / Empresa): queda como precio puesto a mano.
+const elegirPrecioLinea = (i: number, nombre: 'General' | 'Empresa') => {
+    const d = sale_details.value[i];
+    if (!d) return;
+    const bruto = nombre === 'Empresa' ? Number(d.product.price_company) : Number(d.product.price_general);
+    d.price_base = Number(getPrecioBaseSinIgv(bruto || 0, d.product, { igvGeneral: getIgvGeneralTasa(), ivap: getIvapTasa() }));
+    d.precio_manual = true;
+    updateItem(i);
 };
 
-const searchClientByDocument = async () => {
-    const doc = clientSearchText.value.trim();
-    if (!doc) return;
-    if (client_selected.value) { clearClientSelection(); setTimeout(searchClientByDocument, 100); return; }
-
-    const existing = clients.value.find(c => c.n_document === doc);
-    if (existing) { selectClient(existing); return; }
-
-    if (/^\d{8}$/.test(doc)) await searchDocumentAPI('dni', doc);
-    else if (/^\d{11}$/.test(doc)) await searchDocumentAPI('ruc', doc);
-    else await searchClients(doc);
-};
-
-const searchDocumentAPI = async (type: string, number: string) => {
-    try {
-        const response = await httpClient.get(`/search-document/${type}/${number}`);
-        if (response.data.success === false) {
-            openQuickClientModalWithData({ type_document: type.toUpperCase(), n_document: number });
-            return;
-        }
-        const existing = clients.value.find(c => c.n_document === number);
-        if (existing) { selectClient(existing); return; }
-
-        const data = response.data;
-        let clientData: any = { type_document: type.toUpperCase(), n_document: number };
-        if (type === 'dni') {
-            clientData.name = data.nombres || '';
-            clientData.surname = `${data.apellidoPaterno || ''} ${data.apellidoMaterno || ''}`.trim();
-            clientData.full_name = `${clientData.name} ${clientData.surname}`;
-        } else {
-            clientData.full_name = data.razonSocial || '';
-            clientData.name_comerc = data.nombreComercial || '';
-            clientData.address = data.direccion || '';
-        }
-        openQuickClientModalWithData(clientData);
-    } catch {
-        openQuickClientModalWithData({ type_document: type.toUpperCase(), n_document: number });
-    }
-};
-
+// ── Cliente ───────────────────────────────────────────────────────
+// La búsqueda vive en PanelClienteComprobante.vue; acá solo lo que pasa al elegir o quitar un cliente.
 const selectClient = (client: Client) => {
     client_selected.value = client;
-    clientSearchText.value = client.full_name || client.name_comerc || client.name || '';
-    clientSuggestions.value = [];
-    clientNotFound.value = false;
 
     // ── Autocompletar tipo de documento según tipo de documento del cliente ──
     // RUC → Factura ('01'), DNI y otros → Boleta ('03') — solo si el usuario
@@ -1099,62 +439,22 @@ const selectClient = (client: Client) => {
     }
 
     // ── Sugerir destino según zona del cliente ─────────────────────
-    // Si el cliente es de zona Amazonía, pre-seleccionar 'amazonia'
-    // El vendedor puede cambiarlo si el pedido se envía fuera
+    // Si el cliente es de zona Amazonía, pre-seleccionar 'amazonia'. El vendedor puede
+    // cambiarlo si el pedido se envía fuera; si no es Amazonía no se cambia nada.
     if (client.es_amazonia) {
         destino.value = 'amazonia';
     }
-    // Si no es Amazonía, no cambiar automáticamente — puede ser
-    // un cliente de Lima que compra acá o uno local que envía fuera
 
     cargarAdelantosDisponibles(client.id);
+    recalcularPreciosPorCliente();
 };
 
 const clearClientSelection = () => {
     client_selected.value = undefined;
-    clientSearchText.value = '';
-    clientSuggestions.value = [];
-    clientNotFound.value = false;
     client_address_id.value = null;
     tipo_comprobante_codigo.value = '03'; // resetear a boleta por defecto
     availableAdvances.value = [];
-};
-
-// ── Métodos de producto ───────────────────────────────────────────
-
-const onProductSearchInput = () => {
-    clearTimeout(productSearchTimeout);
-    const query = productSearchText.value.trim();
-    productNotFound.value = false;
-    if (query.length === 0) { productSuggestions.value = []; return; }
-    if (query.length >= 2) {
-        productSearchTimeout = setTimeout(() => searchProducts(query), 300);
-    }
-};
-
-const onProductSearchFocus = () => {
-    const query = productSearchText.value.trim();
-    if (query.length >= 2) searchProducts(query);
-};
-
-const onProductSearchBlur = () => {
-    setTimeout(() => {
-        productSuggestions.value = [];
-        if (productSearchText.value.trim().length > 2 && !productSelected.value) {
-            productNotFound.value = true;
-        }
-    }, 200);
-};
-
-const searchProducts = async (query: string) => {
-    try {
-        const res = await httpClient.get(`products?search=${encodeURIComponent(query)}&take=10`);
-        productSuggestions.value = res.data.products.data;
-        productNotFound.value = productSuggestions.value.length === 0;
-    } catch {
-        productSuggestions.value = [];
-        productNotFound.value = true;
-    }
+    recalcularPreciosPorCliente();
 };
 
 // ── Resolver tip_afe_igv según las reglas de negocio ─────────────
@@ -1163,78 +463,67 @@ const searchProducts = async (query: string) => {
 const resolverTipAfeIgv = (product: Product): string =>
     resolverTipAfeIgvPuro(product, destino.value, is_exportacion.value);
 
-const selectAndAddProduct = (product: Product) => {
-    if (product.stock <= 0 && product.disponiblidad !== 1) {
-        (Swal as TVueSwalInstance).fire('Stock insuficiente', 'No hay stock disponible', 'error');
+// Agrega un producto a la venta (o suma a la línea que ya existe) y lleva la lista hasta esa línea.
+// `opciones.precio` (>0) es un precio puesto a mano (p. ej. el de una cotización): no lo pisa el cambio de cliente.
+const agregarProducto = (product: Product, opciones: { cantidad?: number; precio?: number } = {}) => {
+    const cantidad = opciones.cantidad || 1;
+    if (controlaStock(product) && Number(product.stock) <= 0) {
+        avisar(`No hay stock disponible de «${product.title}».`);
         return;
     }
 
     // Si el producto ya está en la lista, incrementar cantidad
-    const existing = sale_details.value.find(d => d.product.id === product.id);
-    if (existing) {
-        const newQty = existing.quantity + (default_quantity.value || 1);
-        if (newQty > product.stock && product.disponiblidad !== 1) {
-            (Swal as TVueSwalInstance).fire('Stock insuficiente', `Solo hay ${product.stock} unidades`, 'error');
+    let indice = sale_details.value.findIndex(d => d.product.id === product.id);
+    if (indice >= 0) {
+        const existing = sale_details.value[indice];
+        const newQty = Number(existing.quantity) + cantidad;
+        if (controlaStock(product) && newQty > Number(product.stock)) {
+            avisar(`Solo hay ${product.stock} unidades de «${product.title}».`);
             return;
         }
         existing.quantity = newQty;
-        updateItem(sale_details.value.indexOf(existing));
-        clearSearchProduct();
-        return;
-    }
+        updateItem(indice);
+    } else {
+        const manual = Number(opciones.precio) > 0;
+        const price = manual ? Number(opciones.precio) : precioBaseDe(product, client_selected.value);
 
-    // Precio según tipo de cliente
-    let price = default_price.value;
-    if (price <= 0) {
-        const rawPrice = String(client_selected.value?.type_client) === '2'
-            ? product.price_company || product.price_general || 0
-            : product.price_general || 0;
-        // El precio crudo del catálogo puede venir CON IGV incluido
-        // (product.include_igv) — hay que revertir ese cálculo para obtener
-        // el P.BASE real, igual que hace el registro de producto.
-        price = getPrecioBaseSinIgv(rawPrice, product, {
-            igvGeneral: getIgvGeneralTasa(),
-            ivap: getIvapTasa(),
+        // Resolver el tipo de afectación IGV usando las reglas de negocio
+        const tip_afe = resolverTipAfeIgv(product);
+
+        sale_details.value.push({
+            uid: siguienteUid++,
+            precio_manual: manual,
+            product: product,
+            unidad_medida: product.unidad_medida || 'NIU',
+            price_base: Number(price),
+            quantity: cantidad,
+            discount_percent: 0,
+            tip_afe_igv: tip_afe,
+            subtotal: 0,
+            igv: 0,
+            isc: 0,
+            icbper: 0,
+            discount: 0,
+            price_final: 0,
+            mto_valor_venta: 0,
+            mto_base_igv: 0,
+            porcentaje_igv: 0,
+            total_impuestos: 0,
+            tipo_isc: product.tipo_isc ?? '01',
+            monto_isc_fijo: product.monto_isc_fijo ?? 0,
+            contenido_neto_litros: product.contenido_neto_litros ?? undefined,
+            per_icbper: 0,
         });
+        indice = sale_details.value.length - 1;
+        updateItem(indice);
     }
 
-    // Resolver el tipo de afectación IGV usando las reglas de negocio
-    const tip_afe = resolverTipAfeIgv(product);
-
-    sale_details.value.push({
-        product: product,
-        unidad_medida: product.unidad_medida || 'NIU',
-        price_base: Number(price),
-        quantity: default_quantity.value || 1,
-        discount_percent: 0,
-        tip_afe_igv: tip_afe,
-        subtotal: 0,
-        igv: 0,
-        isc: 0,
-        icbper: 0,
-        discount: 0,
-        price_final: 0,
-        mto_valor_venta: 0,
-        mto_base_igv: 0,
-        porcentaje_igv: 0,
-        total_impuestos: 0,
-        tipo_isc: product.tipo_isc ?? '01',
-        monto_isc_fijo: product.monto_isc_fijo ?? 0,
-        contenido_neto_litros: product.contenido_neto_litros ?? undefined,
-        per_icbper: 0,
-    });
-
-    const lastIndex = sale_details.value.length - 1;
-    updateItem(lastIndex);
     sumDetails();
-    clearSearchProduct();
-    default_price.value = 0;
-};
-
-const clearSearchProduct = () => {
-    productSearchText.value = '';
-    productSuggestions.value = [];
-    productNotFound.value = false;
+    lineaResaltada.value = null;
+    nextTick(() => {
+        lineaResaltada.value = indice;
+        setTimeout(() => { if (lineaResaltada.value === indice) lineaResaltada.value = null; }, 900);
+    });
 };
 
 // ── Cálculos de cada ítem ─────────────────────────────────────────
@@ -1328,9 +617,18 @@ const updateItem = (index: number) => {
     sumDetails();
 };
 
+// Quitar una línea no pide confirmación: avisa y deja «Deshacer».
 const removeItem = (index: number) => {
-    sale_details.value.splice(index, 1);
+    const [quitada] = sale_details.value.splice(index, 1);
     sumDetails();
+    if (!quitada) return;
+    avisar(`Quitaste «${quitada.product.title}»`, [{
+        texto: 'Deshacer',
+        fn: () => {
+            sale_details.value.splice(Math.min(index, sale_details.value.length), 0, quitada);
+            sumDetails();
+        },
+    }]);
 };
 
 // ── Tasas de IGV para mostrar en la tabla de totales ─────────────
@@ -1565,42 +863,6 @@ const aplicarDefaultsMora = () => {
     tipo_mora.value = company_mora_defaults.value.tipo_mora_default ?? 'porcentaje_diario';
 };
 
-// ── Pagos ─────────────────────────────────────────────────────────
-const addPayment = () => {
-    if (!method_payment.value) {
-        (Swal as TVueSwalInstance).fire('Error', 'El método de pago es obligatorio.', 'error'); return;
-    }
-    if (amount.value <= 0) {
-        (Swal as TVueSwalInstance).fire('Error', 'El monto debe ser mayor a 0.', 'error'); return;
-    }
-    if (getTotalSales() < (amount.value + total_payments.value)) {
-        (Swal as TVueSwalInstance).fire('Error', 'El monto no puede superar el total de la venta.', 'error'); return;
-    }
-    if (method_payment.value === 'EFECTIVO' && sale_payments.value.some(p => p.method_payment === 'EFECTIVO')) {
-        (Swal as TVueSwalInstance).fire('Error', 'Ya hay un pago en efectivo registrado.', 'error'); return;
-    }
-
-    sale_payments.value.push({
-        method_payment: method_payment.value,
-        amount: amount.value,
-        date_payment: date_payment.value,
-        nro_operacion: nro_operacion.value.trim() || null,
-    });
-
-    setTimeout(() => {
-        method_payment.value = '';
-        amount.value = 0;
-        date_payment.value = '';
-        nro_operacion.value = '';
-        sumDetails();
-    }, 50);
-};
-
-const removePayment = (index: number) => {
-    sale_payments.value.splice(index, 1);
-    sumDetails();
-};
-
 // ── Guardar venta ─────────────────────────────────────────────────
 const store = async () => {
     if (!client_selected.value) {
@@ -1751,7 +1013,8 @@ const store = async () => {
         paid_out: total_payments.value + totalAdelantos,
 
         // Detalles — incluyen todos los campos para Greenter
-        sale_details: sale_details.value,
+        // (sin los campos solo de pantalla — uid y precio_manual —: el JSON es el mismo de siempre)
+        sale_details: sale_details.value.map(({ uid, precio_manual, ...linea }) => linea),
 
         // Pagos
         payments: sale_payments.value,
@@ -1770,6 +1033,15 @@ const store = async () => {
         } : {}),
     };
 
+    if (guardando.value) return;
+    guardando.value = true;
+    // Lo que sale en el aviso: el número real recién se asigna al enviar a SUNAT, así que se muestra la serie.
+    const nombreTipo = tiposComprobante.value.find(t => t.codigo === tipo_comprobante_codigo.value)?.nombre ?? 'Venta';
+    const serieAviso = serieResuelta.value?.serie ?? '';
+    const esCredito = type_payment.value == 2;
+    const totalAviso = totalAPagar.value;
+    const monedaAviso = currency.value === 'USD' ? 'US$' : 'S/';
+
     try {
         const resp: AxiosResponse<SaleResponse> = await httpClient.post('sales', data);
 
@@ -1778,8 +1050,8 @@ const store = async () => {
             return;
         }
         if (resp.data.code === 200) {
-            await (Swal as TVueSwalInstance).fire('¡Listo!', resp.data.message, 'success');
-            if (resp.data.sale_id) {
+            const saleId = resp.data.sale_id;
+            if (saleId) {
                 // Cierra el flujo "Convertir en venta" de Cotizaciones
                 // Comerciales — la venta ya se guardó bien, así que un
                 // fallo acá (red, etc.) solo se loguea, nunca bloquea al
@@ -1788,19 +1060,32 @@ const store = async () => {
                 if (commercial_quote_id_origen.value) {
                     try {
                         await httpClient.post(`commercial-quotes/${commercial_quote_id_origen.value}/mark-converted`, {
-                            sale_id: resp.data.sale_id,
+                            sale_id: saleId,
                         });
                     } catch (markError) {
                         console.error('No se pudo marcar la cotización comercial como convertida', markError);
                     }
                 }
-                const formatoDefault = useAuthStore().getUser()?.formato_impresion_default ?? 'a4';
-                await imprimirComprobante(resp.data.sale_id, formatoDefault);
             }
             resetData();
+            // Sin ventana de éxito: pantalla limpia, foco en el buscador y un aviso con Reimprimir / Ver PDF A4.
+            if (saleId) {
+                const formatoDefault = (useAuthStore().getUser()?.formato_impresion_default ?? 'a4') as FormatoImpresion;
+                const cobro = esCredito ? 'a crédito' : `cobrado ${monedaAviso} ${totalAviso.toFixed(2)}`;
+                avisar(`✓ ${nombreTipo} ${serieAviso} guardada, ${cobro}.`, [
+                    { texto: 'Reimprimir', fn: () => { imprimirDirecto(saleId, formatoDefault); } },
+                    { texto: 'Ver PDF A4', fn: () => { verPdfComprobante(saleId, 'a4'); } },
+                ], 12000);
+                imprimirDirecto(saleId, formatoDefault);
+            }
+            previsualizarSerie();
+            cargarCaja();
+            nextTick(() => buscador.value?.enfocar());
         }
     } catch (e: any) {
         (Swal as TVueSwalInstance).fire('Error', e.response?.data?.message ?? 'Error inesperado', 'error');
+    } finally {
+        guardando.value = false;
     }
 };
 
@@ -1808,13 +1093,7 @@ const store = async () => {
 const resetData = () => {
     commercial_quote_id_origen.value = null;
     client_selected.value = undefined;
-    clientSearchText.value = '';
-    clientSuggestions.value = [];
-    clientNotFound.value = false;
     client_address_id.value = null;
-    productSearchText.value = '';
-    productSuggestions.value = [];
-    productNotFound.value = false;
     sale_details.value = [];
     sale_payments.value = [];
     discount_total.value = 0;
@@ -1837,13 +1116,7 @@ const resetData = () => {
     is_exportacion.value = 0;
     currency.value = 'PEN';
     destino.value = 'amazonia';
-    default_quantity.value = 1;
-    default_price.value = 0;
     type_payment.value = 1;
-    method_payment.value = 'EFECTIVO';
-    amount.value = 0;
-    date_payment.value = '';
-    nro_operacion.value = '';
     credit_type.value = 'cuotas_fijas';
     num_cuotas.value = 3;
     periodicidad.value = 'mensual';
@@ -1853,11 +1126,8 @@ const resetData = () => {
 };
 
 // ── Modales rápidos ───────────────────────────────────────────────
-const openQuickClientModal = () => {
-    quickClientData.value = null;
-    showQuickClientModal.value = true;
-};
-const openQuickClientModalWithData = (data: any) => {
+// `data` = lo ya consultado en RENIEC/SUNAT para prellenar el formulario (null = vacío).
+const openQuickClientModalWithData = (data: any | null) => {
     quickClientData.value = data;
     showQuickClientModal.value = true;
 };
@@ -1866,13 +1136,14 @@ const onClientCreated = (client: Client) => {
     selectClient(client);
     showQuickClientModal.value = false;
 };
-const openQuickProductModal = () => {
-    quickProductData.value = null;
+// «+ Crear producto o servicio» del buscador: el formulario rápido ya tiene Bien / Servicio.
+const openQuickProductModal = (nombre = '') => {
+    quickProductData.value = nombre ? { title: nombre } : null;
     showQuickProductModal.value = true;
 };
 const onProductCreated = (product: Product) => {
     products.value.unshift(product);
-    selectAndAddProduct(product);
+    agregarProducto(product);
     showQuickProductModal.value = false;
 };
 
@@ -1989,15 +1260,15 @@ watch(condicion_especial, (valor) => {
 
 
 
+// Al pasar de contado a crédito (o al revés) se arma el cobro de cero: los pagos los vuelve a escribir
+// el componente de cobro que queda montado.
 watch(type_payment, () => {
-    setTimeout(() => {
-        method_payment.value = '';
-        amount.value = 0;
-        date_payment.value = '';
-        nro_operacion.value = '';
-        sumDetails();
-    }, 50);
+    sale_payments.value = [];
+    sumDetails();
 });
+
+// Los pagos los escriben los componentes de cobro: se re-suman acá (total_payments, estado, deuda).
+watch(sale_payments, () => sumDetails(), { deep: true });
 
 watch(is_exportacion, (value) => {
     // Código ISO para Greenter: 'PEN' = soles, 'USD' = dólares
@@ -2023,7 +1294,7 @@ watch(currency_iso, (nuevo) => {
 });
 
 // Trae cliente/ítems de una Cotización Comercial (GET .../for-sale, solo
-// lectura) y prellena el formulario reusando selectClient()/
+// lectura) y prellena el formulario reusando selectClient()/agregarProducto()
 // selectAndAddProduct() ya existentes — así el cálculo de IGV/stock/
 // afectación tributaria sigue siendo exactamente el mismo que el de
 // cualquier venta normal, sin duplicar nada. Corre DESPUÉS de config()
@@ -2050,9 +1321,7 @@ const prellenarDesdeCotizacion = async (quoteId: string) => {
         for (const item of data.items) {
             if (item.product_id) {
                 const { data: productoCompleto } = await httpClient.get(`products/${item.product_id}`);
-                default_price.value = item.unit_price;
-                default_quantity.value = item.quantity;
-                selectAndAddProduct(productoCompleto.product);
+                agregarProducto(productoCompleto.product, { cantidad: item.quantity, precio: item.unit_price });
             } else {
                 itemsSinProducto.push(item.description);
             }
@@ -2073,103 +1342,149 @@ const prellenarDesdeCotizacion = async (quoteId: string) => {
     }
 };
 
+// ── Caja (T-106) ──────────────────────────────────────────────────
+// Misma sesión de caja que la pantalla de Caja (cash/status). Si el usuario no tiene acceso al módulo,
+// la consulta falla y queda en «desconocida» (null): ahí no se bloquea nada, lo valida el backend.
+const cargarCaja = async () => {
+    try {
+        const { data } = await httpClient.get<CashStatusResponse>('cash/status');
+        cajaAbierta.value = !!data.has_open_session;
+        cajaDesde.value = data.session?.opened_at ? partesFechaHoraPeru(data.session.opened_at).hora : '';
+    } catch {
+        cajaAbierta.value = null;
+        cajaDesde.value = '';
+    }
+};
+
+// ── Totales a mostrar y a cobrar ──────────────────────────────────
+const simbolo = computed(() => (currency.value === 'USD' ? 'US$' : 'S/'));
+const dinero = (n: number) => `${simbolo.value} ${n.toFixed(2)}`;
+const tipoClienteElegido = computed(() => client_selected.value?.type_client ?? null);
+
+// Lo que se cobra ahora: total de la venta menos los adelantos aplicados.
+const totalAPagar = computed(() => {
+    const adelantos = condicion_especial.value === 'anticipo' ? totalAdelantosAplicados() : 0;
+    return Math.max(0, redondear2(sale_total.value - adelantos));
+});
+const adelantosExceden = computed(() =>
+    condicion_especial.value === 'anticipo' && totalAdelantosAplicados() > sale_total.value + 0.009);
+
+// Filas del resumen: solo las que aplican (misma base que los mto_oper_* del payload, netas del descuento global).
+const filasTotales = computed(() => {
+    if (sale_details.value.length === 0) return [];
+    const base = (...afectaciones: string[]) => sale_details.value
+        .filter(d => afectaciones.includes(d.tip_afe_igv))
+        .reduce((s, d) => s + subtotalNetoDescuentoGlobal(d, subtotalBrutoCobro.value), 0);
+    const filas: { etiqueta: string; valor: string; clase?: string }[] = [];
+    const desc = discount_total.value + (Number(discount_global.value) || 0);
+    if (desc > 0) filas.push({ etiqueta: 'Descuentos', valor: `− ${dinero(desc)}`, clase: 'text-danger' });
+    const g = base('10'), ivap = base('17'), ex = base('20'), ina = base('30'), exp = base('40'), gra = base('11');
+    if (g > 0) filas.push({ etiqueta: 'Op. gravada', valor: dinero(g) });
+    if (ivap > 0) filas.push({ etiqueta: 'Op. gravada IVAP', valor: dinero(ivap) });
+    if (getIgvTotal() > 0) filas.push({ etiqueta: 'IGV', valor: dinero(getIgvTotal()) });
+    if (ex > 0) filas.push({ etiqueta: 'Op. exonerada', valor: dinero(ex) });
+    if (ina > 0) filas.push({ etiqueta: 'Op. inafecta', valor: dinero(ina) });
+    if (exp > 0) filas.push({ etiqueta: 'Exportación', valor: dinero(exp) });
+    if (gra > 0) filas.push({ etiqueta: 'Op. gratuita', valor: dinero(gra) });
+    if (icbper_total.value > 0) filas.push({ etiqueta: 'ICBPER (bolsas)', valor: dinero(icbper_total.value) });
+    if (isc_total.value > 0) filas.push({ etiqueta: 'ISC', valor: dinero(isc_total.value) });
+    if (condicion_especial.value === '3') filas.push({ etiqueta: `(+) Percepción ${(porcentaje_percepcion_sel.value * 100).toFixed(1)}%`, valor: dinero(monto_percepcion.value), clase: 'text-info' });
+    if (condicion_especial.value === '1') filas.push({ etiqueta: `(−) Retención ${(porcentaje_retencion_sel.value * 100).toFixed(1)}%`, valor: `− ${dinero(monto_retencion.value)}`, clase: 'text-danger' });
+    if (condicion_especial.value === '2') filas.push({ etiqueta: `(−) Detracción ${(porcentaje_detraccion_sel.value * 100).toFixed(1)}% [${codigo_detraccion_sel.value}]`, valor: dinero(monto_detraccion.value), clase: 'text-warning' });
+    if (condicion_especial.value === 'anticipo' && totalAdelantosAplicados() > 0) {
+        filas.push({ etiqueta: 'Total de la venta', valor: dinero(sale_total.value) });
+        filas.push({ etiqueta: '(−) Adelantos aplicados', valor: `− ${dinero(totalAdelantosAplicados())}`, clase: 'text-primary' });
+    }
+    return filas;
+});
+const etiquetaTotal = computed(() => (condicion_especial.value === 'anticipo' ? 'Monto a pagar' : 'Total'));
+
+// ── Botón Cobrar: se deshabilita con el motivo debajo ──────────────
+const esCredito = computed(() => type_payment.value == 2);
+const motivoCobro = computed(() => {
+    const lineaSinStock = sale_details.value.find(d => controlaStock(d.product) && Number(d.quantity) > Number(d.product.stock));
+    return motivoBloqueoCobro({
+        lineas: sale_details.value.length,
+        sinStock: lineaSinStock ? lineaSinStock.product.title : null,
+        hayCliente: !!client_selected.value,
+        tipoComprobante: tipo_comprobante_codigo.value,
+        clienteTipoDocumento: client_selected.value?.type_document ?? null,
+        clienteNDocumento: client_selected.value?.n_document ?? null,
+        total: sale_total.value,
+        moneda: currency.value,
+        esCredito: esCredito.value,
+        cajaAbierta: cajaAbierta.value,
+        cobraAhora: esCredito.value ? total_payments.value > 0 : totalAPagar.value > 0,
+        faltaCobrar: esCredito.value ? 0 : Math.max(0, redondear2(totalAPagar.value - total_payments.value)),
+        sobraCobrar: Math.max(0, redondear2(total_payments.value - totalAPagar.value)),
+        efectivoRepetido: sale_payments.value.filter(p => p.method_payment === 'EFECTIVO').length > 1,
+        adelantosExceden: adelantosExceden.value,
+        detraccionSinCodigo: condicion_especial.value === '2' && !codigo_detraccion_sel.value,
+        creditoSinCronograma: cronograma.value.length === 0,
+        creditoNoCalza: Math.abs(sumaCronograma() - montoAFinanciar()) > 0.01,
+        moraSinTasa: aplica_mora.value && (!tasa_mora.value || tasa_mora.value <= 0),
+    });
+});
+const textoBotonCobrar = computed(() =>
+    esCredito.value ? 'Guardar venta a crédito' : `Cobrar ${dinero(totalAPagar.value)}`);
+
+const cobrar = () => {
+    if (motivoCobro.value || guardando.value) return;
+    store();
+};
+// Ctrl + Enter cobra desde cualquier campo.
+const atajoCobrar = (e: KeyboardEvent) => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); cobrar(); }
+};
+
+// ── Cabecera con etiquetas de estado ───────────────────────────────
+const nombreSucursal = computed(() => branches.value.find(b => b.id === branch_id_seleccionado.value)?.name ?? '');
+const noHabituales = computed(() => (condicion_especial.value !== '0' ? 1 : 0) + (currency.value !== 'PEN' ? 1 : 0));
+const etiquetaCondicion = computed(() => ({
+    anticipo: 'Con adelanto', exportacion: 'Exportación', '1': 'Retención 3%', '2': 'Detracción', '3': 'Percepción',
+} as Record<string, string>)[condicion_especial.value] ?? '');
+
+const cerrarDatos = () => {
+    datosAbiertos.value = false;
+    buscador.value?.enfocar();
+};
+
+// Abrir caja en otra pestaña para no perder la venta armada; al volver a esta pestaña se vuelve a consultar.
+const abrirCaja = () => {
+    window.open(router.resolve({ name: 'cash.session' }).href, '_blank');
+};
+const alVolverALaPestana = () => { if (cajaAbierta.value === false) cargarCaja(); };
+
 onMounted(async () => {
-    await Promise.all([config(), loadPaymentMethods(), cargarTiposYSucursales()]);
+    await Promise.all([config(), loadPaymentMethods(), cargarTiposYSucursales(), cargarCaja()]);
+    document.addEventListener('keydown', atajoCobrar);
+    window.addEventListener('focus', alVolverALaPestana);
 
     const fromQuote = route.query.from_quote;
     if (typeof fromQuote === 'string' && fromQuote) {
         await prellenarDesdeCotizacion(fromQuote);
     }
+    nextTick(() => buscador.value?.enfocar());
+});
+onBeforeUnmount(() => {
+    document.removeEventListener('keydown', atajoCobrar);
+    window.removeEventListener('focus', alVolverALaPestana);
 });
 </script>
 
 <style scoped>
-/* ── Barra fija inferior ─────────────────────────────── */
-.sv-bottom-bar {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    z-index: 1030;
-    background: #ffffff;
-    border-top: 2px solid #e2e8f0;
-    box-shadow: 0 -4px 20px rgba(0, 0, 0, .10);
-    padding: 0 16px;
-    height: 58px;
+/* Pantalla de caja: productos a la izquierda, cobro fijo a la derecha (T-106). */
+.grid-venta { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; align-items: start; }
+.panel-cobro { position: sticky; top: 110px; } /* debajo de la barra superior de la plantilla */
+@media (max-width: 920px) {
+    .grid-venta { grid-template-columns: minmax(0, 1fr); }
+    .panel-cobro { position: static; }
 }
 
-.sv-bottom-inner {
-    max-width: 1400px;
-    margin: 0 auto;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.sv-bottom-chip {
-    display: flex;
-    flex-direction: column;
-    line-height: 1.15;
-    padding: 0 4px;
-    min-width: 70px;
-}
-
-.sv-bottom-label {
-    font-size: .68rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: .05em;
-    color: #94a3b8;
-}
-
-.sv-bottom-value {
-    font-size: .88rem;
-    font-weight: 600;
-    color: #1e293b;
-}
-
-.sv-bottom-divider {
-    width: 1px;
-    height: 28px;
-    background: #e2e8f0;
-    flex-shrink: 0;
-}
-
-.sv-bottom-total {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    padding: 0 8px;
-    line-height: 1.1;
-}
-
-.sv-bottom-total-label {
-    font-size: .65rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: .07em;
-    color: #64748b;
-}
-
-.sv-bottom-total-amount {
-    font-size: 1.2rem;
-    font-weight: 800;
-    color: #1e40af;
-    letter-spacing: -.5px;
-}
-
-.sv-bottom-save {
-    height: 38px;
-    border-radius: 8px;
-    font-size: .9rem;
-    white-space: nowrap;
-    flex-shrink: 0;
-}
-
-:deep(.default-layout-content),
-:deep(main),
-:deep(.layout-page-content) {
-    padding-bottom: 74px !important;
-}
+.chip { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--bs-border-color); background: var(--bs-body-bg, #fff);
+    border-radius: 999px; padding: 3px 10px; font-size: .8rem; color: var(--bs-secondary-color); cursor: pointer; }
+.chip b { color: var(--bs-body-color); font-weight: 600; }
+.chip:hover { border-color: var(--bs-success); }
+.chip-alerta { background: var(--bs-warning-bg-subtle); color: var(--bs-warning-text-emphasis); border-color: transparent; }
+span.chip { cursor: default; }
 </style>

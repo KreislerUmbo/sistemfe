@@ -186,3 +186,30 @@ function abrirEImprimir(url: string): void {
         });
     }
 }
+
+// T-106: imprime el comprobante de una venta SIN preguntar (la pantalla de venta ya sabe el formato
+// por defecto del usuario). Mismo mecanismo que imprimirComprobante(): URL firmada + diálogo de impresión.
+export async function imprimirDirecto(
+    saleId: string | number,
+    formato: FormatoImpresion = 'a4',
+): Promise<void> {
+    try {
+        const { data } = await httpClient.get(`sales-pdf-url/${saleId}`, { params: { format: formato } });
+        abrirEImprimir(data.url);
+    } catch (e: any) {
+        Swal.fire('Error', e.response?.data?.message ?? 'No se pudo generar el PDF del comprobante.', 'error');
+    }
+}
+
+// T-106: abre el PDF del comprobante en otra pestaña, sin disparar la impresión.
+export async function verPdfComprobante(
+    saleId: string | number,
+    formato: FormatoImpresion = 'a4',
+): Promise<void> {
+    try {
+        const { data } = await httpClient.get(`sales-pdf-url/${saleId}`, { params: { format: formato } });
+        window.open(data.url, '_blank');
+    } catch (e: any) {
+        Swal.fire('Error', e.response?.data?.message ?? 'No se pudo generar el PDF del comprobante.', 'error');
+    }
+}
