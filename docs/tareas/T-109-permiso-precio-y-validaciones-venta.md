@@ -143,6 +143,21 @@ Usuario vendedor sin el permiso y Propietario, en un tenant retail.
   5. **Al desplegar:** ver abajo.
 - **Suite completa del backend (tras los puntos 1 a 3):** 2381 pasan y 1 falla, la misma previa
   (`Fila13Fase2cOperacionTest`).
+- **Revisión 2 (19-nov), puntos 1 y 2:** un commit por punto, cada uno con sus tests.
+  1. **Descuento global:** sin `cambiar_precio_venta`, `store()` y `update()` dan 422 «No tienes
+     permiso para aplicar un descuento global» si `discount_global > 0` (en `validarPrecioDeVenta()`,
+     comparado con `BigDecimal`). En `update()`, si no cambió respecto de lo guardado, pasa. Pantalla:
+     `TotalesVenta.vue` recibe `puedeDescuentoGlobal` (el permiso) y sin él no aparece «+ Descuento
+     global». Tests: sin el permiso 422; con el permiso 200; editando sin cambiarlo 200 y subiéndolo
+     422.
+  2. **Descuento de línea:** en `importesIncoherentes()`, si `is_discount ≠ 2` el descuento tiene que
+     ser 0 («este producto no admite descuento»); test nuevo. El test del máximo ahora usa un producto
+     con `is_discount = 2`.
+  No toqué los totales de la cabecera (subtotal, IGV, total): van en T-114.
+- **Suite completa del backend (tras la revisión 2):** 2384 pasan y 2 fallan: la previa
+  (`Fila13Fase2cOperacionTest`) y el intermitente conocido `Fila13Fase1cFacturacionTest › descuento
+  del combo…`, que corrido solo pasa (34 de 34). Vitest: 329 pasan; type-check sin errores en los
+  archivos tocados. Sigue sin prueba visual en el navegador.
 - **Al desplegar:** `tenants:migrate-verticales` y `roles:sync-propietario`. **Antes del deploy**, en
   producción, listar los roles que tienen usuarios en market, dakamu y credishirley y confirmar que los
   nombres de la migración (`Admin-General`, `Administrador de agencia`, `Admin Empresario`) coinciden;
