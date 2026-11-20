@@ -753,6 +753,7 @@ import { imprimirComprobante } from '@/composables/usePrintComprobante';
 import { getPrecioBaseSinIgv } from '@/composables/useProductPricing';
 import { useAuthStore } from '@/stores/auth';
 import { resolverTipAfeIgv as resolverTipAfeIgvPuro } from '@/utils/resolverTipAfeIgv';
+import { cantidadEnVenta, faltaStockEnEdicion } from '@/helpers/ventaRetail';
 import type { Branch } from '@/types/cash-session';
 import type { TipoComprobante } from '@/types/series-comprobante';
 
@@ -913,6 +914,8 @@ const currency_iso = ref<string>('PEN'); // 'PEN' o 'USD' para el backend
 
 // ── Detalle y pagos ────────────────────────────────────────────────
 const sale_details = ref<SaleDetail[]>([]);
+// T-113: cantidad por producto que la venta tenía al abrirla (ya descontada del stock).
+const cantidadOriginal = ref<Record<string, number>>({});
 const discount_total = ref<number>(0);
 const discount_global = ref<number>(0);
 const default_quantity = ref<number>(1);
@@ -1131,19 +1134,24 @@ const recalcularItemTipAfeIgv = (item: SaleDetail, index: number) => {
 
 // ── SELECT AND ADD PRODUCT (directo al detalle) ────────────────────
 const selectAndAddProduct = (product: Product) => {
-    if (product.stock <= 0 && product.disponiblidad !== 1) {
-        (Swal as TVueSwalInstance).fire('Stock insuficiente', 'No hay stock disponible', 'error');
+    // T-113: mismo criterio que el backend (controlaStock) y lo disponible incluye lo que esta
+    // venta ya tenía descontado de ese producto (el backend valida solo la diferencia).
+    const agregar = default_quantity.value || 1;
+    const pedido = cantidadEnVenta(sale_details.value, product.id) + agregar;
+    const disponible = faltaStockEnEdicion(product, pedido, cantidadOriginal.value[String(product.id)] ?? 0);
+    if (disponible !== null) {
+        (Swal as TVueSwalInstance).fire(
+            'Stock insuficiente',
+            disponible <= 0 ? 'No hay stock disponible' : `Solo hay ${disponible} unidades para esta venta`,
+            'error'
+        );
         return;
     }
 
     // Si el producto ya está en la lista, incrementar cantidad
     const existing = sale_details.value.find(d => d.product.id === product.id);
     if (existing) {
-        const newQty = existing.quantity + (default_quantity.value || 1);
-        if (newQty > product.stock && product.disponiblidad !== 1) {
-            (Swal as TVueSwalInstance).fire('Stock insuficiente', `Solo hay ${product.stock} unidades`, 'error');
-            return;
-        }
+        const newQty = existing.quantity + agregar;
         existing.quantity = newQty;
         updateItem(sale_details.value.indexOf(existing));
         clearSearchProduct();
@@ -1826,6 +1834,11 @@ console.log(res);
                 icbper: Number(d.icbper ?? 0),
                 price_final: Number(d.price_final ?? 0),
             }));
+            cantidadOriginal.value = {};
+            for (const d of sale.sale_details as any[]) {
+                const id = String(d.product?.id ?? d.product_id ?? '');
+                if (id) cantidadOriginal.value[id] = (cantidadOriginal.value[id] ?? 0) + Number(d.quantity ?? 0);
+            }
         }
 
         // Pagos   

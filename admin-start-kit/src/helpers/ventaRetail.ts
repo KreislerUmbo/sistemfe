@@ -120,9 +120,28 @@ export const motivoBloqueoCobro = (e: EntradaMotivoCobro): string => {
     return '';
 };
 
-/** Un producto controla stock si es un bien y no está marcado «venta sin stock» (disponiblidad 1). */
-export const controlaStock = (p: { tipo_bien_servicio?: string; disponiblidad?: number }): boolean =>
-    p.tipo_bien_servicio !== 'SERVICIO' && p.disponiblidad !== 1;
+/**
+ * Un producto controla stock si es un bien, no está marcado «venta sin stock» (disponiblidad 1) y
+ * `controla_stock` no es false. Mismo criterio que `Product::controlaStock()` del backend (T-113).
+ */
+export const controlaStock = (p: { tipo_bien_servicio?: string; disponiblidad?: number; controla_stock?: boolean }): boolean =>
+    p.tipo_bien_servicio !== 'SERVICIO' && p.disponiblidad !== 1 && p.controla_stock !== false;
+
+/**
+ * Al editar una venta (T-113): lo disponible para ella es el stock del almacén MÁS lo que la venta
+ * ya tenía descontado de ese producto, porque el backend valida solo la diferencia.
+ * Devuelve lo disponible si `pedido` (suma de las líneas del producto) no alcanza; null si alcanza
+ * o si el producto no controla stock.
+ */
+export const faltaStockEnEdicion = (
+    p: { stock?: number | string; tipo_bien_servicio?: string; disponiblidad?: number; controla_stock?: boolean },
+    pedido: number,
+    yaDescontado: number,
+): number | null => {
+    if (!controlaStock(p)) return null;
+    const disponible = (Number(p.stock) || 0) + yaDescontado;
+    return pedido > disponible + 1e-9 ? Math.max(0, disponible) : null;
+};
 
 /** SUNAT acepta hasta 500 caracteres en la descripción de una línea (T-108). */
 export const MAX_DESCRIPCION_LINEA = 500;

@@ -42,6 +42,7 @@ class ProductResource extends JsonResource
 
             // ── Campos SUNAT ─────────────────────────────────────────
             'tipo_bien_servicio' => $this->resource->tipo_bien_servicio ?? 'BIEN',
+            'controla_stock' => (bool) $this->resource->controla_stock, // T-113: la pantalla usa el mismo criterio que el backend
             'codigo_detraccion' => $this->resource->codigo_detraccion,
             'detraccion' => $this->whenLoaded('detraction', function () { // whenLoaded solo incluye esto si la relación ya está cargada”. Evita consultas adicionales y hace tu API más eficiente.
                 return [
