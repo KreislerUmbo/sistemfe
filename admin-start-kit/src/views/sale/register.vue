@@ -162,7 +162,7 @@ import AdelantosVenta from '@/components/Sales/AdelantosVenta.vue';
 import AvisoVenta from '@/components/Sales/AvisoVenta.vue';
 import { imprimirDirecto, verPdfComprobante, type FormatoImpresion } from '@/composables/usePrintComprobante';
 import { getPrecioBaseSinIgv } from '@/composables/useProductPricing';
-import { controlaStock, motivoBloqueoCobro, precioCatalogoPorCliente, redondear2 } from '@/helpers/ventaRetail';
+import { cantidadEnVenta, controlaStock, indiceLineaIntacta, motivoBloqueoCobro, productoSinStock, precioCatalogoPorCliente, redondear2 } from '@/helpers/ventaRetail';
 import { formatFecha, partesFechaHoraPeru } from '@/helpers/fecha';
 import type { CashStatusResponse } from '@/types/cash-session';
 import { useAuthStore } from '@/stores/auth';
@@ -478,16 +478,18 @@ const agregarProducto = (product: Product, opciones: { cantidad?: number; precio
         return;
     }
 
-    // Si el producto ya está en la lista, incrementar cantidad
-    let indice = sale_details.value.findIndex(d => d.product.id === product.id);
+    // Aviso de stock: la suma de TODAS las líneas del producto contra su stock (T-112).
+    if (controlaStock(product) && cantidadEnVenta(sale_details.value, product.id) + cantidad > Number(product.stock)) {
+        avisar(`Solo hay ${product.stock} unidades de «${product.title}».`);
+        return;
+    }
+
+    // Si hay una línea intacta del producto (sin descripción editada y con el precio del sistema) se le suma;
+    // si no, va una fila nueva (T-112). Un precio puesto a mano (cotización) siempre abre fila propia.
+    const precioSistema = precioBaseDe(product, client_selected.value);
+    let indice = Number(opciones.precio) > 0 ? -1 : indiceLineaIntacta(sale_details.value, product.id, precioSistema);
     if (indice >= 0) {
-        const existing = sale_details.value[indice];
-        const newQty = Number(existing.quantity) + cantidad;
-        if (controlaStock(product) && newQty > Number(product.stock)) {
-            avisar(`Solo hay ${product.stock} unidades de «${product.title}».`);
-            return;
-        }
-        existing.quantity = newQty;
+        sale_details.value[indice].quantity = Number(sale_details.value[indice].quantity) + cantidad;
         updateItem(indice);
     } else {
         const manual = Number(opciones.precio) > 0;
@@ -1412,10 +1414,9 @@ const etiquetaTotal = computed(() => (condicion_especial.value === 'anticipo' ? 
 // ── Botón Cobrar: se deshabilita con el motivo debajo ──────────────
 const esCredito = computed(() => type_payment.value == 2);
 const motivoCobro = computed(() => {
-    const lineaSinStock = sale_details.value.find(d => controlaStock(d.product) && Number(d.quantity) > Number(d.product.stock));
     return motivoBloqueoCobro({
         lineas: sale_details.value.length,
-        sinStock: lineaSinStock ? lineaSinStock.product.title : null,
+        sinStock: productoSinStock(sale_details.value),
         hayCliente: !!client_selected.value,
         tipoComprobante: tipo_comprobante_codigo.value,
         clienteTipoDocumento: client_selected.value?.type_document ?? null,

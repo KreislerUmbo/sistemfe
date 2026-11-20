@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-    MAX_DESCRIPCION_LINEA, admiteDecimales, atajosEfectivo, calcularEfectivo, descripcionAGuardar, motivoBloqueoCobro, normalizarCantidad,
+    MAX_DESCRIPCION_LINEA, admiteDecimales, cantidadEnVenta, indiceLineaIntacta, productoSinStock, atajosEfectivo, calcularEfectivo, descripcionAGuardar, motivoBloqueoCobro, normalizarCantidad,
     precioCatalogoPorCliente, type EntradaMotivoCobro,
 } from './ventaRetail';
 
@@ -99,5 +99,39 @@ describe('descripcionAGuardar (T-108)', () => {
     });
     it('se corta en 500 caracteres', () => {
         expect(descripcionAGuardar('a'.repeat(600), titulo)).toHaveLength(MAX_DESCRIPCION_LINEA);
+    });
+});
+
+describe('línea intacta y stock por producto (T-112)', () => {
+    const p = { id: 1, title: 'Mantenimiento', stock: 5, tipo_bien_servicio: 'BIEN', disponiblidad: 0 };
+    const linea = (o: object = {}) => ({ product: p, quantity: 1, price_base: 80, precio_manual: false, descripcion_linea: null, ...o });
+
+    it('CA1: línea sin personalizar → se suma a ella', () => {
+        expect(indiceLineaIntacta([linea()], 1, 80)).toBe(0);
+    });
+    it('CA2: con descripción editada → fila nueva', () => {
+        expect(indiceLineaIntacta([linea({ descripcion_linea: 'Otro texto' })], 1, 80)).toBe(-1);
+    });
+    it('CA3: precio a mano o distinto del sistema → fila nueva', () => {
+        expect(indiceLineaIntacta([linea({ precio_manual: true })], 1, 80)).toBe(-1);
+        expect(indiceLineaIntacta([linea({ price_base: 60 })], 1, 80)).toBe(-1);
+    });
+    it('CA4: personalizada + intacta → suma a la intacta', () => {
+        expect(indiceLineaIntacta([linea({ descripcion_linea: 'x' }), linea()], 1, 80)).toBe(1);
+    });
+    it('otro producto o vacío → -1', () => {
+        expect(indiceLineaIntacta([], 1, 80)).toBe(-1);
+        expect(indiceLineaIntacta([linea()], 2, 80)).toBe(-1);
+    });
+    it('CA5: el stock se compara con la suma de todas las líneas del producto', () => {
+        const ls = [linea({ quantity: 3 }), linea({ quantity: 2, descripcion_linea: 'y' })];
+        expect(cantidadEnVenta(ls, 1)).toBe(5);
+        expect(productoSinStock(ls)).toBeNull();
+        ls[1].quantity = 3;
+        expect(productoSinStock(ls)).toBe('Mantenimiento');
+    });
+    it('un servicio no controla stock', () => {
+        const s = { ...p, tipo_bien_servicio: 'SERVICIO' };
+        expect(productoSinStock([linea({ product: s, quantity: 99 })])).toBeNull();
     });
 });

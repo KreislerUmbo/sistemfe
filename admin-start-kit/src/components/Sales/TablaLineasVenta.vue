@@ -125,7 +125,7 @@ import { computed, ref, watch } from 'vue';
 import type { SaleDetail } from '@/types/sales';
 import type { Product } from '@/types/products';
 import ModalDescripcionLinea from '@/components/Sales/ModalDescripcionLinea.vue';
-import { admiteDecimales, controlaStock as productoControlaStock, normalizarCantidad, precioCatalogoPorCliente } from '@/helpers/ventaRetail';
+import { admiteDecimales, cantidadEnVenta, controlaStock as productoControlaStock, normalizarCantidad, precioCatalogoPorCliente } from '@/helpers/ventaRetail';
 
 export type LineaVenta = SaleDetail & { uid?: number; precio_manual?: boolean };
 
@@ -167,7 +167,8 @@ watch(() => props.items.length, () => { preciosAbierto.value = null; descuentoAb
 
 const esServicio = (it: LineaVenta) => it.product.tipo_bien_servicio === 'SERVICIO';
 const controlaStock = (it: LineaVenta) => productoControlaStock(it.product);
-const sinStock = (it: LineaVenta) => controlaStock(it) && Number(it.quantity) > Number(it.product.stock);
+// Se compara la suma de TODAS las líneas del producto con su stock (T-112): con 3 + 3 y stock 5 se marcan las dos filas.
+const sinStock = (it: LineaVenta) => controlaStock(it) && cantidadEnVenta(props.items, it.product.id) > Number(it.product.stock);
 const pocoStock = (it: LineaVenta) => controlaStock(it) && Number(it.product.stock) <= 5;
 
 const afectacionCambiada = (it: LineaVenta) => it.tip_afe_igv !== props.afeDefecto(it.product);

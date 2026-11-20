@@ -137,3 +137,40 @@ export const descripcionAGuardar = (texto: string, tituloCatalogo: string): stri
     if (limpio === '' || limpio === tituloCatalogo.trim()) return null;
     return limpio.slice(0, MAX_DESCRIPCION_LINEA);
 };
+
+/** Lo mínimo de una línea de venta que mira la regla de «línea intacta» (T-112). */
+export type LineaComparable = {
+    product: { id: number | string; title?: string };
+    quantity: number | string;
+    price_base: number | string;
+    precio_manual?: boolean;
+    descripcion_linea?: string | null;
+};
+
+/**
+ * Índice de la línea de ese producto a la que se le suma la cantidad al elegirlo de nuevo (T-112), o -1
+ * si hay que abrir una fila nueva. Una línea es «intacta» si no tiene descripción editada y lleva el
+ * precio que pondría el sistema (no puesto a mano y igual a `precioSistema`). Si hay varias, la primera.
+ */
+export const indiceLineaIntacta = (
+    lineas: LineaComparable[],
+    productId: number | string,
+    precioSistema: number,
+): number =>
+    lineas.findIndex(l =>
+        l.product.id === productId
+        && !l.descripcion_linea?.trim()
+        && !l.precio_manual
+        && Math.abs(Number(l.price_base) - precioSistema) <= 0.0001);
+
+/** Unidades de un producto en toda la venta, sumando todas sus líneas (para comparar con el stock, T-112). */
+export const cantidadEnVenta = (lineas: LineaComparable[], productId: number | string): number =>
+    lineas.reduce((s, l) => (l.product.id === productId ? s + (Number(l.quantity) || 0) : s), 0);
+
+/** Título del primer producto que controla stock y cuya suma de líneas supera su stock; null si ninguno (T-112). */
+export const productoSinStock = (
+    lineas: (LineaComparable & { product: { stock?: number | string; tipo_bien_servicio?: string; disponiblidad?: number } })[],
+): string | null => {
+    const l = lineas.find(x => controlaStock(x.product) && cantidadEnVenta(lineas, x.product.id) > Number(x.product.stock));
+    return l ? (l.product.title ?? '') : null;
+};
