@@ -102,6 +102,8 @@ final class T009MonedaCajaTest extends CreditosTestCase
             'client_id' => $cliente->id, 'type_client' => 1, 'cod_tipo_doc_cliente' => '1',
             'currency' => $moneda, 'is_exportacion' => 0, 'destino' => 'nacional', 'type_payment' => 1,
             'subtotal' => 100.00, 'igv' => 18.00, 'total' => 118.00, 'discount' => 0, 'discount_global' => 0,
+            // T-114: la cabecera completa, como la manda la pantalla (los totales se validan contra las líneas).
+            'mto_oper_gravadas' => 100, 'total_impuestos' => 18, 'valor_venta' => 100, 'mto_imp_venta' => 118, 'redondeo' => 0,
             'retencion_igv' => 0, 'state_payment' => 3, 'debt' => 0, 'paid_out' => 118,
             'sale_details' => [[
                 'product' => ['id' => $producto->id, 'categorie_id' => $producto->categorie_id],

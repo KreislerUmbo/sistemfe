@@ -23,6 +23,7 @@ use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\Feature\Creditos\CreditosTestCase;
+use Tests\Feature\Ventas\Concerns\CabeceraDePantalla;
 
 /**
  * T-109 — permiso cambiar_precio_venta y validaciones nuevas de SaleController::store()/update():
@@ -31,6 +32,9 @@ use Tests\Feature\Creditos\CreditosTestCase;
  */
 final class T109PrecioYValidacionesVentaTest extends CreditosTestCase
 {
+    use CabeceraDePantalla; // T-114: los totales de la cabecera se validan contra las líneas
+
+
     private Branch $sede;
     private Categorie $categoria;
     private ?Client $clienteCompartido = null;
@@ -114,7 +118,7 @@ final class T109PrecioYValidacionesVentaTest extends CreditosTestCase
 
     private function guardar(array $payload): array
     {
-        $respuesta = app(SaleController::class)->store(new Request($payload));
+        $respuesta = app(SaleController::class)->store(new Request($this->conCabeceraDeLasLineas($payload)));
 
         return json_decode($respuesta->getContent(), true);
     }
@@ -302,7 +306,7 @@ final class T109PrecioYValidacionesVentaTest extends CreditosTestCase
 
     private function actualizar(int $idVenta, array $payload): array
     {
-        $respuesta = app(SaleController::class)->update(new Request($payload), (string) $idVenta);
+        $respuesta = app(SaleController::class)->update(new Request($this->conCabeceraDeLasLineas($payload)), (string) $idVenta);
 
         return json_decode($respuesta->getContent(), true);
     }

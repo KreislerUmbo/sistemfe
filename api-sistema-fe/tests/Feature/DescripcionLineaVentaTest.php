@@ -69,6 +69,8 @@ class DescripcionLineaVentaTest extends CreditosTestCase
             'client_id' => $cliente->id, 'type_client' => 1, 'cod_tipo_doc_cliente' => '6',
             'currency' => 'PEN', 'is_exportacion' => 0, 'destino' => 'nacional', 'type_payment' => 1,
             'subtotal' => 100.00, 'igv' => 18.00, 'total' => 118.00, 'discount' => 0, 'discount_global' => 0,
+            // T-114: la cabecera completa, como la manda la pantalla (los totales se validan contra las líneas).
+            'mto_oper_gravadas' => 100, 'total_impuestos' => 18, 'valor_venta' => 100, 'mto_imp_venta' => 118, 'redondeo' => 0,
             'retencion_igv' => 0, 'state_payment' => 3, 'debt' => 0, 'paid_out' => 118,
             'sale_details' => [$linea + [
                 'product' => ['id' => $this->producto->id, 'categorie_id' => $this->producto->categorie_id],
@@ -258,7 +260,7 @@ class DescripcionLineaVentaTest extends CreditosTestCase
         $id = $venta->sale_details()->first()->id;
 
         // 1) la pantalla vieja no manda el campo (cambia la cantidad, por ejemplo)
-        app(SaleController::class)->update(new Request($this->payload($cliente, ['id' => $id, 'quantity' => 3, 'subtotal' => 150, 'mto_valor_venta' => 150, 'mto_base_igv' => 150, 'igv' => 27, 'total_impuestos' => 27])), (string) $venta->id);
+        app(SaleController::class)->update(new Request(array_replace($this->payload($cliente, ['id' => $id, 'quantity' => 3, 'subtotal' => 150, 'mto_valor_venta' => 150, 'mto_base_igv' => 150, 'igv' => 27, 'total_impuestos' => 27]), ['subtotal' => 150, 'igv' => 27, 'total' => 177, 'mto_oper_gravadas' => 150, 'total_impuestos' => 27, 'valor_venta' => 150, 'mto_imp_venta' => 177])), (string) $venta->id);
         $this->assertSame(self::TEXTO, SaleDetail::find($id)->descripcion_linea);
         $this->assertSame(3.0, (float) SaleDetail::find($id)->quantity);
 
