@@ -8,7 +8,7 @@
 
 Cada línea: ID · qué · estado · depende de · rama o commit. El detalle está en
 `docs/tareas/T-…md` (se borra al cerrar; para una tarea hecha, el commit es la referencia).
-Próximo ID libre: **T-116**.
+Próximo ID libre: **T-117**.
 
 ## Orden de construcción (27-oct-2026)
 
@@ -47,6 +47,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-083 | TRA | Inventario y limpieza de columnas y tablas sin uso en las bases tenant: por cada una, quién la usa (código, PDF, Excel, seeders) y cuántos datos tiene en producción; decidir borrar, migrar o dejar; borrar por módulo en tandas chicas con sus tests. Conocidas: `cronograma_pago_proveedor`/`pago_proveedor` (esperan a Compras), `sv_facturacion` (histórico), `state_sale` de cotizaciones. **Tanda Agencia (auditoría 09-nov, sin lectura ni escritura en el código):** `proveedores.pais_id/departamento_id/provincia_id/distrito_id`, `reserva.monto_reembolso`, `salidas_mayorista.fecha_retorno`, `pago_proveedor.referencia_documento`; tablas sin camino de escritura `reglas_cancelacion` (solo una relación en `Reserva`) y `recordatorios`/`tipos_recordatorio`/`recordatorio_snooze_config` (11f, el seeder corre al provisionar); `reserva_item_pasajero.checkin_realizado/checkin_hora` ya tiene su línea en «Por analizar» (la clave `checkin_realizado` de la API se calcula y no se toca). Sin archivo de tarea todavía: primero el inventario | por analizar | — | |
 | T-101 | TRA | Dejar `npm run type-check` (vue-tsc) en 0 errores para que `npm run build` vuelva a servir de criterio de aceptación. Medido el 10-nov: 47 errores en 17 archivos, todos previos a T-035; los que más pesan: `views/recursos/manual.vue` (11), `helpers/fake-backend.ts` (7), `portal/Favoritos.vue` (4), `recursos/index.vue` (4); el resto, 1-2 por archivo en ventas, productos, portal, agencia y router. Corregir tipos sin cambiar comportamiento, por módulo. Sin archivo de tarea todavía | por hacer | — | |
 | T-029 | AGE | Tour clásico desde plantilla: cada servicio nace con su tratamiento tributario; costo sin infantes (H18, H19) | por hacer: desbloqueada el 07-nov (D-AGE-035: el guía toma el valor por defecto de la agencia) | — | |
+| T-116 | VEN | Editar venta: corregir los errores anotados por T-110 (pago inicial a crédito, anticipo al abrir, sucursal de la venta, destino pisado por el cliente, aviso de venta enviada a SUNAT, etiqueta de precio de la línea guardada, decimales del precio base) | en curso | T-110 | `fix/T-116-edicion-venta-errores` |
 
 ## Por analizar
 
@@ -67,13 +68,6 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | CLI | Marcar un cliente como mayorista (precio menor en todas sus compras) queda con el permiso de editar clientes. Decisión del 20-nov: así por ahora; revisar si hace falta un permiso propio | revisión de T-115, 20-nov-2026 |
 | POR | Revisar si el portal e-commerce usa `price_company` (desde T-115 es el «precio mayorista», no el de empresa) | hallazgo de T-115, 20-nov-2026 |
 | VEN | `price_company` sigue llamándose así en la base y en `useProductPricing.ts`; desde T-115 es el precio mayorista. Renombrar solo si se toca esa zona | hallazgo de T-115, 20-nov-2026 |
-| VEN | Editar venta a crédito: `SalePaymentController::store()` responde 422 a ventas con `condicion_pago = 'credito'`, así que «Agregar pago inicial» de `edit.vue` falla; y como `store()` de `edit.vue` exige al menos un pago, una venta a crédito sin pago inicial no se puede guardar desde la edición | hallazgo de T-110, 20-nov-2026 |
-| VEN | Editar venta con anticipo: `edit.vue` no carga `sale_anticipo` ni `n_comprobante_anticipo` al abrir la venta y el botón «buscar» del anticipo solo avisa «Función pendiente»; se guarda con `n_comprobante_anticipo: ''` y `amount_anticipo: 0` | hallazgo de T-110, 20-nov-2026 |
-| VEN | Editar venta: `branch_id_seleccionado` arranca en `branches[0]`, no en la sucursal de la venta; con `can_switch_branch` se envía esa. Ver qué hace `update()` con ella | hallazgo de T-110, 20-nov-2026 |
-| VEN | Editar venta: `loadSale()` llama a `selectClient()` después de cargar el destino guardado, y si el cliente es de Amazonía lo cambia a `amazonia` aunque la venta sea `nacional` (sin recalcular el IGV de las líneas, porque está en carga). Ya pasaba antes de T-110 | revisión de T-110, 20-nov-2026 |
-| VEN | Editar venta enviada a SUNAT: «Guardar cambios» no muestra nada; `update()` responde HTTP 200 con `code: 405` en el cuerpo y `store()` de `edit.vue` solo maneja `error` y `code 200`. Ya pasaba antes de T-110 (la venta igual no se edita) | revisión de T-110, 20-nov-2026 |
-| VEN | Etiqueta de precio de una línea guardada en edición («General»/«Mayorista»): `TablaLineasVenta` la calcula con el catálogo y el cliente de hoy, no con el precio que tiene la línea; puede no coincidir con el monto | revisión de T-110, 20-nov-2026 |
-| VEN | `getPrecioBaseSinIgv()` deja errores de punto flotante (59 → 50, pero 53,1 → `45.00000000000001`): la casilla de precio de la línea se ve «45.0000(» y el payload lleva el número largo. Redondear el precio base (p. ej. a 6 decimales) | revisión de T-110, 20-nov-2026 |
 | VEN | `sales` no tiene `porcentaje_retencion` y `store()` no lo guarda (sí el de detracción y el de percepción): no se sabe con qué tasa se retuvo una venta ya emitida. Migración nueva + guardarlo | hallazgo de T-114, 20-nov-2026 |
 | VEN | `tax_configs` no tiene `monto_minimo`: el mínimo de retención y percepción queda fijo en S/ 700 en la pantalla y en `TotalesVentaValidator`. Si SUNAT lo cambia, agregar la columna y leerla en los dos lados | hallazgo de T-114, 20-nov-2026 |
 | VEN | `debt`, `paid_out` y `state_payment` de la venta siguen llegando del front sin recalcular en el backend (T-114 solo validó los totales de la cabecera) | hallazgo de T-114, 20-nov-2026 |

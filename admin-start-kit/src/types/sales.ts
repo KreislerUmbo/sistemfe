@@ -170,6 +170,8 @@ export type SaleResponse = {
     code?: number,
     sale?: Sale,
     sale_id?: string | number,
+    /** T-116: sucursal de la serie de la venta (solo en GET sales/{id}). */
+    branch_id?: number | null,
     error?: any,
 
 }

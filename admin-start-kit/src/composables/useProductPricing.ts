@@ -25,5 +25,7 @@ export const getPrecioBaseSinIgv = (rawPrice: number, product: Product, tasas: T
     if (!product.include_igv) return precio;
     const tasa = getTasaProductoBase(product, tasas);
     const divisor = 1 + (tasa / 100);
-    return precio / divisor;
+    // T-116: 53.1 / 1.18 da 45.00000000000001 en coma flotante; 6 decimales bastan
+    // (PrecioVentaValidator compara price_base con tolerancia 0.0001).
+    return Math.round((precio / divisor) * 1e6) / 1e6;
 };

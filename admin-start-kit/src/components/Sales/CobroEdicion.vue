@@ -248,7 +248,29 @@ const addPayment = () => {
         (Swal as TVueSwalInstance).fire('Error', 'Ya hay un pago en efectivo registrado.', 'error'); return;
     }
 
-    // Si estamos editando, guardar el pago en backend
+    const limpiarFormulario = () => setTimeout(() => {
+        methodPayment.value = '';
+        amount.value = 0;
+        datePayment.value = '';
+        nroOperacion.value = '';
+        emit('cambio');
+    }, 50);
+
+    // T-116: en crédito el pago inicial queda en memoria y lo guarda «Guardar cambios»
+    // (PATCH sales/{id} reemplaza todos los pagos con los del payload). POST sale_payments
+    // rechaza con 422 las ventas a crédito: ahí el cobro se hace desde Cuentas por Cobrar.
+    if (typePayment.value == 2) {
+        pagos.value.push({
+            method_payment: methodPayment.value,
+            amount: amount.value,
+            date_payment: datePayment.value,
+            nro_operacion: nroOperacion.value.trim() || null,
+        } as SalePayment);
+        limpiarFormulario();
+        return;
+    }
+
+    // Contado: el pago se registra al instante en el backend (decisión del 20-nov, T-110)
     const data = {
         sale_id: props.saleId,
         method_payment: methodPayment.value,
@@ -260,13 +282,7 @@ const addPayment = () => {
     httpClient.post('sale_payments', data)
         .then(res => {
             pagos.value.push(res.data.payment);
-            setTimeout(() => {
-                methodPayment.value = '';
-                amount.value = 0;
-                datePayment.value = '';
-                nroOperacion.value = '';
-                emit('cambio');
-            }, 50);
+            limpiarFormulario();
         })
         .catch(err => {
             (Swal as TVueSwalInstance).fire('Error', err.response?.data?.message || 'Error al agregar pago', 'error');
@@ -276,6 +292,13 @@ const addPayment = () => {
 const removePayment = (index: number) => {
     const payment = pagos.value[index];
     if (!payment) return;
+    // T-116: en crédito (o un pago que todavía no está en el backend) se quita de la lista y
+    // el cambio se guarda con «Guardar cambios»; DELETE sale_payments rechaza ventas a crédito.
+    if (typePayment.value == 2 || !payment.id) {
+        pagos.value.splice(index, 1);
+        emit('cambio');
+        return;
+    }
     (Swal as TVueSwalInstance)
         .fire({
             title: "Confirmar eliminación",

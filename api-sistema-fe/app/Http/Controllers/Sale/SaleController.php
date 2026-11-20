@@ -1031,8 +1031,13 @@ class SaleController extends Controller
 
         return response()->json([
             "sale" => SaleResource::make($venta),
+            // T-116: la venta no guarda sucursal; es la de su serie. La edición arranca en ella
+            // (antes en la primera sucursal de la lista). Va acá y no en SaleResource para no
+            // agregar una consulta por fila al listado.
+            "branch_id" => $venta?->serie_comprobante_id
+                ? SerieComprobante::whereKey($venta->serie_comprobante_id)->value('branch_id')
+                : null,
             "code" => 200,
-           
         ]);
     }
 

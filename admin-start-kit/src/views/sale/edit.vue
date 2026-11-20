@@ -749,7 +749,8 @@ const store = async () => {
     if (sale_details.value.length === 0) {
         (Swal as TVueSwalInstance).fire({ icon: 'error', title: 'Error', text: 'Agrega al menos un producto.' }); return;
     }
-    if (sale_payments.value.length === 0 && getTotalSales() > 0) {
+    // T-116: igual que register.vue, a crédito no hace falta pago inicial (el cronograma financia todo).
+    if (sale_payments.value.length === 0 && getTotalSales() > 0 && type_payment.value != 2) {
         (Swal as TVueSwalInstance).fire({ icon: 'error', title: 'Error', text: 'Agrega al menos un pago para la venta.' }); return;
     }
     // Re-validar acá (no solo en addPayment()): el total pudo bajar después
@@ -880,8 +881,8 @@ const store = async () => {
         paid_out: total_payments.value,
 
         // Detalles — incluyen todos los campos para Greenter
-        // (sin precio_manual ni uid: son solo de pantalla)
-        sale_details: sale_details.value.map(({ precio_manual, uid, ...linea }) => linea),
+        // (sin precio_manual, uid ni precio_guardado: son solo de pantalla)
+        sale_details: sale_details.value.map(({ precio_manual, uid, precio_guardado, ...linea }) => linea),
 
         // Pagos
         payments: sale_payments.value,
@@ -911,10 +912,25 @@ const store = async () => {
             const formatoDefault = useAuthStore().getUser()?.formato_impresion_default ?? 'a4';
             await imprimirComprobante(sale_id.value, formatoDefault);
             router.push({ name: 'sale.list' });
+            return;
         }
+        // T-116: update() responde HTTP 200 con code 405 si la venta ya se envió a SUNAT.
+        (Swal as TVueSwalInstance).fire('No se guardó', String(resp.data.message ?? 'No se pudo guardar la venta.'), 'warning');
     } catch (e: any) {
         (Swal as TVueSwalInstance).fire('Error', e.response?.data?.message ?? 'Error inesperado', 'error');
     }
+};
+
+// T-116: qué precio de catálogo tiene una línea guardada, comparando su propio precio sin IGV
+// (misma tolerancia que PrecioVentaValidator). Si no coincide con ninguno: «Precio guardado».
+const precioGuardado = (d: any): 'General' | 'Mayorista' | 'Otro' | undefined => {
+    if (!d.product) return undefined;
+    const tasas = { igvGeneral: getIgvGeneralTasa(), ivap: getIvapTasa() };
+    const precio = Number(d.price_base ?? 0);
+    const igual = (bruto: number) => bruto > 0 && Math.abs(getPrecioBaseSinIgv(bruto, d.product, tasas) - precio) <= 0.0001;
+    if (igual(Number(d.product.price_general))) return 'General';
+    if (igual(Number(d.product.price_company))) return 'Mayorista';
+    return 'Otro';
 };
 
 // ── CARGAR DATOS DE LA VENTA ──────────────────────────────────────
@@ -936,7 +952,6 @@ const loadSale = async () => {
         n_transaction.value = sale.n_transaction;
         today.value = sale.created_at_format || sale.date || '';
         currency.value = sale.currency || 'PEN';
-        destino.value = sale.destino || 'nacional';
         description.value = sale.description || '';
         discount_global.value = Number(sale.discount_global || 0);
         type_payment.value = sale.type_payment || 1;
@@ -953,6 +968,18 @@ const loadSale = async () => {
         // Cliente
         if (sale.client) {
             selectClient(sale.client);
+        }
+        // T-116: el destino guardado va DESPUÉS de selectClient(), que sugiere «amazonia» si el
+        // cliente es de esa zona y pisaba el de una venta nacional.
+        destino.value = sale.destino || 'nacional';
+
+        // T-116: anticipo guardado en la venta (antes se abría vacío y se guardaba en 0).
+        n_comprobante_anticipo.value = sale.n_comprobante_anticipo ?? '';
+        sale_anticipo.value = Number(sale.amount_anticipo ?? 0);
+
+        // T-116: la sucursal de la venta es la de su serie; antes arrancaba en la primera de la lista.
+        if (puedeCambiarSucursal.value && res.data.branch_id) {
+            branch_id_seleccionado.value = res.data.branch_id;
         }
         // T-107: se reenvía tal cual la dirección guardada (el backend la acepta aunque se haya desactivado).
         client_address_id.value = sale.client_address_id ?? null;
@@ -1000,6 +1027,7 @@ const loadSale = async () => {
                 igv: Number(d.igv ?? 0),
                 icbper: Number(d.icbper ?? 0),
                 price_final: Number(d.price_final ?? 0),
+                precio_guardado: precioGuardado(d),
             }));
             cantidadOriginal.value = {};
             for (const d of sale.sale_details as any[]) {
