@@ -31,6 +31,7 @@ use App\Services\QrCodeService;
 use App\Services\TipoCambio\TipoCambioSunatResolver;
 use App\Services\Ventas\PrecioVentaValidator;
 use App\Services\Ventas\StockVentaService;
+use App\Services\Ventas\TotalesVentaValidator;
 use Brick\Math\BigDecimal;
 use App\Services\SerieComprobanteService;
 use App\Services\StorageUrl;
@@ -402,6 +403,13 @@ class SaleController extends Controller
         $validador->validar((array) $request->sale_details, $cliente, $cotizacion, $guardados);
     }
 
+    // T-114: con o sin el permiso de precio, la cabecera tiene que salir de las líneas del payload.
+    // Corre ANTES de DB::beginTransaction(): un 422 no deja nada a medias. Ver TotalesVentaValidator.
+    private function validarTotalesDeVenta(Request $request): void
+    {
+        app(TotalesVentaValidator::class)->validar($request->all(), (array) $request->sale_details);
+    }
+
     // SUNAT exige identificar al comprador en boletas de más de S/ 700. En dólares se convierte con
     // el último tipo de cambio SUNAT a la fecha de hoy; si no hay ninguno cargado no se bloquea
     // (mismo criterio que TipoCambioSunatResolver: nunca frena la emisión por falta de T.C.).
@@ -750,6 +758,7 @@ class SaleController extends Controller
         $serieResuelta = $this->resolverSerieComprobante($request);
         $this->validarBoletaSinDocumento($request, $serieResuelta['tipo']->codigo);
         $this->validarPrecioDeVenta($request);
+        $this->validarTotalesDeVenta($request);
 
         $detalles_venta       = $request->sale_details;
         $aplicaciones_adelanto = $request->advance_applications ?? [];
@@ -1139,6 +1148,7 @@ public function update(Request $request, string $id)
     $serieResuelta = $this->resolverSerieComprobanteUpdate($venta, $request);
     $this->validarBoletaSinDocumento($request, $serieResuelta['tipo']?->codigo);
     $this->validarPrecioDeVenta($request, $venta);
+    $this->validarTotalesDeVenta($request);
 
     $detalles_nuevos = $request->sale_details ?? [];
     $this->validarDescripcionesLinea($detalles_nuevos);
