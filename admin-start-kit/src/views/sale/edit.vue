@@ -134,7 +134,6 @@ import PanelClienteComprobante from '@/components/Sales/PanelClienteComprobante.
 import DatosVentaPanel from '@/components/Sales/DatosVentaPanel.vue';
 import TotalesVenta from '@/components/Sales/TotalesVenta.vue';
 import TablaLineasVenta, { type LineaVenta } from '@/components/Sales/TablaLineasVenta.vue';
-import SelectorDireccionComprobante from '@/components/Clientes/SelectorDireccionComprobante.vue';
 import { imprimirComprobante } from '@/composables/usePrintComprobante';
 import { getPrecioBaseSinIgv } from '@/composables/useProductPricing';
 import { useAuthStore } from '@/stores/auth';
@@ -157,7 +156,6 @@ const PERMISOS_EMISION: Record<string, string> = {
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 
-//const route = useRoute();
 const route = useRoute();
 const router = useRouter();
 
@@ -172,10 +170,7 @@ const avisar = (texto: string, acciones: { texto: string; fn: () => void }[] = [
 //const sale_id_edit = ref<string | string[]>("");//id de la venta a edit
 
 
-
 // ── Datos maestros ──────────────────────────────────────────────────
-const clients = ref<Client[]>([]);
-const products = ref<Product[]>([]);
 const client_selected = ref<Client | undefined>(undefined);
 const client_address_id = ref<number | null>(null); // T-107: null = dirección fiscal
 
@@ -246,10 +241,8 @@ const previsualizarSerie = async () => {
     }
 };
 
-const type_operation = ref<string>('10');
 const destino = ref<string>('amazonia');
 const currency = ref<string>('PEN');
-const currency_symbol = computed(() => currency.value === 'USD' ? '$' : 'S/.');
 
 // Bloquea los watchers de recálculo tributario mientras los datos se
 // asignan de forma programática (carga inicial de la venta, o reversión
@@ -265,7 +258,6 @@ const porcentaje_detraccion_sel = ref<number>(0);
 const monto_detraccion = ref<number>(0);
 const porcentaje_retencion_sel = ref<number>(0.03);
 const monto_retencion = ref<number>(0);
-const retencion_igv = ref<number>(0);
 const porcentaje_percepcion_sel = ref<number>(0.02);
 const monto_percepcion = ref<number>(0);
 
@@ -277,8 +269,6 @@ const getIgvGeneralTasa = (): number => {
     const igv_default = parametros_tributarios.value['IGV']?.find((t: any) => t.es_default);
     return Number(igv_default?.tasa_porcentaje ?? 18);
 };
-const getIgvAmazoniaTasa = (): number =>
-    Number(parametros_tributarios.value['IGV']?.find((t: any) => t.ubigeos_aplicables)?.tasa_porcentaje ?? 0);
 const getIvapTasa = (): number =>
     Number(parametros_tributarios.value['IVAP']?.[0]?.tasa_porcentaje ?? 4);
 const getIcbperMonto = (): number =>
@@ -287,11 +277,6 @@ const getRetencionTasa = (): number =>
     Number(parametros_tributarios.value['RETENCION']?.[0]?.tasa_porcentaje ?? 3) / 100;
 const getPercepcionTasa = (): number =>
     Number(parametros_tributarios.value['PERCEPCION']?.[0]?.tasa_porcentaje ?? 2) / 100;
-
-// ── Moneda ──────────────────────────────────────────────────────
-const currency_iso = ref<string>('PEN'); // 'PEN' o 'USD' para el backend
-
-
 
 // ── Detalle y pagos ────────────────────────────────────────────────
 const sale_details = ref<LineaVenta[]>([]);
@@ -592,20 +577,6 @@ const removeItem = (index: number) => {
     recalcularPreciosNuevos();
     sumDetails();
 };
-
-// ── Tasas de IGV para mostrar en la tabla de totales ─────────────
-const getTasaIgv = (item?: LineaVenta): number => {
-    if (!item) return getIgvGeneralTasa();
-    if (item.tip_afe_igv === '17') return getIvapTasa();
-    if (['20', '30', '40'].includes(item.tip_afe_igv)) return 0;
-    return getIgvGeneralTasa();
-};
-
-const getTasaIgvGlobal = (): number => {
-    if (sale_details.value.length === 0) return getIgvGeneralTasa();
-    return getTasaIgv(sale_details.value[0]);
-};
-
 
 // ── Cálculo de totales ────────────────────────────────────────────
 const getSubTotalSale = (): number => {
@@ -958,7 +929,6 @@ const loadSale = async () => {
             (Swal as TVueSwalInstance).fire('Error', res.data.message, 'error');
             return;
         }
-console.log(res);
         const sale = res.data.sale;
         if (!sale) return;
 
@@ -1085,19 +1055,12 @@ console.log(res);
 };
 
 
-
-
 // ── Modales rápidos ───────────────────────────────────────────────
-const openQuickClientModal = () => {
-    quickClientData.value = null;
-    showQuickClientModal.value = true;
-};
 const openQuickClientModalWithData = (data: any) => {
     quickClientData.value = data;
     showQuickClientModal.value = true;
 };
 const onClientCreated = (client: Client) => {
-    clients.value.unshift(client);
     selectClient(client);
     showQuickClientModal.value = false;
 };
@@ -1106,7 +1069,6 @@ const openQuickProductModal = (nombre = '') => {
     showQuickProductModal.value = true;
 };
 const onProductCreated = (product: Product) => {
-    products.value.unshift(product);
     agregarProducto(product);
     showQuickProductModal.value = false;
 };
@@ -1146,10 +1108,6 @@ const config = async () => {
     try {
         const res: AxiosResponse<SaleConfig> = await httpClient.get('sales/config');
         // No asignamos n_transaction ni today porque ya vienen de la venta cargada
-        if (products.value.length === 0) {
-            clients.value = res.data.clients.data;
-            products.value = res.data.products.data;
-        }
         parametros_tributarios.value = (res.data as any).parametros_tributarios ?? {};
         codigos_detraccion.value = (res.data as any).codigos_detraccion ?? [];
 
@@ -1169,7 +1127,6 @@ const config = async () => {
 
 // ── Watchers ──────────────────────────────────────────────────────
 watch(discount_global, () => sumDetails());
-watch(retencion_igv, () => sumDetails()); // compatibilidad
 
 watch(condicion_especial, (valor) => {
     // Activar exportación si se seleccionó esa condición
@@ -1275,131 +1232,6 @@ watch(destino, async (_nuevoValor, valorAnterior) => {
 });
 
 
-/* const config = async () => {
-    try {
-        const res: AxiosResponse<SaleConfig> = await httpClient.get(
-            `sales/config`);
-        // n_transaction.value = res.data.n_transaction;
-        // today.value = res.data.today;
-        if (products.value.length == 0) {
-            clients.value = res.data.clients.data;
-            products.value = res.data.products.data;
-
-            setTimeout(() => {
-                clientSelectr.value = new Selectr('#n-f-clients');
-                productSelectr.value = new Selectr('#n-f-products', {
-                    searchable: true,
-
-                    renderOption(option: any) {//
-                        if (!option.value) return option.text;
-
-                        const stock = option.dataset.stock ?? 0;
-
-                        return `
-                    <div style="display:flex;justify-content:space-between; width:100%;">
-                        <span>${option.text}</span>
-                        <span style="font-size:12px;color:${stock <= 5 ? 'red' : '#6b7280'};">stock: ${stock}</span>
-                    </div>
-    `;
-                    },
-
-                    renderSelection(option: any) {
-                        return option.text;
-                    }
-                });
-                show();
-            }, 25);
-        }
-
-
-
-        console.log(res);
-
-        setTimeout(() => {
-            clientSelectr.value.on("selectr.change", (option: any) => {
-                console.log(option.value);
-                client_selected.value = clients.value.find(client => client.id == option.value);
-                if (product_selected.value && client_selected.value) {
-                    if (client_selected.value.type_client === '1') { //CLIENTE FINAL
-                        price_base.value = Number(Number(getPriceBaseCF()).toFixed(3));
-                    }
-                    if (client_selected.value.type_client === '2') { // CLIENTE EMPRESA
-                        price_base.value = Number(Number(getPriceBaseCE()).toFixed(3));
-                    }
-                }
-            });
-
-            productSelectr.value.on("selectr.change", (option: any) => {
-                console.log(option.value);
-                product_selected.value = products.value.find(product => product.id == option.value);
-                if (product_selected.value) {
-                    if (product_selected.value?.is_ivap == 1 && is_exportacion.value == 0) {
-                        type_operation.value = "10";
-                    };
-                    if (is_exportacion.value == 1) {
-                        type_operation.value = "40";
-                    }
-                    if (product_selected.value?.is_ivap == 2 && is_exportacion.value == 0) {
-                        type_operation.value = "17";
-                    };
-                }
-
-
-
-
-                if (client_selected.value) {
-                    if (client_selected.value.type_client == '1') {//CLIENTE FINAL
-                        price_base.value = Number(Number(getPriceBaseCF()).toFixed(3));
-
-                    }
-                    if (client_selected.value.type_client == '2') {// CLIENTE EMPRESA
-                        price_base.value = Number(Number(getPriceBaseCE()).toFixed(3));
-                    }
-                } else {
-                    price_base.value = product_selected.value?.price_general ?? 0;
-                }
-            });
-
-        }, 50);
-
-    } catch (error) {
-        console.log(error);
-
-    }
-
-} */
-
-/* const deleteSaleDetail = async (index: number) => {
-    const SALE_DETAIL = sale_details.value[index];
-    if (!SALE_DETAIL) return;
-
-    try {
-        const result = await (Swal as TVueSwalInstance).fire({
-            title: "Confirmar eliminación",
-            text: `¿Estás seguro de eliminar el producto '${SALE_DETAIL.product.title}'?`,
-            icon: "warning",
-            showCancelButton: true,
-            confirmButtonColor: "#3085d6",
-            cancelButtonColor: "#d33",
-            confirmButtonText: "Sí, eliminar",
-            cancelButtonText: "Cancelar"
-        });
-
-        if (result.isConfirmed) {
-            await httpClient.delete("sale_details/" + SALE_DETAIL.id);
-            (Swal as TVueSwalInstance).fire("Eliminado!", `Producto eliminado.`, "success");
-            sale_details.value.splice(index, 1);
-            discount_global.value = 0;
-            sumDetails();
-        }
-    } catch (error: any) {
-        if (error.response?.data?.error) {
-            (Swal as TVueSwalInstance).fire('Error', error.response.data.error, 'error');
-        }
-    }
-};
- */
-
 // ── Totales a mostrar ─────────────────────────────────────────────
 const simbolo = computed(() => (currency.value === 'USD' ? 'US$' : 'S/'));
 const dinero = (n: number) => `${simbolo.value} ${n.toFixed(2)}`;
@@ -1460,92 +1292,4 @@ onMounted(() => config());
     .panel-cobro { position: static; }
 }
 
-/* ── Barra fija inferior ─────────────────────────────── */
-.sv-bottom-bar {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    z-index: 1030;
-    background: #ffffff;
-    border-top: 2px solid #e2e8f0;
-    box-shadow: 0 -4px 20px rgba(0, 0, 0, .10);
-    padding: 0 16px;
-    height: 58px;
-}
-
-.sv-bottom-inner {
-    max-width: 1400px;
-    margin: 0 auto;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.sv-bottom-chip {
-    display: flex;
-    flex-direction: column;
-    line-height: 1.15;
-    padding: 0 4px;
-    min-width: 70px;
-}
-
-.sv-bottom-label {
-    font-size: .68rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: .05em;
-    color: #94a3b8;
-}
-
-.sv-bottom-value {
-    font-size: .88rem;
-    font-weight: 600;
-    color: #1e293b;
-}
-
-.sv-bottom-divider {
-    width: 1px;
-    height: 28px;
-    background: #e2e8f0;
-    flex-shrink: 0;
-}
-
-.sv-bottom-total {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    padding: 0 8px;
-    line-height: 1.1;
-}
-
-.sv-bottom-total-label {
-    font-size: .65rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: .07em;
-    color: #64748b;
-}
-
-.sv-bottom-total-amount {
-    font-size: 1.2rem;
-    font-weight: 800;
-    color: #1e40af;
-    letter-spacing: -.5px;
-}
-
-.sv-bottom-save {
-    height: 38px;
-    border-radius: 8px;
-    font-size: .9rem;
-    white-space: nowrap;
-    flex-shrink: 0;
-}
-
-:deep(.default-layout-content),
-:deep(main),
-:deep(.layout-page-content) {
-    padding-bottom: 74px !important;
-}
 </style>

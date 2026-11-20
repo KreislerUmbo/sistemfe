@@ -82,6 +82,7 @@ declare module 'vue' {
     CobrarPanel: typeof import('./src/components/Creditos/CobrarPanel.vue')['default']
     CobroContado: typeof import('./src/components/Sales/CobroContado.vue')['default']
     CobroCredito: typeof import('./src/components/Sales/CobroCredito.vue')['default']
+    CobroEdicion: typeof import('./src/components/Sales/CobroEdicion.vue')['default']
     CobroFacturaCampos: typeof import('./src/components/AgenciaViajes/CobroFacturaCampos.vue')['default']
     ComparadorMayoristas: typeof import('./src/components/AgenciaViajes/cotizador/ComparadorMayoristas.vue')['default']
     CondicionPagoCampos: typeof import('./src/components/AgenciaViajes/CondicionPagoCampos.vue')['default']
