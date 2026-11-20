@@ -9,7 +9,7 @@
 | **Rama** | `feat/T-114-totales-venta-backend` |
 
 ## Contexto
-`SaleController::store()` (~799-819) y `update()` (~1177) guardan los totales de la cabecera
+`SaleController::store()` (~810-835) y `update()` (~1190-1215) guardan los totales de la cabecera
 (`subtotal`, `igv`, `total`, `mto_oper_gravadas/exoneradas/inafectas/exportacion/gratuitas`,
 `isc_total`, `icbper_total`, `ivap_total`, `total_impuestos`, `mto_imp_venta`, retención,
 detracción, percepción…) tal como llegan del front. T-109 valida cada **línea** sin el permiso de
@@ -25,6 +25,11 @@ el PDF y el XML usan la cabecera. Revisión de T-109, 19-nov.
   totales que no salen de las líneas.
 - Un servicio aparte (como `PrecioVentaValidator`), no más código dentro del controlador.
 - `update()`: misma validación sobre el payload completo.
+- **Ojo (20-nov):** `edit.vue` tiene su **propia** copia de `sumDetails()` (~1358), distinta de la de
+  `register.vue` (~688). Antes de codificar, compararlas: si en algún régimen dan totales distintos,
+  validar `update()` con la cuenta de `register.vue` rechazaría ediciones legítimas hechas desde
+  `edit.vue`. Si difieren, **parar y mostrar la diferencia** (no elegir una por tu cuenta); T-110
+  reemplazará `edit.vue` por los componentes de `register.vue`.
 
 ## Fuera de alcance
 - Recalcular y **guardar** los totales en el backend en lugar de los del front (posible después;
@@ -34,7 +39,7 @@ el PDF y el XML usan la cabecera. Revisión de T-109, 19-nov.
 
 ## Dónde tocar
 - `admin-start-kit/src/views/sale/register.vue` → `sumDetails()` (solo leer: es la referencia)
-- `api-sistema-fe/app/Http/Controllers/Sale/SaleController.php` → `store()` (~735), `update()` (~1127)
+- `api-sistema-fe/app/Http/Controllers/Sale/SaleController.php` → `store()` (~760), `update()` (~1032)
 - `api-sistema-fe/app/Services/Ventas/` → servicio nuevo
 
 ## Criterios de aceptación
