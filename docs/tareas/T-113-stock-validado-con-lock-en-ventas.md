@@ -106,6 +106,14 @@ Al desplegar: consulta de productos con `stock < 0` por tenant, para decidir el 
   - La reposición de la NC no está en una transacción propia: el lock es de una sola sentencia y el `decrement` es atómico; no se agregó transacción por no ampliar alcance.
   - Efecto a vigilar al desplegar: servicios y productos «venta sin stock» ya no descuentan; productos que hoy tienen `disponiblidad = 1` dejan de bajar de stock.
 
+- **Correcciones tras la revisión (19-nov):**
+  - `destroy()`: si al obtener el lock la venta ya no existe (otra petición la eliminó, p. ej. doble
+    clic), no hace nada. Antes devolvía el stock dos veces (los `sale_details` no se borran). Test
+    `ca5_eliminar_una_venta_ya_eliminada_por_otra_peticion…` (sin la corrección el stock quedaba en 9, no en 5).
+  - `edit.vue` usa el criterio único (`controlaStock`) y lo disponible incluye lo que la venta ya tenía
+    descontado (`ventaRetail.ts::faltaStockEnEdicion()`, con test). Antes solo miraba `disponiblidad`
+    y comparaba contra el stock del almacén. Sin prueba visual en navegador.
+
 ## Hallazgos fuera de alcance
 - `Fila13Fase2cOperacionTest` (viaje de varios días) está roto en `main` por una fecha fija en el pasado (18-nov-2026).
 - `update()` toma `detalle_bd` por `SaleDetail::find($id)` sin comprobar que la línea sea de esa venta (preexistente).

@@ -33,6 +33,7 @@ export type Product = {
     percentage_isc:number,
     is_especial_nota:number,
     tipo_bien_servicio:string,
+    controla_stock?:boolean, // T-113: false = sin inventario real (ver helpers/ventaRetail.ts::controlaStock)
     codigo_detraccion:string,
     aplica_percepcion:boolean,
     tip_afe_igv_default:string

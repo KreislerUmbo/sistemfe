@@ -197,4 +197,32 @@ final class StockVentaTest extends CreditosTestCase
         $this->assertEquals(5, $bien->fresh()->stock);
         $this->assertEquals(7, $servicio->fresh()->stock);
     }
+
+    /**
+     * Doble clic en «Eliminar»: las dos peticiones leen la venta antes de la transacción; la
+     * segunda obtiene el lock cuando la primera ya la borró. Se simula borrándola justo después
+     * de que destroy() la lee: no debe devolver el stock otra vez.
+     */
+    public function test_ca5_eliminar_una_venta_ya_eliminada_por_otra_peticion_no_devuelve_dos_veces(): void
+    {
+        $bien = $this->producto(['stock' => 5]);
+        $idVenta = $this->guardar([$this->linea($bien, 4)]);
+        app(SaleController::class)->destroy((string) $idVenta); // la primera petición: stock 5
+        $this->assertEquals(5, $bien->fresh()->stock);
+
+        // La segunda petición había leído la venta antes de que la primera la borrara.
+        Sale::withTrashed()->whereKey($idVenta)->update(['deleted_at' => null]);
+        $simulado = false;
+        Sale::retrieved(function (Sale $s) use ($idVenta, &$simulado) {
+            if (!$simulado && $s->id === $idVenta) {
+                $simulado = true;
+                Sale::whereKey($idVenta)->update(['deleted_at' => now()]);
+            }
+        });
+
+        app(SaleController::class)->destroy((string) $idVenta);
+
+        $this->assertTrue($simulado);
+        $this->assertEquals(5, $bien->fresh()->stock);
+    }
 }

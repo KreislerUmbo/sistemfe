@@ -1451,7 +1451,12 @@ public function update(Request $request, string $id)
             // Con la venta bloqueada, se vuelven a leer los cobros vivos: si
             // otro usuario la editó o eliminó a la vez, no se corrige dos
             // veces el mismo movimiento.
-            Sale::whereKey($venta->id)->lockForUpdate()->first();
+            // Si al obtener el lock ya no existe (otra petición la eliminó mientras esta esperaba,
+            // p. ej. doble clic), no se hace nada: sus líneas siguen en la base y devolverían el
+            // stock por segunda vez (T-113).
+            if (!Sale::whereKey($venta->id)->lockForUpdate()->first()) {
+                return;
+            }
             foreach ($this->movimientosCajaActivos($venta, true) as $movimiento) {
                 $this->cashCorrection->revertirMovimiento($movimiento, auth('api')->user());
             }

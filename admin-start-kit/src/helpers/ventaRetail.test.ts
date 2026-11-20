@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-    MAX_DESCRIPCION_LINEA, admiteDecimales, cantidadEnVenta, controlaStock, indiceLineaIntacta, productoSinStock, atajosEfectivo, calcularEfectivo, descripcionAGuardar, motivoBloqueoCobro, normalizarCantidad,
+    MAX_DESCRIPCION_LINEA, admiteDecimales, cantidadEnVenta, controlaStock, faltaStockEnEdicion, indiceLineaIntacta, productoSinStock, atajosEfectivo, calcularEfectivo, descripcionAGuardar, motivoBloqueoCobro, normalizarCantidad,
     precioCatalogoPorCliente, type EntradaMotivoCobro,
 } from './ventaRetail';
 
@@ -145,5 +145,24 @@ describe('controlaStock (T-113)', () => {
         expect(controlaStock({ tipo_bien_servicio: 'SERVICIO' })).toBe(false);
         expect(controlaStock({ disponiblidad: 1 })).toBe(false);
         expect(controlaStock({ controla_stock: false })).toBe(false);
+    });
+});
+
+describe('faltaStockEnEdicion (T-113)', () => {
+    it('suma lo que la venta ya tenía descontado', () => {
+        // venta con 4, almacén en 0: puede quedarse en 4 o bajar, no subir a 5
+        expect(faltaStockEnEdicion({ stock: 0 }, 4, 4)).toBeNull();
+        expect(faltaStockEnEdicion({ stock: 0 }, 3, 4)).toBeNull();
+        expect(faltaStockEnEdicion({ stock: 0 }, 5, 4)).toBe(4);
+        expect(faltaStockEnEdicion({ stock: '1' }, 5, 4)).toBeNull();
+    });
+    it('producto nuevo en la venta: solo cuenta el almacén', () => {
+        expect(faltaStockEnEdicion({ stock: 2 }, 3, 0)).toBe(2);
+        expect(faltaStockEnEdicion({ stock: -1 }, 1, 0)).toBe(0);
+    });
+    it('servicio, «venta sin stock» o controla_stock=false nunca faltan', () => {
+        expect(faltaStockEnEdicion({ stock: 0, tipo_bien_servicio: 'SERVICIO' }, 9, 0)).toBeNull();
+        expect(faltaStockEnEdicion({ stock: 0, disponiblidad: 1 }, 9, 0)).toBeNull();
+        expect(faltaStockEnEdicion({ stock: 0, controla_stock: false }, 9, 0)).toBeNull();
     });
 });
