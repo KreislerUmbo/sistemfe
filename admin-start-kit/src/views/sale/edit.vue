@@ -18,150 +18,16 @@
              Los bloques de dentro se van reemplazando por los componentes de components/Sales/ paso a paso. -->
         <div class="grid-venta">
             <div class="card border-0 shadow-sm">
-        <!-- ═══════════════════════════════════════════════════
-             PASO 2 — BUSCAR PRODUCTO
-        ═══════════════════════════════════════════════════ -->
-        <div class="card border-0 shadow-sm mb-3">
-            <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-2">
-                <span class="badge bg-success rounded-pill">2</span>
-                <span class="fw-semibold text-dark">Buscar Producto</span>
-                <span class="badge bg-light text-secondary border ms-auto">{{ sale_details.length }} ítem(s)</span>
-            </div>
-            <div class="card-body py-3">
-                <div class="row g-3 align-items-end">
-                    <div class="col-12 col-md-6 position-relative">
-                        <label for="product-search" class="form-label mb-1 small fw-semibold text-secondary">
-                            <i class="fas fa-box me-1"></i>Producto / Servicio
-                        </label>
-                        <div class="input-group input-group-sm">
-                            <input type="text" id="product-search" class="form-control" v-model="productSearchText"
-                                placeholder="Buscar por nombre o SKU..." @input="onProductSearchInput"
-                                @focus="onProductSearchFocus" @blur="onProductSearchBlur" autocomplete="off" />
-                            <button class="btn btn-success" type="button" @click="openQuickProductModal"
-                                title="Nuevo producto">
-                                <i class="fas fa-plus"></i>
-                            </button>
-                        </div>
-                        <div v-if="productSuggestions.length > 0 && !productSelected"
-                            class="list-group mt-1 position-absolute"
-                            style="max-height:220px;overflow-y:auto;z-index:1050;width:100%;box-shadow:0 4px 8px rgba(0,0,0,.1)">
-                            <button type="button" class="list-group-item list-group-item-action"
-                                v-for="product in productSuggestions" :key="product.id"
-                                @mousedown.prevent="selectAndAddProduct(product)">
-                                <div class="d-flex justify-content-between">
-                                    <span>{{ product.title }}</span>
-                                    <small :style="{ color: product.stock <= 5 ? 'red' : '#6b7280' }">
-                                        stock: {{ product.stock }}
-                                    </small>
-                                </div>
-                                <small class="text-muted">{{ product.sku }} | {{ currency }} {{
-                                    product.price_general
-                                    }}</small>
-                            </button>
-                        </div>
-                        <div v-if="productNotFound && !productSelected && productSearchText.length > 2"
-                            class="text-danger small mt-1">
-                            <i class="fas fa-exclamation-circle me-1"></i>
-                            No encontrado — <a href="#" @click.prevent="openQuickProductModal">regístralo ahora</a>
-                        </div>
-                    </div>
-                    <div class="col-6 col-md-2">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">Cantidad por defecto</label>
-                        <b-form-input type="number" v-model.number="default_quantity" min="1" size="sm" />
-                    </div>
-                    <div class="col-6 col-md-2">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">Precio por defecto</label>
-                        <b-input-group size="sm">
-                            <b-input-group-text>{{ currency }}</b-input-group-text>
-                            <b-form-input type="number" v-model.number="default_price" step="0.01" size="sm" />
-                        </b-input-group>
-                    </div>
+                <div class="p-3 border-bottom">
+                    <BuscadorProductosVenta ref="buscador" :moneda="currency" @agregar="agregarProducto"
+                        @crear="openQuickProductModal" />
                 </div>
-            </div>
-        </div>
-
-        <!-- ═══════════════════════════════════════════════════
-             PASO 3 — DETALLE DE LA VENTA
-        ═══════════════════════════════════════════════════ -->
-        <div class="card border-0 shadow-sm mb-3">
-            <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-2">
-                <span class="badge bg-warning text-dark rounded-pill">3</span>
-                <span class="fw-semibold text-dark">Detalle de Venta</span>
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-hover table-sm mb-0 align-middle">
-                        <thead class="table-light">
-                            <tr class="small text-secondary text-uppercase">
-                                <th class="ps-3">#</th>
-                                <th>Producto</th>
-                                <th style="min-width:90px">Cant.</th>
-                                <th style="min-width:110px">P. Base</th>
-                                <th class="text-center">Desc.%</th>
-                                <th class="text-end">IGV</th>
-                                <th class="text-end">Subtotal</th>
-                                <th class="text-center">Afect.</th>
-                                <th class="pe-3"></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr v-if="sale_details.length === 0">
-                                <td colspan="9" class="text-center text-muted py-4 fst-italic">
-                                    <i class="fas fa-box-open me-2 opacity-50"></i>
-                                    Sin productos — busca uno en el paso 2
-                                </td>
-                            </tr>
-                            <tr v-for="(item, index) in sale_details" :key="index">
-                                <td class="ps-3 text-muted small">{{ index + 1 }}</td>
-                                <td>
-                                    <span class="fw-semibold">{{ item.product.title }}</span>
-                                    <br>
-                                    <small class="text-muted">{{ item.unidad_medida }}</small>
-                                </td>
-                                <!-- Cantidad editable -->
-                                <td>
-                                    <b-form-input type="number" v-model.number="item.quantity" min="1" size="sm"
-                                        style="width:80px" @input="alCambiarCantidad(index)" />
-                                </td>
-                                <!-- Precio base editable -->
-                                <td>
-                                    <div class="input-group input-group-sm" style="width:110px">
-                                        <span class="input-group-text text-muted px-1 small">{{ currency }}</span>
-                                        <b-form-input type="number" v-model.number="item.price_base" step="0.01"
-                                            size="sm" @input="alCambiarPrecio(index)" />
-                                    </div>
-                                </td>
-                                <!-- Descuento % editable -->
-                                <td class="text-center">
-                                    <b-form-input type="number" v-model.number="item.discount_percent" min="0"
-                                        :max="item.product.max_discount || 0" size="sm" style="width:70px"
-                                        @input="updateItem(index)" :disabled="item.product.is_discount != 2" />
-                                </td>
-                                <td class="text-end small text-muted">{{ currency }} {{ item.igv.toFixed(2) }}</td>
-                                <td class="text-end fw-bold">{{ currency }} {{ item.subtotal.toFixed(2) }}</td>
-                                <!-- Tipo de afectación IGV — editable por el vendedor -->
-                                <td class="text-center">
-                                    <select v-model="item.tip_afe_igv" class="form-select form-select-sm"
-                                        style="width:110px; font-size:.75rem" @change="updateItem(index)"
-                                        :title="'tip_afe_igv: ' + item.tip_afe_igv">
-                                        <option value="10">Grav. 10</option>
-                                        <option value="20">Exon. 20</option>
-                                        <option value="30">Inaf. 30</option>
-                                        <option value="17">IVAP 17</option>
-                                        <option value="40">Exp. 40</option>
-                                        <option value="11">Grat. 11</option>
-                                    </select>
-                                </td>
-                                <td class="pe-3">
-                                    <button type="button" class="btn btn-outline-danger btn-sm py-0 px-2"
-                                        @click="removeItem(index)">
-                                        <i class="fas fa-trash-alt small"></i>
-                                    </button>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
+                <div>
+                <div class="card-body p-0">
+                <TablaLineasVenta :items="sale_details" :moneda="currency" :afe-defecto="resolverTipAfeIgv"
+                    :cliente="client_selected" :puede-cambiar-precio="puedeCambiarPrecio" :resaltado="lineaResaltada"
+                    :ya-descontado="cantidadOriginal" @cambio="alCambiarLinea" @quitar="removeItem"
+                    @elegir-precio="elegirPrecioLinea" />
 
                 <!-- Descuento global + totales -->
                 <div class="row g-0 border-top">
@@ -757,7 +623,8 @@ import type { Product } from '@/types/products';
 import ClientFormQuick from '@/components/Sales/ClientFormQuick.vue';
 import ProductFormQuick from '@/components/Sales/ProductFormQuick.vue';
 import AvisoVenta from '@/components/Sales/AvisoVenta.vue';
-import type { LineaVenta } from '@/components/Sales/TablaLineasVenta.vue';
+import BuscadorProductosVenta from '@/components/Sales/BuscadorProductosVenta.vue';
+import TablaLineasVenta, { type LineaVenta } from '@/components/Sales/TablaLineasVenta.vue';
 import CronogramaCuotasCampos from '@/components/CronogramaCuotasCampos.vue';
 import SelectorDireccionComprobante from '@/components/Clientes/SelectorDireccionComprobante.vue';
 import { imprimirComprobante } from '@/composables/usePrintComprobante';
@@ -800,7 +667,6 @@ const avisar = (texto: string, acciones: { texto: string; fn: () => void }[] = [
 const clients = ref<Client[]>([]);
 const products = ref<Product[]>([]);
 const client_selected = ref<Client | undefined>(undefined);
-const productSelected = ref<Product | undefined>(undefined);
 
 // ── Búsqueda de clientes ──────────────────────────────────────────
 const clientSearchText = ref<string>('');
@@ -808,12 +674,6 @@ const clientSuggestions = ref<Client[]>([]);
 const client_address_id = ref<number | null>(null); // T-107: null = dirección fiscal
 let clientSearchTimeout: any = null;
 const clientNotFound = ref<boolean>(false);
-
-// ── Búsqueda de productos ──────────────────────────────────────────
-const productSearchText = ref<string>('');
-const productSuggestions = ref<Product[]>([]);
-let productSearchTimeout: any = null;
-const productNotFound = ref<boolean>(false);
 
 // ── Modales rápidos ────────────────────────────────────────────────
 const showQuickClientModal = ref<boolean>(false);
@@ -935,8 +795,6 @@ const sale_details = ref<LineaVenta[]>([]);
 const cantidadOriginal = ref<Record<string, number>>({});
 const discount_total = ref<number>(0);
 const discount_global = ref<number>(0);
-const default_quantity = ref<number>(1);
-const default_price = ref<number>(0);
 const description = ref<string>('');
 
 // Pagos
@@ -1097,43 +955,6 @@ const clearClientSelection = () => {
     }
 };
 
-// ── Métodos de producto ───────────────────────────────────────────
-
-const onProductSearchInput = () => {
-    clearTimeout(productSearchTimeout);
-    const query = productSearchText.value.trim();
-    productNotFound.value = false;
-    if (query.length === 0) { productSuggestions.value = []; return; }
-    if (query.length >= 2) {
-        productSearchTimeout = setTimeout(() => searchProducts(query), 300);
-    }
-};
-
-const onProductSearchFocus = () => {
-    const query = productSearchText.value.trim();
-    if (query.length >= 2) searchProducts(query);
-};
-
-const onProductSearchBlur = () => {
-    setTimeout(() => {
-        productSuggestions.value = [];
-        if (productSearchText.value.trim().length > 2 && !productSelected.value) {
-            productNotFound.value = true;
-        }
-    }, 200);
-};
-
-const searchProducts = async (query: string) => {
-    try {
-        const res = await httpClient.get(`products?search=${encodeURIComponent(query)}&take=10`);
-        productSuggestions.value = res.data.products.data;
-        productNotFound.value = productSuggestions.value.length === 0;
-    } catch {
-        productSuggestions.value = [];
-        productNotFound.value = true;
-    }
-};
-
 // ── Resolver tip_afe_igv según las reglas de negocio ─────────────
 // Lógica pura extraída a src/utils/resolverTipAfeIgv.ts (testeada ahí
 // con Vitest) — acá solo se cierra sobre los refs de esta vista.
@@ -1165,99 +986,87 @@ const recalcularPreciosNuevos = () => {
         }
     });
 };
-const alCambiarCantidad = (index: number) => {
+// La tabla avisa que una línea cambió (cantidad, precio, descuento o afectación).
+const alCambiarLinea = (index: number) => {
     updateItem(index);
     recalcularPreciosNuevos();
 };
-// Escribir en la casilla de precio es precio a mano: ya no se recalcula por cantidad.
-const alCambiarPrecio = (index: number) => {
-    const item = sale_details.value[index];
-    if (item) item.precio_manual = true;
-    updateItem(index);
+
+// Precio elegido con el ▾ de la línea (General / Mayorista): queda como precio puesto a mano.
+const elegirPrecioLinea = (i: number, nombre: 'General' | 'Mayorista') => {
+    const d = sale_details.value[i];
+    if (!d) return;
+    const bruto = nombre === 'Mayorista' ? Number(d.product.price_company) : Number(d.product.price_general);
+    d.price_base = Number(getPrecioBaseSinIgv(bruto || 0, d.product, { igvGeneral: getIgvGeneralTasa(), ivap: getIvapTasa() }));
+    d.precio_manual = true;
+    updateItem(i);
 };
 
-// ── SELECT AND ADD PRODUCT (directo al detalle) ────────────────────
-const selectAndAddProduct = (product: Product) => {
+// ── Agregar un producto a la venta ─────────────────────────────────
+const lineaResaltada = ref<number | null>(null);
+const buscador = ref<InstanceType<typeof BuscadorProductosVenta> | null>(null);
+// T-109: sin este permiso el precio de cada línea es el del sistema (el backend lo valida igual).
+const puedeCambiarPrecio = computed(() => authStore.isPermitedRoute('cambiar_precio_venta'));
+
+const agregarProducto = (product: Product) => {
     // T-113: mismo criterio que el backend (controlaStock) y lo disponible incluye lo que esta
     // venta ya tenía descontado de ese producto (el backend valida solo la diferencia).
-    const agregar = default_quantity.value || 1;
-    const pedido = cantidadEnVenta(sale_details.value, product.id) + agregar;
+    const pedido = cantidadEnVenta(sale_details.value, product.id) + 1;
     const disponible = faltaStockEnEdicion(product, pedido, cantidadOriginal.value[String(product.id)] ?? 0);
     if (disponible !== null) {
-        (Swal as TVueSwalInstance).fire(
-            'Stock insuficiente',
-            disponible <= 0 ? 'No hay stock disponible' : `Solo hay ${disponible} unidades para esta venta`,
-            'error'
-        );
+        avisar(disponible <= 0
+            ? `No hay stock disponible de «${product.title}».`
+            : `Solo hay ${disponible} unidades para esta venta de «${product.title}».`);
         return;
     }
 
-    // Si el producto ya está en la lista, incrementar cantidad
-    const existing = sale_details.value.find(d => d.product.id === product.id);
-    if (existing) {
-        const newQty = existing.quantity + agregar;
-        existing.quantity = newQty;
-        updateItem(sale_details.value.indexOf(existing));
+    // Si el producto ya está en la lista (y esa línea no tiene descripción editada, T-108), se incrementa la cantidad.
+    let indice = sale_details.value.findIndex(d => d.product.id === product.id && !d.descripcion_linea?.trim());
+    if (indice >= 0) {
+        sale_details.value[indice].quantity = Number(sale_details.value[indice].quantity) + 1;
+        updateItem(indice);
         recalcularPreciosNuevos();
-        clearSearchProduct();
-        return;
-    }
-
-    // Precio según tipo de cliente
-    let price = default_price.value;
-    if (price <= 0) {
+    } else {
         // T-115: mayorista por cliente o por cantidad (la suma incluye la línea nueva), no por type_client.
-        const rawPrice = precioCatalogo(product, client_selected.value, cantidadEnVenta(sale_details.value, product.id) + (default_quantity.value || 1)).valor;
-        // El precio crudo del catálogo puede venir CON IGV incluido
-        // (product.include_igv) — hay que revertir ese cálculo para obtener
-        // el P.BASE real, igual que hace el registro de producto.
-        price = getPrecioBaseSinIgv(rawPrice, product, {
-            igvGeneral: getIgvGeneralTasa(),
-            ivap: getIvapTasa(),
+        const rawPrice = precioCatalogo(product, client_selected.value, cantidadEnVenta(sale_details.value, product.id) + 1).valor;
+        // El precio crudo del catálogo puede venir CON IGV incluido (product.include_igv) — hay que revertir
+        // ese cálculo para obtener el P.BASE real, igual que hace el registro de producto.
+        const price = getPrecioBaseSinIgv(rawPrice, product, { igvGeneral: getIgvGeneralTasa(), ivap: getIvapTasa() });
+
+        sale_details.value.push({
+            uid: siguienteUid++,
+            product: product,
+            unidad_medida: product.unidad_medida || 'NIU',
+            price_base: Number(price),
+            quantity: 1,
+            discount_percent: 0,
+            tip_afe_igv: resolverTipAfeIgv(product),
+            subtotal: 0,
+            igv: 0,
+            isc: 0,
+            icbper: 0,
+            discount: 0,
+            price_final: 0,
+            mto_valor_venta: 0,
+            mto_base_igv: 0,
+            porcentaje_igv: 0,
+            total_impuestos: 0,
+            tipo_isc: product.tipo_isc ?? '01',
+            monto_isc_fijo: product.monto_isc_fijo ?? 0,
+            contenido_neto_litros: product.contenido_neto_litros ?? undefined,
+            per_icbper: 0,
         });
+        indice = sale_details.value.length - 1;
+        updateItem(indice);
+        recalcularPreciosNuevos();
+        sumDetails();
     }
 
-    // Resolver el tipo de afectación IGV usando las reglas de negocio
-    const tip_afe = resolverTipAfeIgv(product);
-
-    sale_details.value.push({
-        uid: siguienteUid++,
-        product: product,
-        unidad_medida: product.unidad_medida || 'NIU',
-        price_base: Number(price),
-        quantity: default_quantity.value || 1,
-        discount_percent: 0,
-        tip_afe_igv: tip_afe,
-        subtotal: 0,
-        igv: 0,
-        isc: 0,
-        icbper: 0,
-        discount: 0,
-        price_final: 0,
-        mto_valor_venta: 0,
-        mto_base_igv: 0,
-        porcentaje_igv: 0,
-        total_impuestos: 0,
-        tipo_isc: product.tipo_isc ?? '01',
-        monto_isc_fijo: product.monto_isc_fijo ?? 0,
-        contenido_neto_litros: product.contenido_neto_litros ?? undefined,
-        per_icbper: 0,
+    lineaResaltada.value = null;
+    nextTick(() => {
+        lineaResaltada.value = indice;
+        setTimeout(() => { if (lineaResaltada.value === indice) lineaResaltada.value = null; }, 900);
     });
-
-    const lastIndex = sale_details.value.length - 1;
-    // Un precio escrito en «Precio» antes de agregar es precio a mano (T-115).
-    if (default_price.value > 0) sale_details.value[lastIndex].precio_manual = true;
-    updateItem(lastIndex);
-    recalcularPreciosNuevos();
-    sumDetails();
-    clearSearchProduct();
-    default_price.value = 0;
-};
-
-const clearSearchProduct = () => {
-    productSearchText.value = '';
-    productSuggestions.value = [];
-    productNotFound.value = false;
 };
 
 // ── ACTUALIZAR ÍTEM ──────────────────────────────────────────────────
@@ -1955,13 +1764,13 @@ const onClientCreated = (client: Client) => {
     selectClient(client);
     showQuickClientModal.value = false;
 };
-const openQuickProductModal = () => {
-    quickProductData.value = null;
+const openQuickProductModal = (nombre = '') => {
+    quickProductData.value = nombre ? { title: nombre } : null;
     showQuickProductModal.value = true;
 };
 const onProductCreated = (product: Product) => {
     products.value.unshift(product);
-    selectAndAddProduct(product);
+    agregarProducto(product);
     showQuickProductModal.value = false;
 };
 

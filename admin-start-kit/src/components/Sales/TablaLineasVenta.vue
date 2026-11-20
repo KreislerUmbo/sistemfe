@@ -32,8 +32,8 @@
                                 <div class="small text-muted d-flex flex-wrap gap-1 align-items-center">
                                     <span>{{ item.product.sku }}</span>
                                     <span v-if="esServicio(item)" class="badge bg-success-subtle text-success">Servicio</span>
-                                    <span v-if="sinStock(item)" class="badge bg-danger">Solo hay {{ item.product.stock }}</span>
-                                    <span v-else-if="pocoStock(item)" class="badge bg-warning-subtle text-warning">Quedan {{ item.product.stock }}</span>
+                                    <span v-if="sinStock(item)" class="badge bg-danger">Solo hay {{ disponible(item) }}</span>
+                                    <span v-else-if="pocoStock(item)" class="badge bg-warning-subtle text-warning">Quedan {{ disponible(item) }}</span>
                                     <span v-if="Number(item.discount_percent) > 0" class="badge bg-success-subtle text-success">−{{ item.discount_percent }}%</span>
                                     <button type="button" class="btn btn-link btn-sm p-0" @click="editarDescripcion(i)">Editar descripción</button>
                                     <button v-if="item.product.is_discount == 2" type="button" class="btn btn-link btn-sm p-0"
@@ -140,6 +140,8 @@ const props = defineProps<{
     puedeCambiarPrecio?: boolean;
     /** Índice de la línea recién agregada: se resalta y se lleva a la vista. */
     resaltado?: number | null;
+    /** Edición (T-110): unidades por producto que la venta ya tenía descontadas del stock; se suman a lo disponible. */
+    yaDescontado?: Record<string, number>;
 }>();
 
 const emit = defineEmits<{
@@ -168,8 +170,9 @@ watch(() => props.items.length, () => { preciosAbierto.value = null; descuentoAb
 const esServicio = (it: LineaVenta) => it.product.tipo_bien_servicio === 'SERVICIO';
 const controlaStock = (it: LineaVenta) => productoControlaStock(it.product);
 // Se compara la suma de TODAS las líneas del producto con su stock (T-112): con 3 + 3 y stock 5 se marcan las dos filas.
-const sinStock = (it: LineaVenta) => controlaStock(it) && cantidadEnVenta(props.items, it.product.id) > Number(it.product.stock);
-const pocoStock = (it: LineaVenta) => controlaStock(it) && Number(it.product.stock) <= 5;
+const disponible = (it: LineaVenta) => Number(it.product.stock) + (props.yaDescontado?.[String(it.product.id)] ?? 0);
+const sinStock = (it: LineaVenta) => controlaStock(it) && cantidadEnVenta(props.items, it.product.id) > disponible(it);
+const pocoStock = (it: LineaVenta) => controlaStock(it) && disponible(it) <= 5;
 
 const afectacionCambiada = (it: LineaVenta) => it.tip_afe_igv !== props.afeDefecto(it.product);
 const importe = (it: LineaVenta) => (Number(it.subtotal) || 0) + (Number(it.total_impuestos) || 0);
