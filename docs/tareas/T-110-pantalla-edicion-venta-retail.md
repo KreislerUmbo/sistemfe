@@ -28,6 +28,16 @@ registrar y editar se vean y se comporten igual.
     de cliente: sin el permiso de precio el backend rechaza esa línea). Las guardadas conservan su precio.
   - Cada cambio de precio recalcula la línea y la cabecera (T-114 la valida).
   - Retirar el bloque comentado de Selectr de `edit.vue` (~2131-2163, `getPriceBaseCF()`/`getPriceBaseCE()`).
+- **Ojo — dos diferencias de comportamiento con `register.vue` que NO se cambian sin preguntar (20-nov):**
+  - **Pagos:** `edit.vue` agrega y borra pagos **al instante** (`POST sale_payments` ~1560,
+    `DELETE sale_payments/{id}` ~1594); `CobroContado.vue`/`CobroCredito.vue` arman la lista en memoria y
+    se mandan al guardar. Usar esos componentes tal cual cambia cuándo se registra un pago (y su paso por
+    caja). Si no encajan sin cambiar ese comportamiento, **parar y mostrar opciones** antes de codificar.
+  - **Anticipo:** `edit.vue` usa `sale_anticipo` / `n_comprobante_anticipo` / `amount_anticipo` (~881,
+    ~1523, ~1707); `register.vue` usa `AdelantosVenta.vue` y `advance_applications`. CA1 exige el mismo
+    payload que hoy: no cambiar al mecanismo de Adelantos en esta tarea.
+- Trabajar por pasos con un commit cada uno (estructura y carga → líneas → cliente/comprobante/datos →
+  cobro → limpieza), comparando el payload después de cada paso.
 
 ## Fuera de alcance
 - El problema de pagos que se guardan al instante sin caja en «editar venta»
@@ -35,8 +45,8 @@ registrar y editar se vean y se comporten igual.
 - Cambios en `SaleController::update()`.
 
 ## Dónde tocar
-- `admin-start-kit/src/views/sale/edit.vue` → template completo; carga de la venta; `update()`
-  (payload ~1647); precio por cliente (~1160).
+- `admin-start-kit/src/views/sale/edit.vue` → template completo; carga de la venta; `store()` (~1610,
+  payload ~1700); precio por cliente (~1193).
 - Componentes de T-106.
 
 ## Criterios de aceptación
