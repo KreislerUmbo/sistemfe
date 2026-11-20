@@ -68,245 +68,30 @@
                     :serie-fija="yaReservoCorrelativo ? serieActual : undefined" @seleccionar="selectClient"
                     @limpiar="clearClientSelection" @registrar="openQuickClientModalWithData" />
             </div>
-            <div class="p-3" :class="{ 'border-bottom': condicion_especial === 'anticipo' }">
+            <div class="p-3 border-bottom">
                 <TotalesVenta v-model:descuento-global="discount_global" :filas="filasTotales" :total="sale_total"
                     :simbolo="simbolo" etiqueta-total="Monto a pagar" :puede-descuento-global="puedeCambiarPrecio" />
             </div>
-            <div v-if="condicion_especial === 'anticipo'" class="p-3">
-                <label class="form-label mb-1 small fw-semibold text-secondary">
-                    <i class="fas fa-receipt me-1"></i>N° Comprobante de Anticipo
-                </label>
-                <div class="input-group input-group-sm">
-                    <b-form-input type="text" v-model="n_comprobante_anticipo" @keyup.enter="searchAnticipo()"
-                        placeholder="Ej: F001-00000123" :disabled="sale_anticipo > 0" size="sm" />
-                    <button v-if="sale_anticipo > 0" type="button" class="btn btn-outline-danger btn-sm"
-                        @click="resetAnticipo()">
-                        <i class="fas fa-times"></i>
-                    </button>
-                    <button v-else type="button" class="btn btn-outline-primary btn-sm"
-                        @click="searchAnticipo()">
-                        <i class="fas fa-search"></i>
-                    </button>
-                </div>
+            <div class="p-3 border-bottom">
+                <CobroEdicion v-model:type-payment="type_payment" v-model:pagos="sale_payments"
+                    v-model:cronograma="cronograma" v-model:num-cuotas="num_cuotas" v-model:periodicidad="periodicidad"
+                    v-model:aplica-mora="aplica_mora" v-model:tasa-mora="tasa_mora" v-model:tipo-mora="tipo_mora"
+                    v-model:n-comprobante-anticipo="n_comprobante_anticipo" v-model:sale-anticipo="sale_anticipo"
+                    :sale-id="sale_id" :metodos="paymentMethods" :moneda="currency" :fecha-base="today"
+                    :total-venta="sale_total" :total-pagado="total_payments" :monto-a-financiar="montoAFinanciar()"
+                    :tiene-cobros-formales="tiene_cobros_formales" :condicion-especial="condicion_especial"
+                    @cambio="sumDetails" />
             </div>
-        </div>
-
-        <!-- ═══════════════════════════════════════════════════
-             PASO 4 — PAGOS + OBSERVACIONES + GUARDAR
-        ═══════════════════════════════════════════════════ -->
-        <div class="card border-0 shadow-sm mb-4">
-            <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-2">
-                <span class="badge bg-danger rounded-pill">4</span>
-                <span class="fw-semibold text-dark">Pagos</span>
-            </div>
-            <div class="card-body py-3">
-                <!-- Fila de entrada de pago -->
-                <div class="row g-3 align-items-end pb-3 border-bottom mb-3">
-                    <div class="col-12 col-md-3">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">Tipo de Pago</label>
-                        <div class="btn-group w-100" role="group">
-                            <input type="radio" class="btn-check" name="type-pay-c" id="pay-contado" value="1"
-                                :checked="type_payment == 1" @click="type_payment = 1" autocomplete="off">
-                            <label class="btn btn-outline-success btn-sm fw-semibold" for="pay-contado">
-                                <i class="fas fa-money-bill-wave me-1"></i>Contado
-                            </label>
-                            <input type="radio" class="btn-check" name="type-pay-c" id="pay-credito" value="2"
-                                :checked="type_payment == 2" @click="type_payment = 2" autocomplete="off">
-                            <label class="btn btn-outline-warning btn-sm fw-semibold" for="pay-credito">
-                                <i class="fas fa-calendar-alt me-1"></i>Crédito
-                            </label>
-                        </div>
-                    </div>
-                    <div class="col-12" v-if="type_payment == 2 && !tiene_cobros_formales">
-                        <p class="small text-muted mb-0">
-                            <i class="fas fa-info-circle me-1"></i>
-                            Esto registra un <strong>pago inicial (cuota inicial) opcional</strong>, no el cobro
-                            completo de la venta — se descuenta del monto que se financiará con el cronograma de
-                            cuotas. El seguimiento de cobros de la venta a crédito se hace después, desde
-                            Cuentas por Cobrar.
-                        </p>
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">
-                            {{ type_payment == 2 ? 'Método (pago inicial)' : 'Método' }}
-                        </label>
-                        <select v-model="method_payment" class="form-select form-select-sm" :disabled="type_payment == 2 && tiene_cobros_formales">
-                            <option v-for="pm in paymentMethods" :key="pm.id" :value="pm.code">{{ pm.name }}</option>
-                        </select>
-                    </div>
-                    <div class="col-6 col-md-2">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">
-                            {{ type_payment == 2 ? 'Monto (pago inicial)' : 'Monto' }}
-                        </label>
-                        <b-input-group size="sm">
-                            <b-input-group-text>{{ currency }}</b-input-group-text>
-                            <b-form-input type="number" v-model.number="amount" placeholder="0.00" size="sm"
-                                :disabled="type_payment == 2 && tiene_cobros_formales" />
-                        </b-input-group>
-                    </div>
-                    <div class="col-6 col-md-2" v-if="type_payment == 2">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">Fecha de Pago</label>
-                        <b-form-input type="date" v-model="date_payment" size="sm" :disabled="tiene_cobros_formales" />
-                    </div>
-                    <div class="col-6 col-md-2">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">N.º de operación</label>
-                        <input type="text" v-model="nro_operacion" maxlength="50" class="form-control form-control-sm"
-                            placeholder="Opcional" :disabled="type_payment == 2 && tiene_cobros_formales" />
-                    </div>
-                    <div class="col-6 col-md-2">
-                        <button type="button" class="btn btn-primary btn-sm w-100 fw-semibold"
-                            :disabled="type_payment == 2 && tiene_cobros_formales" @click="addPayment()">
-                            <i class="fas fa-plus me-1"></i>{{ type_payment == 2 ? 'Agregar Pago Inicial' : 'Agregar Pago' }}
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Venta a crédito con cuotas cobradas o adelanto aplicado — bloqueada -->
-                <div class="alert alert-danger py-2 px-3 mb-3 small" v-if="type_payment == 2 && tiene_cobros_formales">
-                    <i class="fas fa-lock me-1"></i>
-                    Esta venta ya tiene cuotas cobradas y/o un adelanto aplicado — no se pueden editar
-                    productos ni el pago inicial desde aquí. Para corregir un cobro real, anúlalo primero
-                    desde <strong>Cuentas por Cobrar</strong> (cuota/pago) o el módulo de <strong>Adelantos</strong>.
-                </div>
-
-                <!-- Configuración de Crédito — solo editable si no hay cobros formales aún -->
-                <div class="row g-3 align-items-end pb-3 border-bottom mb-3"
-                    v-if="type_payment == 2 && !tiene_cobros_formales">
-                    <div class="col-12">
-                        <div class="alert alert-warning py-2 px-3 mb-2 small">
-                            <i class="fas fa-info-circle me-1"></i>
-                            Cualquier cambio en esta venta (productos, precios o pago inicial) invalida el
-                            cronograma actual — hay que regenerarlo antes de guardar. Las cuotas viejas
-                            quedan anuladas, no se pierden (quedan en el historial).
-                        </div>
-                    </div>
-                    <!-- Cuotas (nuevo cronograma): components/CronogramaCuotasCampos.vue, compartido con register.vue. -->
-                    <CronogramaCuotasCampos v-model="cronograma" v-model:num-cuotas="num_cuotas" v-model:periodicidad="periodicidad"
-                        :monto-a-financiar="montoAFinanciar()" :moneda="currency" :fecha-base="today" />
-                    <div class="col-6 col-md-2">
-                        <div class="form-check form-switch pt-4">
-                            <input class="form-check-input" type="checkbox" role="switch" id="aplica-mora-edit"
-                                v-model="aplica_mora">
-                            <label class="form-check-label small fw-semibold text-secondary"
-                                for="aplica-mora-edit">Aplica mora</label>
-                        </div>
-                    </div>
-                    <template v-if="aplica_mora">
-                        <div class="col-6 col-md-2">
-                            <label class="form-label mb-1 small fw-semibold text-secondary">Tasa de mora</label>
-                            <b-form-input type="number" v-model.number="tasa_mora" step="0.01" min="0" size="sm" />
-                        </div>
-                        <div class="col-6 col-md-3">
-                            <label class="form-label mb-1 small fw-semibold text-secondary">Tipo de mora</label>
-                            <select v-model="tipo_mora" class="form-select form-select-sm">
-                                <option value="fijo_por_cuota">Monto fijo por cuota vencida</option>
-                                <option value="porcentaje_diario">% diario sobre saldo vencido</option>
-                                <option value="porcentaje_fijo_unico">% fijo único sobre saldo vencido</option>
-                            </select>
-                        </div>
-                    </template>
-                </div>
-
-                <!-- Lista de pagos + observaciones + botones -->
-                <div class="row g-3 align-items-start">
-                    <!-- Tabla de pagos -->
-                    <div class="col-12 col-md-5">
-                        <p class="small fw-semibold text-secondary mb-1">
-                            <i class="fas fa-list-ul me-1"></i>
-                            {{ type_payment == 2 ? 'Pago(s) inicial(es) registrado(s)' : 'Pagos registrados' }}
-                        </p>
-                        <div class="table-responsive">
-                            <table class="table table-sm table-hover align-middle mb-0">
-                                <thead class="table-light">
-                                    <tr class="small text-secondary text-uppercase">
-                                        <th>#</th>
-                                        <th>Método</th>
-                                        <th>N.º operación</th>
-                                        <th class="text-end">Monto</th>
-                                        <th v-if="type_payment == 2">Fecha</th>
-                                        <th></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr v-if="sale_payments.length === 0">
-                                        <td colspan="6" class="text-center text-muted fst-italic py-3 small">
-                                            {{ type_payment == 2 ? 'Sin pago inicial' : 'Sin pagos aún' }}
-                                        </td>
-                                    </tr>
-                                    <tr v-for="(p, index) in sale_payments" :key="index">
-                                        <td class="text-muted small">{{ index + 1 }}</td>
-                                        <td class="fw-semibold small">{{ p.method_payment }}</td>
-                                        <td class="small text-muted">{{ p.nro_operacion || "—" }}</td>
-                                        <td class="text-end fw-bold">{{ currency }} {{ p.amount }}</td>
-                                        <td v-if="type_payment == 2" class="small text-muted">{{ p.date_payment }}
-                                        </td>
-                                        <td>
-                                            <button type="button" class="btn btn-outline-danger btn-sm py-0 px-2"
-                                                :disabled="type_payment == 2 && tiene_cobros_formales"
-                                                @click="removePayment(index)">
-                                                <i class="fas fa-trash-alt small"></i>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <!-- Botones -->
-                    <div class="col-12 col-md-3 d-flex flex-column gap-2 pt-md-4">
-                        <button type="button" class="btn btn-success fw-bold py-2 shadow-sm" @click="store()">
-                            <i class="fas fa-check-circle me-2"></i>
-                            Guardar Venta
-                        </button>
-                        <button type="button" class="btn btn-outline-secondary fw-semibold py-2"
-                            @click="$router.push({ name: 'sale.list' })">
-                            <i class="fas fa-undo me-2"></i>Listar Ventas
-                        </button>
-                    </div>
-                </div>
+            <div class="p-3">
+                <button type="button" class="btn btn-success fw-bold py-2 w-100" @click="store()">
+                    <i class="fas fa-check-circle me-2"></i>Guardar cambios
+                </button>
             </div>
         </div>
             </div>
         </div>
 
         <AvisoVenta ref="aviso" />
-
-        <!-- BARRA FIJA INFERIOR -->
-        <div class="sv-bottom-bar">
-            <div class="sv-bottom-inner">
-                <div class="sv-bottom-chip">
-                    <span class="sv-bottom-label">Ítems</span>
-                    <span class="sv-bottom-value text-primary fw-bold">{{ sale_details.length }}</span>
-                </div>
-                <div class="sv-bottom-divider"></div>
-                <div class="sv-bottom-chip">
-                    <span class="sv-bottom-label">Base</span>
-                    <span class="sv-bottom-value">{{ currency }} {{ getSubTotalSale().toFixed(2) }}</span>
-                </div>
-                <div class="sv-bottom-divider d-none d-md-block"></div>
-                <div class="sv-bottom-chip d-none d-md-flex">
-                    <span class="sv-bottom-label">IGV</span>
-                    <span class="sv-bottom-value">{{ currency }} {{ getIgvTotal().toFixed(2) }}</span>
-                </div>
-                <div class="sv-bottom-divider d-none d-md-block"></div>
-                <div class="sv-bottom-chip d-none d-md-flex" v-if="total_payments > 0">
-                    <span class="sv-bottom-label">Pagado</span>
-                    <span class="sv-bottom-value text-success fw-semibold">{{ currency }} {{
-                        total_payments.toFixed(2)
-                        }}</span>
-                </div>
-                <div class="sv-bottom-divider d-none d-md-block" v-if="total_payments > 0"></div>
-                <div class="sv-bottom-total ms-auto">
-                    <span class="sv-bottom-total-label">TOTAL</span>
-                    <span class="sv-bottom-total-amount">{{ currency }} {{ getTotalSales().toFixed(2) }}</span>
-                </div>
-                <button type="button" class="btn btn-success fw-bold px-4 shadow-sm sv-bottom-save" @click="store()">
-                    <i class="fas fa-check-circle me-2"></i>
-                    <span class="d-none d-sm-inline">Guardar </span>Venta
-                </button>
-            </div>
-        </div>
 
         <!-- MODALES clientes y productos -->
         <Teleport to="body">
@@ -343,12 +128,12 @@ import type { Product } from '@/types/products';
 import ClientFormQuick from '@/components/Sales/ClientFormQuick.vue';
 import ProductFormQuick from '@/components/Sales/ProductFormQuick.vue';
 import AvisoVenta from '@/components/Sales/AvisoVenta.vue';
+import CobroEdicion from '@/components/Sales/CobroEdicion.vue';
 import BuscadorProductosVenta from '@/components/Sales/BuscadorProductosVenta.vue';
 import PanelClienteComprobante from '@/components/Sales/PanelClienteComprobante.vue';
 import DatosVentaPanel from '@/components/Sales/DatosVentaPanel.vue';
 import TotalesVenta from '@/components/Sales/TotalesVenta.vue';
 import TablaLineasVenta, { type LineaVenta } from '@/components/Sales/TablaLineasVenta.vue';
-import CronogramaCuotasCampos from '@/components/CronogramaCuotasCampos.vue';
 import SelectorDireccionComprobante from '@/components/Clientes/SelectorDireccionComprobante.vue';
 import { imprimirComprobante } from '@/composables/usePrintComprobante';
 import { getPrecioBaseSinIgv } from '@/composables/useProductPricing';
@@ -518,10 +303,6 @@ const description = ref<string>('');
 
 // Pagos
 const type_payment = ref<number>(1);
-const method_payment = ref<string>('EFECTIVO');
-const amount = ref<number>(0);
-const date_payment = ref<string>('');
-const nro_operacion = ref<string>(''); // T-010: opcional, max 50
 const sale_payments = ref<SalePayment[]>([]);
 
 // Módulo Caja — Fase 0 (plan-modulo-caja.md §3): picker dinámico en vez del
@@ -977,20 +758,6 @@ const onDetractionCodeChange = () => {
     sumDetails();
 };
 
-// ── Anticipo ──────────────────────────────────────────────────────
-const searchAnticipo = () => {
-    if (!n_comprobante_anticipo.value.trim()) {
-        (Swal as TVueSwalInstance).fire('Advertencia', 'Ingresa un número de comprobante.', 'warning');
-        return;
-    }
-    (Swal as TVueSwalInstance).fire('Buscando...', 'Función pendiente de implementar.', 'info');
-};
-
-const resetAnticipo = () => {
-    n_comprobante_anticipo.value = '';
-    sale_anticipo.value = 0;
-};
-
 // ── Configuración de Crédito (edición) ────────────────────────────
 // Mismo cálculo que register.vue::montoAFinanciar(), adaptado al
 // mecanismo de anticipo que usa esta pantalla (sale_anticipo, no el
@@ -1002,82 +769,6 @@ const montoAFinanciar = (): number => {
 
 const sumaCronograma = (): number =>
     cronograma.value.reduce((s, c) => s + (Number(c.monto_programado) || 0), 0);
-
-// ── PAGOS ───────────────────────────────────────────────────────────
-const addPayment = () => {
-    if (!method_payment.value) {
-        (Swal as TVueSwalInstance).fire('Error', 'El método de pago es obligatorio.', 'error'); return;
-    }
-    if (amount.value <= 0) {
-        (Swal as TVueSwalInstance).fire('Error', 'El monto debe ser mayor a 0.', 'error'); return;
-    }
-    if (type_payment.value == 2 && !date_payment.value) {
-        (Swal as TVueSwalInstance).fire('Error', 'La fecha de pago es obligatoria en crédito.', 'error'); return;
-    }
-    if (getTotalSales() < (amount.value + total_payments.value)) {
-        (Swal as TVueSwalInstance).fire('Error', 'El monto no puede superar el total de la venta.', 'error'); return;
-    }
-    if (method_payment.value === 'EFECTIVO' && sale_payments.value.some(p => p.method_payment === 'EFECTIVO')) {
-        (Swal as TVueSwalInstance).fire('Error', 'Ya hay un pago en efectivo registrado.', 'error'); return;
-    }
-
-    // Si estamos editando, guardar el pago en backend
-    const data = {
-        sale_id: sale_id.value,
-        method_payment: method_payment.value,
-        amount: amount.value,
-        date_payment: date_payment.value,
-        nro_operacion: nro_operacion.value.trim() || null
-    };
-
-    httpClient.post('sale_payments', data)
-        .then(res => {
-            sale_payments.value.push(res.data.payment);
-            setTimeout(() => {
-                method_payment.value = '';
-                amount.value = 0;
-                date_payment.value = '';
-                nro_operacion.value = '';
-                sumDetails();
-            }, 50);
-        })
-        .catch(err => {
-            (Swal as TVueSwalInstance).fire('Error', err.response?.data?.message || 'Error al agregar pago', 'error');
-        });
-};
-
-
-const removePayment = (index: number) => {
-    const payment = sale_payments.value[index];
-    if (!payment) return;
-    (Swal as TVueSwalInstance)
-        .fire({
-            title: "Confirmar eliminación",
-            text: `¿Estás seguro de eliminar el pago ${payment.method_payment}?`,
-            icon: "warning",
-            showCancelButton: true,
-            confirmButtonColor: "#3085d6",
-            cancelButtonColor: "#d33",
-            confirmButtonText: "Sí, eliminar",
-            cancelButtonText: "Cancelar"
-        })
-        .then(async (result: any) => {
-            if (result.isConfirmed) {
-                try {
-                    await httpClient.delete(`sale_payments/${payment.id}`);
-                    sale_payments.value.splice(index, 1);
-                    (Swal as TVueSwalInstance).fire('Eliminado', 'Pago eliminado correctamente', 'success');
-                    sumDetails();
-                } catch (err: any) {
-                    (Swal as TVueSwalInstance).fire('Error', err.response?.data?.message || 'Error al eliminar', 'error');
-                }
-            }
-        });
-};
-/* const removePayment = (index: number) => {
-    sale_payments.value.splice(index, 1);
-    sumDetails();
-}; */
 
 // ── Guardar venta ─────────────────────────────────────────────────
 const store = async () => {
@@ -1534,13 +1225,8 @@ watch([tipo_comprobante_codigo, currency, branch_id_seleccionado], () => {
 });
 
 watch(type_payment, () => {
-    setTimeout(() => {
-        method_payment.value = '';
-        amount.value = 0;
-        date_payment.value = '';
-        nro_operacion.value = '';
-        sumDetails();
-    }, 50);
+    // El formulario del pago nuevo se limpia dentro de CobroEdicion.vue.
+    setTimeout(() => sumDetails(), 50);
 });
 
 watch(is_exportacion, (value) => {
