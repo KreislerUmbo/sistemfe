@@ -14,6 +14,237 @@
             </div>
         </div>
 
+        <!-- T-110: estructura de la pantalla nueva (T-106): productos a la izquierda, datos y cobro a la derecha.
+             Los bloques de dentro se van reemplazando por los componentes de components/Sales/ paso a paso. -->
+        <div class="grid-venta">
+            <div class="card border-0 shadow-sm">
+        <!-- ═══════════════════════════════════════════════════
+             PASO 2 — BUSCAR PRODUCTO
+        ═══════════════════════════════════════════════════ -->
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-2">
+                <span class="badge bg-success rounded-pill">2</span>
+                <span class="fw-semibold text-dark">Buscar Producto</span>
+                <span class="badge bg-light text-secondary border ms-auto">{{ sale_details.length }} ítem(s)</span>
+            </div>
+            <div class="card-body py-3">
+                <div class="row g-3 align-items-end">
+                    <div class="col-12 col-md-6 position-relative">
+                        <label for="product-search" class="form-label mb-1 small fw-semibold text-secondary">
+                            <i class="fas fa-box me-1"></i>Producto / Servicio
+                        </label>
+                        <div class="input-group input-group-sm">
+                            <input type="text" id="product-search" class="form-control" v-model="productSearchText"
+                                placeholder="Buscar por nombre o SKU..." @input="onProductSearchInput"
+                                @focus="onProductSearchFocus" @blur="onProductSearchBlur" autocomplete="off" />
+                            <button class="btn btn-success" type="button" @click="openQuickProductModal"
+                                title="Nuevo producto">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
+                        <div v-if="productSuggestions.length > 0 && !productSelected"
+                            class="list-group mt-1 position-absolute"
+                            style="max-height:220px;overflow-y:auto;z-index:1050;width:100%;box-shadow:0 4px 8px rgba(0,0,0,.1)">
+                            <button type="button" class="list-group-item list-group-item-action"
+                                v-for="product in productSuggestions" :key="product.id"
+                                @mousedown.prevent="selectAndAddProduct(product)">
+                                <div class="d-flex justify-content-between">
+                                    <span>{{ product.title }}</span>
+                                    <small :style="{ color: product.stock <= 5 ? 'red' : '#6b7280' }">
+                                        stock: {{ product.stock }}
+                                    </small>
+                                </div>
+                                <small class="text-muted">{{ product.sku }} | {{ currency }} {{
+                                    product.price_general
+                                    }}</small>
+                            </button>
+                        </div>
+                        <div v-if="productNotFound && !productSelected && productSearchText.length > 2"
+                            class="text-danger small mt-1">
+                            <i class="fas fa-exclamation-circle me-1"></i>
+                            No encontrado — <a href="#" @click.prevent="openQuickProductModal">regístralo ahora</a>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Cantidad por defecto</label>
+                        <b-form-input type="number" v-model.number="default_quantity" min="1" size="sm" />
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Precio por defecto</label>
+                        <b-input-group size="sm">
+                            <b-input-group-text>{{ currency }}</b-input-group-text>
+                            <b-form-input type="number" v-model.number="default_price" step="0.01" size="sm" />
+                        </b-input-group>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════
+             PASO 3 — DETALLE DE LA VENTA
+        ═══════════════════════════════════════════════════ -->
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-2">
+                <span class="badge bg-warning text-dark rounded-pill">3</span>
+                <span class="fw-semibold text-dark">Detalle de Venta</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover table-sm mb-0 align-middle">
+                        <thead class="table-light">
+                            <tr class="small text-secondary text-uppercase">
+                                <th class="ps-3">#</th>
+                                <th>Producto</th>
+                                <th style="min-width:90px">Cant.</th>
+                                <th style="min-width:110px">P. Base</th>
+                                <th class="text-center">Desc.%</th>
+                                <th class="text-end">IGV</th>
+                                <th class="text-end">Subtotal</th>
+                                <th class="text-center">Afect.</th>
+                                <th class="pe-3"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-if="sale_details.length === 0">
+                                <td colspan="9" class="text-center text-muted py-4 fst-italic">
+                                    <i class="fas fa-box-open me-2 opacity-50"></i>
+                                    Sin productos — busca uno en el paso 2
+                                </td>
+                            </tr>
+                            <tr v-for="(item, index) in sale_details" :key="index">
+                                <td class="ps-3 text-muted small">{{ index + 1 }}</td>
+                                <td>
+                                    <span class="fw-semibold">{{ item.product.title }}</span>
+                                    <br>
+                                    <small class="text-muted">{{ item.unidad_medida }}</small>
+                                </td>
+                                <!-- Cantidad editable -->
+                                <td>
+                                    <b-form-input type="number" v-model.number="item.quantity" min="1" size="sm"
+                                        style="width:80px" @input="alCambiarCantidad(index)" />
+                                </td>
+                                <!-- Precio base editable -->
+                                <td>
+                                    <div class="input-group input-group-sm" style="width:110px">
+                                        <span class="input-group-text text-muted px-1 small">{{ currency }}</span>
+                                        <b-form-input type="number" v-model.number="item.price_base" step="0.01"
+                                            size="sm" @input="alCambiarPrecio(index)" />
+                                    </div>
+                                </td>
+                                <!-- Descuento % editable -->
+                                <td class="text-center">
+                                    <b-form-input type="number" v-model.number="item.discount_percent" min="0"
+                                        :max="item.product.max_discount || 0" size="sm" style="width:70px"
+                                        @input="updateItem(index)" :disabled="item.product.is_discount != 2" />
+                                </td>
+                                <td class="text-end small text-muted">{{ currency }} {{ item.igv.toFixed(2) }}</td>
+                                <td class="text-end fw-bold">{{ currency }} {{ item.subtotal.toFixed(2) }}</td>
+                                <!-- Tipo de afectación IGV — editable por el vendedor -->
+                                <td class="text-center">
+                                    <select v-model="item.tip_afe_igv" class="form-select form-select-sm"
+                                        style="width:110px; font-size:.75rem" @change="updateItem(index)"
+                                        :title="'tip_afe_igv: ' + item.tip_afe_igv">
+                                        <option value="10">Grav. 10</option>
+                                        <option value="20">Exon. 20</option>
+                                        <option value="30">Inaf. 30</option>
+                                        <option value="17">IVAP 17</option>
+                                        <option value="40">Exp. 40</option>
+                                        <option value="11">Grat. 11</option>
+                                    </select>
+                                </td>
+                                <td class="pe-3">
+                                    <button type="button" class="btn btn-outline-danger btn-sm py-0 px-2"
+                                        @click="removeItem(index)">
+                                        <i class="fas fa-trash-alt small"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Descuento global + totales -->
+                <div class="row g-0 border-top">
+                    <div class="col-12 col-md-6 p-3 border-end">
+                        <label class="form-label small fw-semibold text-secondary mb-1">
+                            <i class="fas fa-tag me-1"></i>Descuento Global
+                        </label>
+                        <div class="input-group input-group-sm" style="max-width:200px">
+                            <span class="input-group-text text-muted small">{{ currency }}</span>
+                            <b-form-input type="number" id="n-discount-global" v-model.number="discount_global"
+                                placeholder="0.00" size="sm" />
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-6 p-3">
+                        <table class="table table-sm table-borderless mb-0 small">
+                            <tbody>
+                                <tr>
+                                    <td class="text-muted">Valor Venta</td>
+                                    <td class="text-end">{{ currency }} {{ sale_subtotal.toFixed(2) }}</td>
+                                </tr>
+                                <tr class="text-danger" v-if="(discount_total + discount_global) > 0">
+                                    <td>(-) Descuento</td>
+                                    <td class="text-end">{{ currency }} {{ (discount_total +
+                                        discount_global).toFixed(2)
+                                        }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted">Base Imponible</td>
+                                    <td class="text-end">{{ currency }} {{ getSubTotalSale().toFixed(2) }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted">IGV ({{ getTasaIgvGlobal() }}%)</td>
+                                    <td class="text-end">{{ currency }} {{ getIgvTotal().toFixed(2) }}</td>
+                                </tr>
+                                <tr v-if="icbper_total > 0">
+                                    <td class="text-muted">ICBPER (bolsas)</td>
+                                    <td class="text-end">{{ currency }} {{ icbper_total.toFixed(2) }}</td>
+                                </tr>
+                                <tr v-if="isc_total > 0">
+                                    <td class="text-muted">ISC</td>
+                                    <td class="text-end">{{ currency }} {{ isc_total.toFixed(2) }}</td>
+                                </tr>
+                                <tr class="border-top fw-semibold">
+                                    <td>Total Factura</td>
+                                    <td class="text-end">
+                                        {{ currency }} {{ (getSubTotalSale() + getIgvTotal() + icbper_total +
+                                            isc_total).toFixed(2) }}
+                                    </td>
+                                </tr>
+                                <!-- Condiciones especiales — solo si aplica -->
+                                <tr v-if="condicion_especial == '3'" class="text-info">
+                                    <td>(+) Percepción {{ (porcentaje_percepcion_sel * 100).toFixed(1) }}%</td>
+                                    <td class="text-end">{{ currency }} {{ monto_percepcion.toFixed(2) }}</td>
+                                </tr>
+                                <tr v-if="condicion_especial == '1'" class="text-danger">
+                                    <td>(-) Retención {{ (porcentaje_retencion_sel * 100).toFixed(1) }}%</td>
+                                    <td class="text-end">-{{ currency }} {{ monto_retencion.toFixed(2) }}</td>
+                                </tr>
+                                <tr v-if="condicion_especial == '2'" class="text-warning">
+                                    <td>(-) Detracción {{ (porcentaje_detraccion_sel * 100).toFixed(1) }}% [{{
+                                        codigo_detraccion_sel }}]</td>
+                                    <td class="text-end">{{ currency }} {{ monto_detraccion.toFixed(2) }}</td>
+                                </tr>
+                            </tbody>
+                            <tfoot>
+                                <tr class="bg-primary text-white">
+                                    <td class="fw-bold fs-6 ps-2">MONTO A PAGAR</td>
+                                    <td class="fw-bold fs-6 text-end pe-2">
+                                        {{ currency }} {{ getTotalSales().toFixed(2) }}
+                                    </td>
+                                </tr>
+                                <tr class="text-success fw-semibold">
+                                    <td class="pt-1">Total Pagado</td>
+                                    <td class="text-end pt-1">{{ currency }} {{ total_payments.toFixed(2) }}</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+            </div>
+            <div class="panel-cobro">
         <!-- ═══════════════════════════════════════════════════
              PASO 1 — DATOS GENERALES
         ═══════════════════════════════════════════════════ -->
@@ -265,232 +496,6 @@
         </div>
 
         <!-- ═══════════════════════════════════════════════════
-             PASO 2 — BUSCAR PRODUCTO
-        ═══════════════════════════════════════════════════ -->
-        <div class="card border-0 shadow-sm mb-3">
-            <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-2">
-                <span class="badge bg-success rounded-pill">2</span>
-                <span class="fw-semibold text-dark">Buscar Producto</span>
-                <span class="badge bg-light text-secondary border ms-auto">{{ sale_details.length }} ítem(s)</span>
-            </div>
-            <div class="card-body py-3">
-                <div class="row g-3 align-items-end">
-                    <div class="col-12 col-md-6 position-relative">
-                        <label for="product-search" class="form-label mb-1 small fw-semibold text-secondary">
-                            <i class="fas fa-box me-1"></i>Producto / Servicio
-                        </label>
-                        <div class="input-group input-group-sm">
-                            <input type="text" id="product-search" class="form-control" v-model="productSearchText"
-                                placeholder="Buscar por nombre o SKU..." @input="onProductSearchInput"
-                                @focus="onProductSearchFocus" @blur="onProductSearchBlur" autocomplete="off" />
-                            <button class="btn btn-success" type="button" @click="openQuickProductModal"
-                                title="Nuevo producto">
-                                <i class="fas fa-plus"></i>
-                            </button>
-                        </div>
-                        <div v-if="productSuggestions.length > 0 && !productSelected"
-                            class="list-group mt-1 position-absolute"
-                            style="max-height:220px;overflow-y:auto;z-index:1050;width:100%;box-shadow:0 4px 8px rgba(0,0,0,.1)">
-                            <button type="button" class="list-group-item list-group-item-action"
-                                v-for="product in productSuggestions" :key="product.id"
-                                @mousedown.prevent="selectAndAddProduct(product)">
-                                <div class="d-flex justify-content-between">
-                                    <span>{{ product.title }}</span>
-                                    <small :style="{ color: product.stock <= 5 ? 'red' : '#6b7280' }">
-                                        stock: {{ product.stock }}
-                                    </small>
-                                </div>
-                                <small class="text-muted">{{ product.sku }} | {{ currency }} {{
-                                    product.price_general
-                                    }}</small>
-                            </button>
-                        </div>
-                        <div v-if="productNotFound && !productSelected && productSearchText.length > 2"
-                            class="text-danger small mt-1">
-                            <i class="fas fa-exclamation-circle me-1"></i>
-                            No encontrado — <a href="#" @click.prevent="openQuickProductModal">regístralo ahora</a>
-                        </div>
-                    </div>
-                    <div class="col-6 col-md-2">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">Cantidad por defecto</label>
-                        <b-form-input type="number" v-model.number="default_quantity" min="1" size="sm" />
-                    </div>
-                    <div class="col-6 col-md-2">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">Precio por defecto</label>
-                        <b-input-group size="sm">
-                            <b-input-group-text>{{ currency }}</b-input-group-text>
-                            <b-form-input type="number" v-model.number="default_price" step="0.01" size="sm" />
-                        </b-input-group>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ═══════════════════════════════════════════════════
-             PASO 3 — DETALLE DE LA VENTA
-        ═══════════════════════════════════════════════════ -->
-        <div class="card border-0 shadow-sm mb-3">
-            <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-2">
-                <span class="badge bg-warning text-dark rounded-pill">3</span>
-                <span class="fw-semibold text-dark">Detalle de Venta</span>
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-hover table-sm mb-0 align-middle">
-                        <thead class="table-light">
-                            <tr class="small text-secondary text-uppercase">
-                                <th class="ps-3">#</th>
-                                <th>Producto</th>
-                                <th style="min-width:90px">Cant.</th>
-                                <th style="min-width:110px">P. Base</th>
-                                <th class="text-center">Desc.%</th>
-                                <th class="text-end">IGV</th>
-                                <th class="text-end">Subtotal</th>
-                                <th class="text-center">Afect.</th>
-                                <th class="pe-3"></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr v-if="sale_details.length === 0">
-                                <td colspan="9" class="text-center text-muted py-4 fst-italic">
-                                    <i class="fas fa-box-open me-2 opacity-50"></i>
-                                    Sin productos — busca uno en el paso 2
-                                </td>
-                            </tr>
-                            <tr v-for="(item, index) in sale_details" :key="index">
-                                <td class="ps-3 text-muted small">{{ index + 1 }}</td>
-                                <td>
-                                    <span class="fw-semibold">{{ item.product.title }}</span>
-                                    <br>
-                                    <small class="text-muted">{{ item.unidad_medida }}</small>
-                                </td>
-                                <!-- Cantidad editable -->
-                                <td>
-                                    <b-form-input type="number" v-model.number="item.quantity" min="1" size="sm"
-                                        style="width:80px" @input="alCambiarCantidad(index)" />
-                                </td>
-                                <!-- Precio base editable -->
-                                <td>
-                                    <div class="input-group input-group-sm" style="width:110px">
-                                        <span class="input-group-text text-muted px-1 small">{{ currency }}</span>
-                                        <b-form-input type="number" v-model.number="item.price_base" step="0.01"
-                                            size="sm" @input="alCambiarPrecio(index)" />
-                                    </div>
-                                </td>
-                                <!-- Descuento % editable -->
-                                <td class="text-center">
-                                    <b-form-input type="number" v-model.number="item.discount_percent" min="0"
-                                        :max="item.product.max_discount || 0" size="sm" style="width:70px"
-                                        @input="updateItem(index)" :disabled="item.product.is_discount != 2" />
-                                </td>
-                                <td class="text-end small text-muted">{{ currency }} {{ item.igv.toFixed(2) }}</td>
-                                <td class="text-end fw-bold">{{ currency }} {{ item.subtotal.toFixed(2) }}</td>
-                                <!-- Tipo de afectación IGV — editable por el vendedor -->
-                                <td class="text-center">
-                                    <select v-model="item.tip_afe_igv" class="form-select form-select-sm"
-                                        style="width:110px; font-size:.75rem" @change="updateItem(index)"
-                                        :title="'tip_afe_igv: ' + item.tip_afe_igv">
-                                        <option value="10">Grav. 10</option>
-                                        <option value="20">Exon. 20</option>
-                                        <option value="30">Inaf. 30</option>
-                                        <option value="17">IVAP 17</option>
-                                        <option value="40">Exp. 40</option>
-                                        <option value="11">Grat. 11</option>
-                                    </select>
-                                </td>
-                                <td class="pe-3">
-                                    <button type="button" class="btn btn-outline-danger btn-sm py-0 px-2"
-                                        @click="removeItem(index)">
-                                        <i class="fas fa-trash-alt small"></i>
-                                    </button>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-
-                <!-- Descuento global + totales -->
-                <div class="row g-0 border-top">
-                    <div class="col-12 col-md-6 p-3 border-end">
-                        <label class="form-label small fw-semibold text-secondary mb-1">
-                            <i class="fas fa-tag me-1"></i>Descuento Global
-                        </label>
-                        <div class="input-group input-group-sm" style="max-width:200px">
-                            <span class="input-group-text text-muted small">{{ currency }}</span>
-                            <b-form-input type="number" id="n-discount-global" v-model.number="discount_global"
-                                placeholder="0.00" size="sm" />
-                        </div>
-                    </div>
-                    <div class="col-12 col-md-6 p-3">
-                        <table class="table table-sm table-borderless mb-0 small">
-                            <tbody>
-                                <tr>
-                                    <td class="text-muted">Valor Venta</td>
-                                    <td class="text-end">{{ currency }} {{ sale_subtotal.toFixed(2) }}</td>
-                                </tr>
-                                <tr class="text-danger" v-if="(discount_total + discount_global) > 0">
-                                    <td>(-) Descuento</td>
-                                    <td class="text-end">{{ currency }} {{ (discount_total +
-                                        discount_global).toFixed(2)
-                                        }}</td>
-                                </tr>
-                                <tr>
-                                    <td class="text-muted">Base Imponible</td>
-                                    <td class="text-end">{{ currency }} {{ getSubTotalSale().toFixed(2) }}</td>
-                                </tr>
-                                <tr>
-                                    <td class="text-muted">IGV ({{ getTasaIgvGlobal() }}%)</td>
-                                    <td class="text-end">{{ currency }} {{ getIgvTotal().toFixed(2) }}</td>
-                                </tr>
-                                <tr v-if="icbper_total > 0">
-                                    <td class="text-muted">ICBPER (bolsas)</td>
-                                    <td class="text-end">{{ currency }} {{ icbper_total.toFixed(2) }}</td>
-                                </tr>
-                                <tr v-if="isc_total > 0">
-                                    <td class="text-muted">ISC</td>
-                                    <td class="text-end">{{ currency }} {{ isc_total.toFixed(2) }}</td>
-                                </tr>
-                                <tr class="border-top fw-semibold">
-                                    <td>Total Factura</td>
-                                    <td class="text-end">
-                                        {{ currency }} {{ (getSubTotalSale() + getIgvTotal() + icbper_total +
-                                            isc_total).toFixed(2) }}
-                                    </td>
-                                </tr>
-                                <!-- Condiciones especiales — solo si aplica -->
-                                <tr v-if="condicion_especial == '3'" class="text-info">
-                                    <td>(+) Percepción {{ (porcentaje_percepcion_sel * 100).toFixed(1) }}%</td>
-                                    <td class="text-end">{{ currency }} {{ monto_percepcion.toFixed(2) }}</td>
-                                </tr>
-                                <tr v-if="condicion_especial == '1'" class="text-danger">
-                                    <td>(-) Retención {{ (porcentaje_retencion_sel * 100).toFixed(1) }}%</td>
-                                    <td class="text-end">-{{ currency }} {{ monto_retencion.toFixed(2) }}</td>
-                                </tr>
-                                <tr v-if="condicion_especial == '2'" class="text-warning">
-                                    <td>(-) Detracción {{ (porcentaje_detraccion_sel * 100).toFixed(1) }}% [{{
-                                        codigo_detraccion_sel }}]</td>
-                                    <td class="text-end">{{ currency }} {{ monto_detraccion.toFixed(2) }}</td>
-                                </tr>
-                            </tbody>
-                            <tfoot>
-                                <tr class="bg-primary text-white">
-                                    <td class="fw-bold fs-6 ps-2">MONTO A PAGAR</td>
-                                    <td class="fw-bold fs-6 text-end pe-2">
-                                        {{ currency }} {{ getTotalSales().toFixed(2) }}
-                                    </td>
-                                </tr>
-                                <tr class="text-success fw-semibold">
-                                    <td class="pt-1">Total Pagado</td>
-                                    <td class="text-end pt-1">{{ currency }} {{ total_payments.toFixed(2) }}</td>
-                                </tr>
-                            </tfoot>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ═══════════════════════════════════════════════════
              PASO 4 — PAGOS + OBSERVACIONES + GUARDAR
         ═══════════════════════════════════════════════════ -->
         <div class="card border-0 shadow-sm mb-4">
@@ -676,6 +681,10 @@
                 </div>
             </div>
         </div>
+            </div>
+        </div>
+
+        <AvisoVenta ref="aviso" />
 
         <!-- BARRA FIJA INFERIOR -->
         <div class="sv-bottom-bar">
@@ -741,12 +750,14 @@ import type { AxiosResponse } from 'axios';
 import httpClient from '@/helpers/http-client';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
-import type { SaleDetail, SaleConfig, SaleResponse, SalePayment } from '@/types/sales';
+import type { SaleConfig, SaleResponse, SalePayment } from '@/types/sales';
 import type { PaymentMethod, PaymentMethods } from '@/types/cash';
 import type { Client } from '@/types/clients';
 import type { Product } from '@/types/products';
 import ClientFormQuick from '@/components/Sales/ClientFormQuick.vue';
 import ProductFormQuick from '@/components/Sales/ProductFormQuick.vue';
+import AvisoVenta from '@/components/Sales/AvisoVenta.vue';
+import type { LineaVenta } from '@/components/Sales/TablaLineasVenta.vue';
 import CronogramaCuotasCampos from '@/components/CronogramaCuotasCampos.vue';
 import SelectorDireccionComprobante from '@/components/Clientes/SelectorDireccionComprobante.vue';
 import { imprimirComprobante } from '@/composables/usePrintComprobante';
@@ -775,6 +786,12 @@ const route = useRoute();
 const router = useRouter();
 
 const sale_id = ref<string>(route.params.id as string);
+
+// ── Estado de la pantalla (T-110, igual que register.vue) ───────────
+const aviso = ref<InstanceType<typeof AvisoVenta> | null>(null);
+let siguienteUid = 1; // identifica cada línea en pantalla; no viaja en el payload
+const avisar = (texto: string, acciones: { texto: string; fn: () => void }[] = [], ms = 6000) =>
+    aviso.value?.mostrar(texto, acciones, ms);
 //const sale_id_edit = ref<string | string[]>("");//id de la venta a edit
 
 
@@ -913,7 +930,7 @@ const currency_iso = ref<string>('PEN'); // 'PEN' o 'USD' para el backend
 
 
 // ── Detalle y pagos ────────────────────────────────────────────────
-const sale_details = ref<SaleDetail[]>([]);
+const sale_details = ref<LineaVenta[]>([]);
 // T-113: cantidad por producto que la venta tenía al abrirla (ya descontada del stock).
 const cantidadOriginal = ref<Record<string, number>>({});
 const discount_total = ref<number>(0);
@@ -1127,7 +1144,7 @@ const resolverTipAfeIgv = (product: Product): string =>
 // Nunca deben actualizarse por separado: si tip_afe_igv cambia sin recalcular
 // igv/mto_base_igv/mto_valor_venta/subtotal (o viceversa), los totales quedan
 // descuadrados frente a lo que se envía a SUNAT.
-const recalcularItemTipAfeIgv = (item: SaleDetail, index: number) => {
+const recalcularItemTipAfeIgv = (item: LineaVenta, index: number) => {
     item.tip_afe_igv = resolverTipAfeIgv(item.product);
     updateItem(index);
 };
@@ -1204,6 +1221,7 @@ const selectAndAddProduct = (product: Product) => {
     const tip_afe = resolverTipAfeIgv(product);
 
     sale_details.value.push({
+        uid: siguienteUid++,
         product: product,
         unidad_medida: product.unidad_medida || 'NIU',
         price_base: Number(price),
@@ -1340,7 +1358,7 @@ const removeItem = (index: number) => {
 };
 
 // ── Tasas de IGV para mostrar en la tabla de totales ─────────────
-const getTasaIgv = (item?: SaleDetail): number => {
+const getTasaIgv = (item?: LineaVenta): number => {
     if (!item) return getIgvGeneralTasa();
     if (item.tip_afe_igv === '17') return getIvapTasa();
     if (['20', '30', '40'].includes(item.tip_afe_igv)) return 0;
@@ -1380,7 +1398,7 @@ const getBaseForRegimen = (): number => getTotalFactura();
 // calculaba por separado y solo el IGV restaba el descuento; ese
 // desfase entre el total (neto) y mto_oper_exoneradas/gravadas/etc.
 // (brutos) causaba el error SUNAT 3275 en ventas con descuento global.
-const subtotalNetoDescuentoGlobal = (d: SaleDetail, subtotalBruto: number): number => {
+const subtotalNetoDescuentoGlobal = (d: LineaVenta, subtotalBruto: number): number => {
     const descuento = Number(discount_global.value) || 0;
     const proporcion = subtotalBruto > 0 ? d.subtotal / subtotalBruto : 0;
     return d.subtotal - (descuento * proporcion);
@@ -1745,8 +1763,8 @@ const store = async () => {
         paid_out: total_payments.value,
 
         // Detalles — incluyen todos los campos para Greenter
-        // (sin precio_manual: es solo de pantalla)
-        sale_details: sale_details.value.map(({ precio_manual, ...linea }) => linea),
+        // (sin precio_manual ni uid: son solo de pantalla)
+        sale_details: sale_details.value.map(({ precio_manual, uid, ...linea }) => linea),
 
         // Pagos
         payments: sale_payments.value,
@@ -1849,6 +1867,7 @@ console.log(res);
             // que ya se envió a SUNAT en su momento.
             sale_details.value = sale.sale_details.map((d: any) => ({
                 ...d,
+                uid: siguienteUid++,
                 discount_percent: Number(d.discount_percent ?? 0),
                 monto_isc_fijo: d.product?.monto_isc_fijo || 0,
                 tipo_isc: d.product?.tipo_isc || '01',
@@ -2244,6 +2263,14 @@ onMounted(() => config());
 </script>
 
 <style scoped>
+/* Pantalla de caja: productos a la izquierda, cobro a la derecha (T-106/T-110). */
+.grid-venta { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; align-items: start; }
+.panel-cobro { position: sticky; top: 110px; }
+@media (max-width: 920px) {
+    .grid-venta { grid-template-columns: minmax(0, 1fr); }
+    .panel-cobro { position: static; }
+}
+
 /* ── Barra fija inferior ─────────────────────────────── */
 .sv-bottom-bar {
     position: fixed;
