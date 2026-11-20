@@ -93,9 +93,20 @@ Al desplegar: consulta de productos con `stock < 0` por tenant, para decidir el 
 ---
 
 ## Resultado
-- **Commits:**
+- **Commits:** rama `feat/T-113-stock-con-lock-ventas` (ver `git log`).
 - **Tests:**
+  - CA1–CA5: `tests/Feature/Ventas/StockVentaTest.php` (6 tests, verdes).
+  - CA6 manual en agencia-demo: producto temporal con stock 1 y dos `POST /api/sales` en paralelo (curl) → una `200` (venta 36) y la otra `422 «Solo quedan 0 unidades de «T113 CA6 temporal».»`; stock quedó en 0 (no −1). Al eliminar la venta por la API el stock volvió a 1. Producto y venta temporales borrados después.
+  - CA7: suite completa del backend contra Postgres: 2390 pasan, 2 fallan. (1) `SaleControllerSerieComprobanteTest::store venta nv a credito…` fallaba porque su producto era «venta sin stock» (`disponiblidad = 1`) y esperaba descuento: se corrigió el fixture a `disponiblidad = 2` (efecto del criterio único); ahora verde. (2) `Fila13Fase2cOperacionTest::en un viaje de varios dias solo se mueve el tour` falla también en `main` sin mis cambios (usa la fecha fija 18-nov-2026, que ya pasó: «no puede ser anterior a hoy»); no es de esta tarea.
+  - Frontend: Vitest de `ventaRetail.test.ts` (31 verdes, con el caso nuevo de `controlaStock`). No corrí `type-check`/`build` ni prueba visual de la pantalla.
 - **Desviaciones de la tarea y por qué:**
+  - `ProductResource` ahora devuelve `controla_stock` para que la pantalla use el mismo criterio que el backend (necesario para el criterio único; no estaba listado en «Dónde tocar»).
+  - `update()` ahora relanza los `HttpException` (antes todo se convertía en 500), para que el 422 de stock llegue como 422. La transacción sigue siendo una sola.
+  - En `store()` el control de stock corre al inicio de la transacción (antes de cabecera, caja y correlativos), no al final.
+  - La reposición de la NC no está en una transacción propia: el lock es de una sola sentencia y el `decrement` es atómico; no se agregó transacción por no ampliar alcance.
+  - Efecto a vigilar al desplegar: servicios y productos «venta sin stock» ya no descuentan; productos que hoy tienen `disponiblidad = 1` dejan de bajar de stock.
 
 ## Hallazgos fuera de alcance
--
+- `Fila13Fase2cOperacionTest` (viaje de varios días) está roto en `main` por una fecha fija en el pasado (18-nov-2026).
+- `update()` toma `detalle_bd` por `SaleDetail::find($id)` sin comprobar que la línea sea de esa venta (preexistente).
+- No revisé si el portal e-commerce descuenta stock (queda como hallazgo pendiente de la tarea).

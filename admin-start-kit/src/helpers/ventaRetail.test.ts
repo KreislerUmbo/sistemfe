@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-    MAX_DESCRIPCION_LINEA, admiteDecimales, cantidadEnVenta, indiceLineaIntacta, productoSinStock, atajosEfectivo, calcularEfectivo, descripcionAGuardar, motivoBloqueoCobro, normalizarCantidad,
+    MAX_DESCRIPCION_LINEA, admiteDecimales, cantidadEnVenta, controlaStock, indiceLineaIntacta, productoSinStock, atajosEfectivo, calcularEfectivo, descripcionAGuardar, motivoBloqueoCobro, normalizarCantidad,
     precioCatalogoPorCliente, type EntradaMotivoCobro,
 } from './ventaRetail';
 
@@ -133,5 +133,17 @@ describe('línea intacta y stock por producto (T-112)', () => {
     it('un servicio no controla stock', () => {
         const s = { ...p, tipo_bien_servicio: 'SERVICIO' };
         expect(productoSinStock([linea({ product: s, quantity: 99 })])).toBeNull();
+    });
+});
+
+describe('controlaStock (T-113)', () => {
+    it('un bien normal controla stock', () => {
+        expect(controlaStock({ tipo_bien_servicio: 'BIEN', disponiblidad: 2, controla_stock: true })).toBe(true);
+        expect(controlaStock({})).toBe(true);
+    });
+    it('servicio, «venta sin stock» o controla_stock=false no controlan', () => {
+        expect(controlaStock({ tipo_bien_servicio: 'SERVICIO' })).toBe(false);
+        expect(controlaStock({ disponiblidad: 1 })).toBe(false);
+        expect(controlaStock({ controla_stock: false })).toBe(false);
     });
 });

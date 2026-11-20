@@ -441,11 +441,10 @@ class NotaElectronicaController extends Controller
             // (no al crear la nota: si SUNAT rechaza, no debe haberse
             // repuesto stock por un documento que nunca llegó a existir)
             if ($nota->reponer_stock) {
-                foreach ($nota->note_details as $detalle) {
-                    if ($detalle->sale_detail_id) {
-                        Product::where('id', $detalle->product_id)->increment('stock', $detalle->quantity);
-                    }
-                }
+                // T-113: solo devuelve a los productos que controlan stock (mismo criterio que la venta).
+                app(\App\Services\Ventas\StockVentaService::class)->devolver(
+                    $nota->note_details->filter(fn ($d) => $d->sale_detail_id)
+                );
             }
 
             // ── Reserva de Agencia de Viajes: la NC libera lo que acredita

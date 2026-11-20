@@ -34,8 +34,7 @@ class Product extends Model
         "monto_isc_fijo",
         "contenido_neto_litros", //volumen en litros de la presentación — solo cuando tipo_isc='02' se aplica por litro (ej. cerveza)
         "is_especial_nota",
-        // false = producto sin inventario real (ej. servicios de viaje) — SaleController
-        // todavía decrementa/incrementa stock sin condición, ver 2026_07_28_130000_alter_products_add_controla_stock.php
+        // false = producto sin inventario real (ej. servicios de viaje); ver controlaStock() (T-113)
         "controla_stock",
         // ── Campos SUNAT — naturaleza tributaria del producto ───────────
         "tipo_bien_servicio",
@@ -54,6 +53,17 @@ class Product extends Model
         'aplica_percepcion' => 'boolean',
         'controla_stock'    => 'boolean',
     ];
+
+    /**
+     * T-113 — Único criterio de «controla stock» (igual al de la pantalla, ventaRetail.ts):
+     * es un bien, no está marcado «venta sin stock» (disponiblidad = 1) y controla_stock = true.
+     */
+    public function controlaStock(): bool
+    {
+        return $this->tipo_bien_servicio !== 'SERVICIO'
+            && (int) $this->disponiblidad !== 1
+            && (bool) $this->controla_stock;
+    }
 
     public function categorie()
     {

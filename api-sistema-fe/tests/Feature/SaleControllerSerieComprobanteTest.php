@@ -221,7 +221,7 @@ class SaleControllerSerieComprobanteTest extends TestCase
             'unidad_medida' => 'NIU',
             'stock' => 50,
             'is_discount' => false,
-            'disponiblidad' => 1,
+            'disponiblidad' => 2,
             'include_igv' => false,
             'is_icbper' => false,
             'is_ivap' => false,

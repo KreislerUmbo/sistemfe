@@ -30,6 +30,7 @@ use App\Services\HoraPeru;
 use App\Services\QrCodeService;
 use App\Services\TipoCambio\TipoCambioSunatResolver;
 use App\Services\Ventas\PrecioVentaValidator;
+use App\Services\Ventas\StockVentaService;
 use Brick\Math\BigDecimal;
 use App\Services\SerieComprobanteService;
 use App\Services\StorageUrl;
@@ -45,7 +46,8 @@ class SaleController extends Controller
         private CashCorrectionService $cashCorrection,
         private SerieComprobanteService $serieComprobanteService,
         private AdvanceApplicationService $advanceApplicationService,
-        private CobroVentaService $cobro
+        private CobroVentaService $cobro,
+        private StockVentaService $stock
     ) {
     }
 
@@ -761,6 +763,10 @@ class SaleController extends Controller
         try {
             DB::beginTransaction();
 
+            // T-113: stock validado y descontado con lock, ANTES de tocar caja o correlativos.
+            // Si no alcanza, 422 y el rollback de abajo no deja nada guardado.
+            $this->stock->descontar($detalles_venta);
+
             // ── Crear cabecera de la venta ────────────────────────────
             $venta = Sale::create([
                 // Identificación
@@ -991,13 +997,6 @@ class SaleController extends Controller
                 $this->cobro->registrar($venta, $pagosPreparados, $sesionCaja, auth('api')->user());
             }
 
-            // ── Descontar stock de cada producto ─────────────────────
-            foreach ($detalles_venta as $detalle) {
-                $producto = Product::find($detalle["product"]["id"]);
-                // decrement es atómico — evita condiciones de carrera si hay concurrencia
-                $producto->decrement('stock', $detalle["quantity"]);
-            }
-
             DB::commit();
         } catch (HttpException $error) {
             // Errores de validación (422) lanzados arriba (regímenes
@@ -1152,6 +1151,15 @@ public function update(Request $request, string $id)
     try {
         DB::beginTransaction();
 
+        // T-113: se bloquea la venta (dos ediciones a la vez no ajustan el stock dos veces) y se
+        // mueve solo la diferencia por producto: lo nuevo menos lo que la venta ya tenía. Va
+        // antes de tocar nada: si no alcanza, 422 y la venta queda como estaba.
+        Sale::whereKey($venta->id)->lockForUpdate()->first();
+        $this->stock->cambiar(
+            SaleDetail::where('sale_id', $venta->id)->get(),
+            $detalles_nuevos
+        );
+
         // ── 1. Actualizar cabecera de la venta ────────────────────
         $venta->update([
             // Identificación — serie/tipo_comprobante_codigo/serie_comprobante_id
@@ -1265,11 +1273,7 @@ public function update(Request $request, string $id)
         // Eliminar los que ya no están y devolver su stock
         foreach ($detalles_actuales as $detalle_actual) {
             if (!in_array($detalle_actual->id, $ids_nuevos)) {
-                // Devolver stock al producto
-                $producto = Product::find($detalle_actual->product_id);
-                if ($producto) {
-                    $producto->increment('stock', $detalle_actual->quantity);
-                }
+                // El stock ya se ajustó arriba (StockVentaService::cambiar)
                 $detalle_actual->delete();
             }
         }
@@ -1321,29 +1325,10 @@ public function update(Request $request, string $id)
                 // Ítem existente → actualizar
                 $detalle_bd = SaleDetail::find($detalle['id']);
                 if ($detalle_bd) {
-                    // Si cambió la cantidad, ajustar el stock
-                    $diferencia_qty = $detalle["quantity"] - $detalle_bd->quantity;
-                    if ($diferencia_qty !== 0) {
-                        $producto = Product::find($detalle["product"]["id"]);
-                        if ($producto) {
-                            if ($diferencia_qty > 0) {
-                                // Pide más → descontar stock
-                                $producto->decrement('stock', $diferencia_qty);
-                            } else {
-                                // Pide menos → devolver stock
-                                $producto->increment('stock', abs($diferencia_qty));
-                            }
-                        }
-                    }
                     $detalle_bd->update($campos_detalle);
                 }
             } else {
-                // Ítem nuevo → crear y descontar stock
                 SaleDetail::create($campos_detalle);
-                $producto = Product::find($detalle["product"]["id"]);
-                if ($producto) {
-                    $producto->decrement('stock', $detalle["quantity"]);
-                }
             }
         }
 
@@ -1403,6 +1388,10 @@ public function update(Request $request, string $id)
 
         DB::commit();
 
+    } catch (HttpException $error) {
+        // T-113: el 422 de stock (y cualquier otro HttpException) no se enmascara como 500.
+        DB::rollBack();
+        throw $error;
     } catch (\Throwable $error) {
         DB::rollBack();
         throw new HttpException(500, $error->getMessage());
@@ -1466,6 +1455,9 @@ public function update(Request $request, string $id)
             foreach ($this->movimientosCajaActivos($venta, true) as $movimiento) {
                 $this->cashCorrection->revertirMovimiento($movimiento, auth('api')->user());
             }
+
+            // T-113: la venta eliminada devuelve el stock de sus bienes (antes quedaba descontado).
+            $this->stock->devolver(SaleDetail::where('sale_id', $venta->id)->get());
 
             // Solo en tenants con reservas (Agencia): en retail la tabla no existe.
             if (\App\Models\AgenciaViajes\ReservaVenta::hayReservasEnEsteTenant()) {
