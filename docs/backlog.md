@@ -8,7 +8,7 @@
 
 Cada línea: ID · qué · estado · depende de · rama o commit. El detalle está en
 `docs/tareas/T-…md` (se borra al cerrar; para una tarea hecha, el commit es la referencia).
-Próximo ID libre: **T-115**.
+Próximo ID libre: **T-116**.
 
 ## Orden de construcción (27-oct-2026)
 
@@ -51,6 +51,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-112 | VEN | Elegir de nuevo un producto cuya línea ya tiene descripción o precio propios abre otra fila (si no, suma como hoy); stock validado por la suma de las líneas del producto. Opción A, elegida el 19-nov. Después de T-109 | por hacer | T-108, T-109 | |
 | T-113 | VEN + NOT | Stock validado en el backend con `lockForUpdate` (productos ordenados por `id`) al guardar y editar una venta: 422 si no alcanza (decisión del 19-nov: bloquear), suma por producto, solo descuenta lo que controla stock (criterio único con la pantalla, conecta `controla_stock`); eliminar una venta devuelve el stock; `update()` bloquea la venta | por hacer | T-112 | |
 | T-114 | VEN | Totales de la cabecera de la venta (subtotal, IGV, total, operaciones por afectación, regímenes) validados en el backend contra la suma de las líneas con la cuenta de `sumDetails()`, con y sin el permiso de precio: hoy se guardan como llegan del front. Hallazgo de la revisión de T-109 | por hacer | T-109 | |
+| T-115 | VEN + PRO + CLI | Precio mayorista si la cantidad del producto (suma de sus líneas) llega a «desde N» o si el cliente está marcado mayorista; `type_client` deja de decidir el precio; un precio a mano nunca se pisa (tampoco escribiendo el mismo número); mismo criterio en `PrecioVentaValidator`. Decisiones del 19-nov (caso venta 41 de umbo) | por hacer | T-112, T-109 | |
 
 ## Por analizar
 
