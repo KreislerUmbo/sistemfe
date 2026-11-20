@@ -85,6 +85,7 @@ class SaleResource extends JsonResource
                 'name'                => $this->resource->client->name,
                 'name_comerc'         => $this->resource->client->name_comerc,
                 'type_client'         => $this->resource->client->type_client,
+                'es_mayorista'        => (bool) $this->resource->client->es_mayorista, // T-115: edit.vue recalcula el precio
                 'type_document'       => $this->resource->client->type_document,
                 'cod_tipo_doc_sunat'  => $this->resource->client->cod_tipo_doc_sunat ?? '1',
                 'address'             => $this->resource->client->address,

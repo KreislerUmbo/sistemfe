@@ -29,6 +29,8 @@ export type Client = {
     ubigeo_distrito:string,
     region:string,
     es_amazonia?:boolean,
+    /** T-115: siempre recibe el precio mayorista. */
+    es_mayorista?:boolean,
     provincia:string,
     distrito:string,
     address:string,

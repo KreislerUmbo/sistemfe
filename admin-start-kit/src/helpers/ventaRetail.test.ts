@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
     MAX_DESCRIPCION_LINEA, admiteDecimales, cantidadEnVenta, controlaStock, faltaStockEnEdicion, indiceLineaIntacta, productoSinStock, atajosEfectivo, calcularEfectivo, descripcionAGuardar, motivoBloqueoCobro, normalizarCantidad,
-    precioCatalogoPorCliente, type EntradaMotivoCobro,
+    precioCatalogo, type EntradaMotivoCobro,
 } from './ventaRetail';
 
 const base: EntradaMotivoCobro = {
@@ -41,12 +41,36 @@ describe('cantidades', () => {
     });
 });
 
-describe('precio por cliente (CA3)', () => {
-    const p = { price_general: 21.9, price_company: 19.5 };
-    it('empresa usa precio empresa; el resto, general', () => {
-        expect(precioCatalogoPorCliente(p, 2)).toEqual({ valor: 19.5, nombre: 'Empresa' });
-        expect(precioCatalogoPorCliente(p, 1)).toEqual({ valor: 21.9, nombre: 'General' });
-        expect(precioCatalogoPorCliente({ price_general: 5, price_company: 0 }, 2).nombre).toBe('General');
+describe('precio mayorista por cantidad o por cliente (T-115)', () => {
+    const p = { price_general: 50, price_company: 30, cantidad_mayorista: 12 };
+    const noMayorista = { es_mayorista: false };
+
+    it('CA1: 11 unidades → general; 12 (en una línea o sumando varias) → mayorista «desde 12 u.»', () => {
+        expect(precioCatalogo(p, noMayorista, 11)).toEqual({ valor: 50, nombre: 'General', motivo: 'General' });
+        expect(precioCatalogo(p, noMayorista, 12)).toEqual({ valor: 30, nombre: 'Mayorista', motivo: 'Mayorista (desde 12 u.)' });
+        // la suma de varias líneas del producto es lo que llega como cantidadTotal
+        const lineas = [{ product: { id: 1 }, quantity: 7, price_base: 50 }, { product: { id: 1 }, quantity: 5, price_base: 50 }];
+        expect(precioCatalogo(p, noMayorista, cantidadEnVenta(lineas, 1)).nombre).toBe('Mayorista');
+    });
+    it('CA2: un cliente empresa (type_client 2) no mayorista con 1 u. paga el general', () => {
+        expect(precioCatalogo(p, { type_client: 2, es_mayorista: false } as any, 1).valor).toBe(50);
+        expect(precioCatalogo(p, undefined, 1).valor).toBe(50);
+    });
+    it('CA3: un cliente mayorista con 1 u. paga el mayorista', () => {
+        expect(precioCatalogo(p, { es_mayorista: true }, 1)).toEqual({ valor: 30, nombre: 'Mayorista', motivo: 'Mayorista (cliente)' });
+    });
+    it('CA4: sin «desde N» solo lo reciben los clientes mayoristas', () => {
+        const sinMinimo = { price_general: 50, price_company: 30, cantidad_mayorista: null };
+        expect(precioCatalogo(sinMinimo, noMayorista, 500).valor).toBe(50);
+        expect(precioCatalogo({ ...sinMinimo, cantidad_mayorista: 0 }, noMayorista, 500).valor).toBe(50);
+        expect(precioCatalogo(sinMinimo, { es_mayorista: true }, 1).valor).toBe(30);
+    });
+    it('sin precio mayorista (0) siempre es el general, aunque cumpla la cantidad o sea mayorista', () => {
+        const sinPrecio = { price_general: 5, price_company: 0, cantidad_mayorista: 1 };
+        expect(precioCatalogo(sinPrecio, { es_mayorista: true }, 10).nombre).toBe('General');
+    });
+    it('el mínimo llega como texto del backend (decimal) y con decimales', () => {
+        expect(precioCatalogo({ ...p, cantidad_mayorista: '2.500' }, noMayorista, 2.5).motivo).toBe('Mayorista (desde 2.5 u.)');
     });
 });
 

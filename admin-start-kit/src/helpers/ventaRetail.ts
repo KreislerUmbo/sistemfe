@@ -40,15 +40,36 @@ export const calcularEfectivo = (restante: number, recibido: number | null) => {
     };
 };
 
-/** Precio de catálogo según el cliente: tipo empresa (type_client 2) usa precio empresa si existe. */
-export const precioCatalogoPorCliente = (
-    product: { price_general?: number; price_company?: number },
-    typeClient: unknown,
-): { valor: number; nombre: 'General' | 'Empresa' } => {
-    if (String(typeClient) === '2' && Number(product.price_company) > 0) {
-        return { valor: Number(product.price_company), nombre: 'Empresa' };
+/** Un número de unidades sin ceros de más: 12 → «12», 2.5 → «2.5». */
+const formatoUnidades = (n: number): string => String(Number(n.toFixed(3)));
+
+export type PrecioCatalogo = {
+    valor: number;
+    nombre: 'General' | 'Mayorista';
+    /** Lo que se muestra en la línea: «Mayorista (desde 12 u.)», «Mayorista (cliente)» o «General». */
+    motivo: string;
+};
+
+/**
+ * Precio de catálogo de un producto en la venta (T-115). Mayorista si `price_company > 0` y (el cliente
+ * es mayorista, o el producto tiene `cantidad_mayorista > 0` y `cantidadTotal` —la suma de TODAS sus
+ * líneas en la venta— llega a ese mínimo). Si no, el general. `type_client` no interviene.
+ * Misma regla que `PrecioVentaValidator::precioBaseCatalogo()` del backend.
+ */
+export const precioCatalogo = (
+    product: { price_general?: number | string; price_company?: number | string; cantidad_mayorista?: number | string | null },
+    cliente: { es_mayorista?: boolean } | null | undefined,
+    cantidadTotal: number,
+): PrecioCatalogo => {
+    const mayorista = Number(product.price_company) || 0;
+    if (mayorista > 0) {
+        if (cliente?.es_mayorista) return { valor: mayorista, nombre: 'Mayorista', motivo: 'Mayorista (cliente)' };
+        const minimo = Number(product.cantidad_mayorista) || 0;
+        if (minimo > 0 && cantidadTotal >= minimo) {
+            return { valor: mayorista, nombre: 'Mayorista', motivo: `Mayorista (desde ${formatoUnidades(minimo)} u.)` };
+        }
     }
-    return { valor: Number(product.price_general) || 0, nombre: 'General' };
+    return { valor: Number(product.price_general) || 0, nombre: 'General', motivo: 'General' };
 };
 
 /** Cliente con documento real (no vacío ni 00000000). */
@@ -170,6 +191,8 @@ export type LineaComparable = {
  * Índice de la línea de ese producto a la que se le suma la cantidad al elegirlo de nuevo (T-112), o -1
  * si hay que abrir una fila nueva. Una línea es «intacta» si no tiene descripción editada y lleva el
  * precio que pondría el sistema (no puesto a mano y igual a `precioSistema`). Si hay varias, la primera.
+ * T-115: `precioSistema` es el precio para la cantidad que el producto lleva AHORA en la venta (antes de
+ * sumar), porque el precio de las líneas depende de la suma; quien llama recalcula las líneas después de sumar.
  */
 export const indiceLineaIntacta = (
     lineas: LineaComparable[],

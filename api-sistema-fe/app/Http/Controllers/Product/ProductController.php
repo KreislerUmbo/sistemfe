@@ -26,6 +26,7 @@ class ProductController extends Controller
             'imagen',
             'price_general',
             'price_company',
+            'cantidad_mayorista',
             'description',
             'is_discount',
             'max_discount',
@@ -141,7 +142,7 @@ class ProductController extends Controller
      */
     public function store(Request $request)
     {
-        $request->validate(['image' => ArchivoSubido::imagen()], ArchivoSubido::MENSAJES);
+        $request->validate(['image' => ArchivoSubido::imagen(), 'cantidad_mayorista' => ['nullable', 'numeric', 'min:0', 'max:999999999']], ArchivoSubido::MENSAJES);
         $is_product_title = Product::where('title', $request->title)->first();
         if ($is_product_title) {
             return response()->json([
@@ -212,7 +213,7 @@ class ProductController extends Controller
      */
     public function update(Request $request, string $id)
     {
-        $request->validate(['image' => ArchivoSubido::imagen()], ArchivoSubido::MENSAJES);
+        $request->validate(['image' => ArchivoSubido::imagen(), 'cantidad_mayorista' => ['nullable', 'numeric', 'min:0', 'max:999999999']], ArchivoSubido::MENSAJES);
         $is_product_title = Product::where('id', '<>', $id)
             ->where('title', $request->title)->first();
 

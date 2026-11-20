@@ -85,6 +85,7 @@ class ClienteRequest extends FormRequest
             'regimen_tributario' => ['nullable', 'string', 'max:20'],
             'es_agente_retencion' => ['nullable', 'boolean'],
             'es_amazonia' => ['nullable', 'boolean'],
+            'es_mayorista' => ['nullable', 'boolean'],
             // T-059 (CRM C4): puede quedar uno desactivado si el cliente ya lo tenía.
             'origen_contacto_id' => ['nullable', 'integer', 'exists:crm_origenes_contacto,id'],
             // Cliente sin documento con un nombre ya registrado: se guarda solo si se confirma.

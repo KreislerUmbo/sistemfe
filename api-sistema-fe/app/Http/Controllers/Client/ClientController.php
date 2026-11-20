@@ -133,6 +133,7 @@ class ClientController extends Controller
             'type_document',
             'n_document',
             'cod_tipo_doc_sunat',   // nuevo — Catálogo 06 SUNAT
+            'es_mayorista',         // T-115
             'es_amazonia',          // nuevo — zona Amazonía Ley 27037
             'name',
             'surname',

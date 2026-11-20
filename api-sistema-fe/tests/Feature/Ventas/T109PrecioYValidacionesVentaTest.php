@@ -152,14 +152,85 @@ final class T109PrecioYValidacionesVentaTest extends CreditosTestCase
         $this->assertSame(200, $this->guardar($this->payload($this->producto(), $this->clienteT109(), 10))['code']);
     }
 
-    public function test_sin_el_permiso_a_una_empresa_le_corresponde_el_precio_empresa(): void
+    // ── T-115: precio mayorista por cantidad o por cliente mayorista ───
+
+    /** Payload con una línea por cada cantidad dada, todas al mismo precio. */
+    private function payloadLineas(Product $producto, Client $cliente, float $precio, array $cantidades): array
+    {
+        $p = $this->payload($producto, $cliente, $precio, [], $cantidades[0]);
+        $plantilla = $p['sale_details'][0];
+        $p['sale_details'] = [];
+        foreach ($cantidades as $cantidad) {
+            $sub = round($precio * $cantidad, 2);
+            $igv = round($sub * 0.18, 2);
+            $p['sale_details'][] = array_merge($plantilla, [
+                'quantity' => $cantidad, 'subtotal' => $sub, 'mto_valor_venta' => $sub, 'mto_base_igv' => $sub,
+                'igv' => $igv, 'total_impuestos' => $igv, 'price_final' => round($precio * 1.18, 2),
+            ]);
+        }
+        $subtotal = array_sum(array_column($p['sale_details'], 'subtotal'));
+        $total = round($subtotal * 1.18, 2);
+        $p['subtotal'] = $subtotal;
+        $p['igv'] = round($total - $subtotal, 2);
+        $p['total'] = $total;
+        $p['debt'] = $total;
+
+        return $p;
+    }
+
+    private function productoMayorista(): Product
+    {
+        // general 50, mayorista 30 desde 12 unidades
+        return $this->producto(['price_general' => 50, 'price_company' => 30, 'cantidad_mayorista' => 12]);
+    }
+
+    public function test_t115_un_cliente_empresa_que_lleva_una_unidad_paga_el_general(): void // CA2 (venta 41)
     {
         $this->entrarComo(['emitir_nota_venta']);
-        $producto = $this->producto();
+        $producto = $this->producto(['price_general' => 50, 'price_company' => 30]);
         $empresa = $this->clienteT109(['type_client' => 2]);
 
-        $this->assertSame(200, $this->guardar($this->payload($producto, $empresa, 8))['code']);
-        $this->assertRechazo($this->payload($producto, $empresa, 10), 'No tienes permiso');
+        $this->assertRechazo($this->payload($producto, $empresa, 30), 'No tienes permiso');
+        $this->assertSame(200, $this->guardar($this->payload($producto, $empresa, 50))['code']);
+    }
+
+    public function test_t115_la_cantidad_mayorista_vale_en_una_linea_o_sumando_varias(): void // CA6
+    {
+        $this->entrarComo(['emitir_nota_venta']);
+        $producto = $this->productoMayorista();
+        $cliente = $this->clienteT109();
+
+        $this->assertRechazo($this->payload($producto, $cliente, 30, [], 1), 'No tienes permiso');
+        $this->assertRechazo($this->payload($producto, $cliente, 30, [], 11), 'No tienes permiso');
+        $this->assertRechazo($this->payload($producto, $cliente, 50, [], 12), 'No tienes permiso'); // llegó al mínimo: ya no vale el general
+        $this->assertSame(200, $this->guardar($this->payload($producto, $cliente, 30, [], 12))['code']);
+        $this->assertSame(200, $this->guardar($this->payloadLineas($producto, $cliente, 30, [7, 5]))['code']);
+        $this->assertRechazo($this->payloadLineas($producto, $cliente, 30, [7, 4]), 'No tienes permiso');
+    }
+
+    public function test_t115_un_cliente_mayorista_paga_el_mayorista_con_una_unidad(): void // CA3
+    {
+        $this->entrarComo(['emitir_nota_venta']);
+        $producto = $this->productoMayorista();
+        $mayorista = $this->clienteT109(['es_mayorista' => true]);
+
+        $this->assertSame(200, $this->guardar($this->payload($producto, $mayorista, 30))['code']);
+        $this->assertRechazo($this->payload($producto, $mayorista, 50), 'No tienes permiso');
+    }
+
+    public function test_t115_sin_cantidad_mayorista_solo_los_clientes_mayoristas_reciben_el_mayorista(): void // CA4
+    {
+        $this->entrarComo(['emitir_nota_venta']);
+        $producto = $this->producto(['price_general' => 50, 'price_company' => 30, 'cantidad_mayorista' => null]);
+
+        $this->assertRechazo($this->payload($producto, $this->clienteT109(), 30, [], 100), 'No tienes permiso');
+        $this->assertSame(200, $this->guardar($this->payload($producto, $this->clienteT109(['es_mayorista' => true, 'n_document' => '45678913']), 30, [], 1))['code']);
+    }
+
+    public function test_t115_la_migracion_no_deja_mayoristas_ni_minimos(): void // CA8
+    {
+        $this->assertSame(0, Client::where('es_mayorista', true)->count());
+        $this->assertSame(0, Product::whereNotNull('cantidad_mayorista')->count());
     }
 
     public function test_sin_el_permiso_con_igv_incluido_se_compara_el_precio_sin_igv_con_tolerancia(): void

@@ -46,6 +46,8 @@ export interface FormCliente {
   ubigeo_distrito: string
   regimen_tributario: string
   es_agente_retencion: boolean
+  /** T-115: siempre recibe el precio mayorista. */
+  es_mayorista: boolean
 }
 
 interface Ubigeo { id: string; name: string; department_id?: string; province_id?: string; es_amazonia?: boolean }
@@ -62,7 +64,7 @@ export function formVacio(): FormCliente {
   return {
     type_client: '1', type_document: 'DNI', n_document: '', name: '', surname: '', full_name: '', name_comerc: '',
     email: '', phone: '', birth_date: '', gender: '', state: 1, address: '',
-    ubigeo_region: '', ubigeo_provincia: '', ubigeo_distrito: '', regimen_tributario: 'SIN REGIMEN', es_agente_retencion: false,
+    ubigeo_region: '', ubigeo_provincia: '', ubigeo_distrito: '', regimen_tributario: 'SIN REGIMEN', es_agente_retencion: false, es_mayorista: false,
   }
 }
 
@@ -90,6 +92,7 @@ export function formDesdeCliente(c: Partial<Client> & { regimen_tributario?: str
     ubigeo_distrito: c.ubigeo_distrito ?? '',
     regimen_tributario: c.regimen_tributario ?? 'SIN REGIMEN',
     es_agente_retencion: Boolean(c.es_agente_retencion),
+    es_mayorista: Boolean(c.es_mayorista),
   }
 }
 
@@ -100,7 +103,7 @@ export function nombreCompleto(f: Pick<FormCliente, 'type_document' | 'name' | '
 }
 
 /** Cuerpo de POST/PUT clients. Los datos tributarios solo viajan si la pantalla los muestra. */
-export function aPayload(f: FormCliente, opciones: { tributarios: boolean }): Record<string, unknown> {
+export function aPayload(f: FormCliente, opciones: { tributarios: boolean; mayorista?: boolean }): Record<string, unknown> {
   const tipo = TIPOS_DOCUMENTO.find((t) => t.valor === f.type_document)!
   const persona = f.type_document !== 'RUC'
   const nombre = (lista: Ubigeo[], id: string) => lista.find((x) => x.id === id)?.name ?? null
@@ -130,6 +133,8 @@ export function aPayload(f: FormCliente, opciones: { tributarios: boolean }): Re
     ...(opciones.tributarios && !persona
       ? { regimen_tributario: f.regimen_tributario, es_agente_retencion: f.es_agente_retencion }
       : {}),
+    // Solo viaja donde la pantalla muestra la casilla: el modal rápido no debe pisarlo con false.
+    ...(opciones.mayorista ? { es_mayorista: f.es_mayorista } : {}),
   }
 }
 

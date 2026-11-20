@@ -26,8 +26,13 @@
         <b-form-input type="number" step="0.01" v-model="form.price_general" size="sm" />
       </div>
       <div class="col-md-3">
-        <label class="form-label small fw-semibold">Precio Empresa (S/.)</label>
+        <label class="form-label small fw-semibold">Precio mayorista (S/.)</label>
         <b-form-input type="number" step="0.01" v-model="form.price_company" size="sm" />
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small fw-semibold">Mayorista desde (u.)</label>
+        <b-form-input type="number" step="any" min="0" v-model="form.cantidad_mayorista" size="sm"
+          placeholder="Vacío = solo clientes mayoristas" />
       </div>
       <div class="col-md-3">
         <label class="form-label small fw-semibold">Unidad</label>
@@ -105,6 +110,7 @@ const form = ref({
   categorie_id: '',
   price_general: 0,
   price_company: 0,
+  cantidad_mayorista: null as number | null,
   description: '',
   unidad_medida: 'NIU',
   stock: 0,

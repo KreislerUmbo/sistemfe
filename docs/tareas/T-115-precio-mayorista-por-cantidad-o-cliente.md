@@ -120,9 +120,25 @@ escrito a mano que no cambia al elegir el cliente; PDF igual a la pantalla.
 ---
 
 ## Resultado
-- **Commits:**
+- **Commits:** rama `feat/T-115-precio-mayorista` (ver `git log`).
 - **Tests:**
+  - Front: `ventaRetail.test.ts` (CA1-CA4: regla `precioCatalogo()`); Vitest completo 346/346.
+  - Back: `T109PrecioYValidacionesVentaTest` (CA2, CA3, CA4, CA6, CA8; reemplaza el caso viejo de `type_client = 2`) + `StockVentaTest` + `T114TotalesVentaTest` en verde. Suite completa del backend: 2416 pasan, 1 falla (`Fila13Fase2cOperacionTest::en un viaje de varios dias solo se mueve el tour`, 422 «La nueva fecha no puede ser anterior a hoy»: usa 18-nov-2026 fijo y hoy es 20-nov; no tiene relación con T-115).
+  - Migración aplicada con `tenants:migrate-verticales` y, a mano, a la base de tests (`sistemafe_test_migrations`, con `migrate --path=… --force`).
+  - CA8 verificado en los 7 tenants locales: 0 clientes mayoristas y 0 productos con mínimo.
+  - `vite build` compila. `vue-tsc` ya tenía errores antes de la tarea (portal, fake-backend, router, `TourIncluidoForm`, `product/*.vue:132`, `sale/index.vue:443`, `sale/edit.vue:1821`); ninguno viene de lo tocado.
+  - **No hecho:** CA5 manual, CA7 (PDF = pantalla con Ghostscript) y la prueba en pantalla en umbo (el MCP de Playwright no conectó). Quedan para la revisión; CA5 tiene la lógica (`@input` marca a mano) pero sin test de componente.
 - **Desviaciones de la tarea y por qué:**
+  - `indiceLineaIntacta()` no cambió de firma: quien llama (`agregarProducto()`) le pasa el precio para la cantidad que el producto lleva **antes** de sumar y luego recalcula todas las líneas. Si se le pasaba el precio de la cantidad ya sumada, al cruzar el mínimo abría una fila nueva en vez de sumar.
+  - También se recalcula al **quitar** una línea (y al deshacer), porque la suma baja y puede dejar de ser mayorista. La tarea solo decía «al cambiar la cantidad».
+  - Cliente: la casilla va solo en la ficha completa (`ficha.vue`, no en Créditos) y `aPayload()` envía `es_mayorista` solo ahí (opción `mayorista`); el modal rápido de Ventas no la muestra ni la manda, para no pisar el valor con `false`.
+  - `SaleResource` (cliente de la venta) ahora devuelve `es_mayorista`, y `SaleDetail` ganó `precio_manual?` (solo pantalla) para `edit.vue`. No estaban en «Dónde tocar».
+  - `edit.vue`: se recalculan por cantidad solo las líneas **nuevas** (sin `id`) sin precio a mano; las guardadas conservan su precio (el validador las acepta). `precio_manual` no viaja al backend (se quita del payload). No se recalcula al cambiar de cliente en `edit.vue` (ver hallazgos).
+  - Validación de `cantidad_mayorista` (numérico, ≥ 0, null) en `ProductController::store/update`, junto a la validación de imagen que ya existía.
 
 ## Hallazgos fuera de alcance
-- 
+- `sale/edit.vue` ~2131 y ~2159 (`getPriceBaseCF()`/`getPriceBaseCE()` por `type_client`): están dentro de un bloque `/* … */` (empieza antes de `deleteSaleDetail`): **código muerto**, no se borró.
+- `sale/edit.vue` no recalcula precios al cambiar de cliente (`selectClient()`): una línea nueva agregada con un cliente y luego cambiado a uno mayorista queda al general y, sin el permiso de precio, el backend la rechaza (ya pasaba antes con `type_client`). Candidato a tarea junto con el rediseño de T-110.
+- `price_company` sigue llamándose así en la base y en `useProductPricing.ts` (comentarios); solo cambió el rótulo en pantalla.
+- Portal e-commerce (fuera del workspace): no se revisó si usa `price_company`; avisarlo al dueño del portal.
+- `AlternativaPdfService:285` y los anticipos siguen usando `type_client` (fuera de alcance, sin cambios).

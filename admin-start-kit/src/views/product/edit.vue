@@ -50,12 +50,18 @@
               </b-col>
 
               <b-col lg="3" md="6">
-                <label for="price_company" class="fw-semibold">Precio Cliente Empresa</label>
+                <label for="price_company" class="fw-semibold">Precio mayorista</label>
                 <b-input-group>
                   <b-input-group-text>S/.</b-input-group-text>
                   <b-form-input id="price_company" type="number" step="0.01" v-model="price_company"
                     placeholder="250.00" />
                 </b-input-group>
+              </b-col>
+
+              <b-col lg="3" md="6">
+                <label for="cantidad_mayorista" class="fw-semibold">Mayorista desde (unidades)</label>
+                <b-form-input id="cantidad_mayorista" type="number" step="any" min="0" v-model="cantidad_mayorista"
+                  placeholder="Vacío = solo clientes mayoristas" />
               </b-col>
 
               <b-col lg="3" md="6">
@@ -407,6 +413,8 @@ const categorie_id = ref<string>("");
 const categories = ref<ProductCategorie[]>([]);
 const price_general = ref<number>(0);
 const price_company = ref<number>(0);
+// T-115: desde cuántas unidades rige el precio mayorista (vacío = solo clientes mayoristas).
+const cantidad_mayorista = ref<number | string | null>(null);
 const description = ref<string>("");
 const disponiblidad = ref<number>(1);
 const max_discount = ref<number>(1);
@@ -555,6 +563,7 @@ const show = async () => {
     categorie_id.value = product_selected.value?.categorie_id + "";
     price_general.value = product_selected.value?.price_general ?? 0;
     price_company.value = product_selected.value?.price_company ?? 0;
+    cantidad_mayorista.value = product_selected.value?.cantidad_mayorista ?? null;
     description.value = product_selected.value?.description ?? ''
     disponiblidad.value = product_selected.value?.disponiblidad ?? 1;
     max_discount.value = product_selected.value?.max_discount ?? 0;
@@ -620,6 +629,7 @@ const limpiarForm = () => {
   categorie_id.value = '';
   price_general.value = 0;
   price_company.value = 0;
+  cantidad_mayorista.value = null;
   description.value = '';
   disponiblidad.value = 1;
   max_discount.value = 0;
@@ -704,6 +714,7 @@ const store = async () => {
     formData.append('categorie_id', categorie_id.value);
     formData.append('price_general', price_general.value.toString());
     formData.append('price_company', price_company.value.toString());
+    formData.append('cantidad_mayorista', cantidad_mayorista.value === null ? '' : String(cantidad_mayorista.value));
     formData.append('description', description.value);
     formData.append('disponiblidad', disponiblidad.value.toString());
     formData.append('max_discount', max_discount.value.toString());

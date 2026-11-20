@@ -26,6 +26,7 @@ class ProductResource extends JsonResource
             ],
             'price_general' => $this->resource->price_general,
             'price_company' => $this->resource->price_company,
+            'cantidad_mayorista' => $this->resource->cantidad_mayorista, // T-115
             'description' => $this->resource->description,
             'is_discount' => $this->resource->is_discount, //'1 es inactivo y 2 activo',
             'max_discount' => $this->resource->max_discount,
