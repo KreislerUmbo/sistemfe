@@ -47,12 +47,15 @@
 
         <div class="small text-uppercase fw-semibold text-secondary mt-1">Comprobante</div>
         <div class="btn-group btn-group-sm w-100" role="group">
-            <button v-for="t in tipos" :key="t.codigo" type="button" class="btn"
+            <button v-for="t in tipos" :key="t.codigo" type="button" class="btn" :disabled="tipoBloqueado"
                 :class="tipo === t.codigo ? 'btn-success' : 'btn-outline-secondary'" @click="tipo = t.codigo">
                 {{ t.nombre }}
             </button>
         </div>
-        <div v-if="serie" class="small text-muted">
+        <div v-if="serieFija" class="small text-muted">
+            Serie <b>{{ serieFija }}</b> · ya tiene correlativo reservado, no se puede cambiar
+        </div>
+        <div v-else-if="serie" class="small text-muted">
             Serie <b>{{ serie.serie }}</b> · siguiente n.º {{ serie.siguiente_correlativo }}
         </div>
         <div v-else-if="errorSerie" class="small text-danger">{{ errorSerie }}</div>
@@ -75,6 +78,10 @@ const props = defineProps<{
     tipos: TipoDoc[];
     serie?: { serie: string; siguiente_correlativo: number } | null;
     errorSerie?: string;
+    /** Edición (T-110): la venta ya tiene correlativo; el tipo de comprobante no se puede cambiar. */
+    tipoBloqueado?: boolean;
+    /** Edición (T-110): serie ya asignada a la venta; sustituye a la vista previa. */
+    serieFija?: string;
 }>();
 const emit = defineEmits<{
     (e: 'seleccionar', cliente: Client): void;

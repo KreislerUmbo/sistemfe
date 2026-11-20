@@ -95,7 +95,7 @@ buscador y muestra «✓ Boleta B001 guardada, cobrado S/ …» con «Reimprimir
 
 - «Clientes varios» no existe: la venta sigue pidiendo un cliente (decisión del usuario). → «Por analizar».
 - El destino por defecto sigue fijo en `amazonia` en el front: no hay dónde configurarlo. → «Por analizar».
-- `edit.vue` sigue siendo la pantalla vieja → **T-110** (usará estos componentes).
+- `edit.vue` sigue siendo la pantalla vieja → **T-110** (usará estos componentes). Hecho el 20-nov: recorrido 79.
 - Descripción editable de la línea → T-108. Permiso para cambiar precio y validaciones en el backend → T-109.
 
 ## 6. Para probarlo

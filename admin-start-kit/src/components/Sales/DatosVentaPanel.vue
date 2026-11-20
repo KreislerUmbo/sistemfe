@@ -15,9 +15,13 @@
                     <label class="form-label small fw-semibold text-secondary mb-1" for="dv-fecha">Fecha de emisión</label>
                     <CampoFecha id="dv-fecha" v-model="fecha" etiqueta="emisión" />
                 </div>
+                <div v-if="mostrarNTransaccion" class="col-12 col-md-4 col-lg-2">
+                    <label class="form-label small fw-semibold text-secondary mb-1" for="dv-ntrans">N.º de documento</label>
+                    <input id="dv-ntrans" v-model="nTransaccion" type="text" class="form-control form-control-sm" placeholder="000000" />
+                </div>
                 <div v-if="puedeCambiarSucursal" class="col-12 col-md-4 col-lg-2">
                     <label class="form-label small fw-semibold text-secondary mb-1" for="dv-sucursal">Sucursal</label>
-                    <select id="dv-sucursal" v-model="sucursalId" class="form-select form-select-sm">
+                    <select id="dv-sucursal" v-model="sucursalId" class="form-select form-select-sm" :disabled="sucursalBloqueada">
                         <option v-for="b in sucursales" :key="b.id" :value="b.id">{{ b.name }}</option>
                     </select>
                 </div>
@@ -74,6 +78,10 @@ import type { Branch } from '@/types/cash-session';
 
 const props = defineProps<{
     puedeCambiarSucursal: boolean;
+    /** Edición (T-110): la venta ya tiene correlativo, la sucursal no se puede cambiar. */
+    sucursalBloqueada?: boolean;
+    /** Edición (T-110): muestra el campo «N.º de documento» interno de la venta. */
+    mostrarNTransaccion?: boolean;
     sucursales: Branch[];
     esFiscal: boolean;
     codigosDetraccion: { codigo: string; nombre: string; tasa_porcentaje: number | string; monto_minimo?: number | string }[];
@@ -86,6 +94,7 @@ const sucursalId = defineModel<number | undefined>('sucursalId');
 const destino = defineModel<string>('destino', { required: true });
 const condicion = defineModel<string>('condicion', { required: true });
 const codigoDetraccion = defineModel<string>('codigoDetraccion', { default: '' });
+const nTransaccion = defineModel<string>('nTransaccion', { default: '' });
 
 const AYUDAS: Record<string, string> = {
     anticipo: 'Se mostrarán los adelantos del cliente para elegir.',
