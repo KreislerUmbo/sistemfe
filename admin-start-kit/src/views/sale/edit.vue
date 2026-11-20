@@ -367,14 +367,14 @@
                                 <!-- Cantidad editable -->
                                 <td>
                                     <b-form-input type="number" v-model.number="item.quantity" min="1" size="sm"
-                                        style="width:80px" @input="updateItem(index)" />
+                                        style="width:80px" @input="alCambiarCantidad(index)" />
                                 </td>
                                 <!-- Precio base editable -->
                                 <td>
                                     <div class="input-group input-group-sm" style="width:110px">
                                         <span class="input-group-text text-muted px-1 small">{{ currency }}</span>
                                         <b-form-input type="number" v-model.number="item.price_base" step="0.01"
-                                            size="sm" @input="updateItem(index)" />
+                                            size="sm" @input="alCambiarPrecio(index)" />
                                     </div>
                                 </td>
                                 <!-- Descuento % editable -->
@@ -753,7 +753,7 @@ import { imprimirComprobante } from '@/composables/usePrintComprobante';
 import { getPrecioBaseSinIgv } from '@/composables/useProductPricing';
 import { useAuthStore } from '@/stores/auth';
 import { resolverTipAfeIgv as resolverTipAfeIgvPuro } from '@/utils/resolverTipAfeIgv';
-import { cantidadEnVenta, faltaStockEnEdicion } from '@/helpers/ventaRetail';
+import { cantidadEnVenta, faltaStockEnEdicion, precioCatalogo } from '@/helpers/ventaRetail';
 import type { Branch } from '@/types/cash-session';
 import type { TipoComprobante } from '@/types/series-comprobante';
 
@@ -1132,6 +1132,33 @@ const recalcularItemTipAfeIgv = (item: SaleDetail, index: number) => {
     updateItem(index);
 };
 
+// ── T-115: precio mayorista por cantidad ─────────────────────────
+// Las líneas NUEVAS (sin id) y sin precio a mano se recalculan al cambiar la cantidad de cualquier línea
+// del producto, porque el precio mayorista cuenta la suma. Las líneas ya guardadas conservan su precio:
+// PrecioVentaValidator las acepta mientras no cambien de precio. Si no se recalculara, una línea nueva que
+// sube a ≥ N quedaría al general y el backend la rechazaría sin el permiso de precio.
+const recalcularPreciosNuevos = () => {
+    sale_details.value.forEach((d, i) => {
+        if (d.id || d.precio_manual) return;
+        const bruto = precioCatalogo(d.product, client_selected.value, cantidadEnVenta(sale_details.value, d.product.id)).valor;
+        const nuevo = Number(getPrecioBaseSinIgv(bruto, d.product, { igvGeneral: getIgvGeneralTasa(), ivap: getIvapTasa() }));
+        if (Math.abs(nuevo - Number(d.price_base)) > 0.0001) {
+            d.price_base = nuevo;
+            updateItem(i);
+        }
+    });
+};
+const alCambiarCantidad = (index: number) => {
+    updateItem(index);
+    recalcularPreciosNuevos();
+};
+// Escribir en la casilla de precio es precio a mano: ya no se recalcula por cantidad.
+const alCambiarPrecio = (index: number) => {
+    const item = sale_details.value[index];
+    if (item) item.precio_manual = true;
+    updateItem(index);
+};
+
 // ── SELECT AND ADD PRODUCT (directo al detalle) ────────────────────
 const selectAndAddProduct = (product: Product) => {
     // T-113: mismo criterio que el backend (controlaStock) y lo disponible incluye lo que esta
@@ -1154,6 +1181,7 @@ const selectAndAddProduct = (product: Product) => {
         const newQty = existing.quantity + agregar;
         existing.quantity = newQty;
         updateItem(sale_details.value.indexOf(existing));
+        recalcularPreciosNuevos();
         clearSearchProduct();
         return;
     }
@@ -1161,9 +1189,8 @@ const selectAndAddProduct = (product: Product) => {
     // Precio según tipo de cliente
     let price = default_price.value;
     if (price <= 0) {
-        const rawPrice = String(client_selected.value?.type_client) === '2'
-            ? product.price_company || product.price_general || 0
-            : product.price_general || 0;
+        // T-115: mayorista por cliente o por cantidad (la suma incluye la línea nueva), no por type_client.
+        const rawPrice = precioCatalogo(product, client_selected.value, cantidadEnVenta(sale_details.value, product.id) + (default_quantity.value || 1)).valor;
         // El precio crudo del catálogo puede venir CON IGV incluido
         // (product.include_igv) — hay que revertir ese cálculo para obtener
         // el P.BASE real, igual que hace el registro de producto.
@@ -1200,7 +1227,10 @@ const selectAndAddProduct = (product: Product) => {
     });
 
     const lastIndex = sale_details.value.length - 1;
+    // Un precio escrito en «Precio» antes de agregar es precio a mano (T-115).
+    if (default_price.value > 0) sale_details.value[lastIndex].precio_manual = true;
     updateItem(lastIndex);
+    recalcularPreciosNuevos();
     sumDetails();
     clearSearchProduct();
     default_price.value = 0;
@@ -1305,6 +1335,7 @@ const updateItem = (index: number) => {
 
 const removeItem = (index: number) => {
     sale_details.value.splice(index, 1);
+    recalcularPreciosNuevos();
     sumDetails();
 };
 
@@ -1714,7 +1745,8 @@ const store = async () => {
         paid_out: total_payments.value,
 
         // Detalles — incluyen todos los campos para Greenter
-        sale_details: sale_details.value,
+        // (sin precio_manual: es solo de pantalla)
+        sale_details: sale_details.value.map(({ precio_manual, ...linea }) => linea),
 
         // Pagos
         payments: sale_payments.value,

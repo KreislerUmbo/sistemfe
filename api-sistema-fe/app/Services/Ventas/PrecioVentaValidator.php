@@ -15,8 +15,9 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 //
 // Precio: la misma cuenta que hace register.vue (precioBaseDe() → getPrecioBaseSinIgv()); el front
 // manda `price_base` SIN IGV, calculado así:
-//   - precio de catálogo: price_company si el cliente es empresa (type_client = 2) y
-//     price_company > 0; si no, price_general;
+//   - precio de catálogo (T-115): price_company («precio mayorista») si es > 0 y el cliente es
+//     mayorista o la suma de las líneas del producto llega a cantidad_mayorista; si no, price_general
+//     (type_client ya no decide el precio);
 //   - si el producto trae el IGV incluido (include_igv), se divide entre (1 + tasa/100); la tasa es
 //     la del IVAP si is_ivap = 2, 0 si el producto es exonerado/inafecto (20/30) y el IGV general
 //     (tax_configs, es_default; 18 si no hay) en el resto;
@@ -50,6 +51,16 @@ class PrecioVentaValidator
         $productos = Product::whereIn('id', $ids)->get()->keyBy('id');
         $preciosCotizados = $this->preciosCotizados($cotizacion);
 
+        // T-115: el precio mayorista por cantidad cuenta la suma de TODAS las líneas del producto.
+        $cantidadPorProducto = [];
+        foreach ($detalles as $detalle) {
+            $idProducto = $detalle['product']['id'] ?? null;
+            $cantidad = $this->decimal($detalle['quantity'] ?? null);
+            if ($idProducto && $cantidad) {
+                $cantidadPorProducto[$idProducto] = ($cantidadPorProducto[$idProducto] ?? BigDecimal::zero())->plus($cantidad);
+            }
+        }
+
         foreach ($detalles as $i => $detalle) {
             $enviado = $this->decimal($detalle['price_base'] ?? null);
             $producto = $productos->get($detalle['product']['id'] ?? null);
@@ -59,7 +70,8 @@ class PrecioVentaValidator
 
             $guardada = ($detalle['id'] ?? null) ? ($lineasGuardadas[$detalle['id']] ?? null) : null;
 
-            if (!$this->precioValido($enviado, $producto, $cliente, $preciosCotizados[$producto->id] ?? [], $guardada)) {
+            $cantidadTotal = $cantidadPorProducto[$producto->id] ?? BigDecimal::zero();
+            if (!$this->precioValido($enviado, $producto, $cliente, $cantidadTotal, $preciosCotizados[$producto->id] ?? [], $guardada)) {
                 // Mismo estilo que el resto de validadores de SaleController: 422 con `message`.
                 throw new HttpException(422, self::MENSAJE . ' La línea ' . ($i + 1) . ' no tiene el precio que le corresponde.');
             }
@@ -93,13 +105,13 @@ class PrecioVentaValidator
     }
 
     /** @param BigDecimal[] $cotizados */
-    private function precioValido(BigDecimal $enviado, Product $producto, ?Client $cliente, array $cotizados, ?array $guardada): bool
+    private function precioValido(BigDecimal $enviado, Product $producto, ?Client $cliente, BigDecimal $cantidadTotal, array $cotizados, ?array $guardada): bool
     {
         if ($guardada && $this->coincide($enviado, $this->decimal($guardada['price_base']), '0.0001')) {
             return true; // no tocó el precio de una línea que ya existía
         }
 
-        $catalogo = $this->precioBaseCatalogo($producto, $cliente);
+        $catalogo = $this->precioBaseCatalogo($producto, $cliente, $cantidadTotal);
         // Catálogo en 0 = producto «a precio variable» (p. ej. los genéricos de Agencia): el
         // precio siempre se escribe a mano, no hay precio del sistema contra el cual comparar.
         if ($catalogo->isZero() || $this->coincide($enviado, $catalogo, self::TOLERANCIA)) {
@@ -234,10 +246,17 @@ class PrecioVentaValidator
         return $porProducto;
     }
 
-    private function precioBaseCatalogo(Product $producto, ?Client $cliente): BigDecimal
+    // T-115 — Precio mayorista (price_company) si es > 0 y el cliente es mayorista o la suma de
+    // las líneas del producto llega a cantidad_mayorista (> 0). Si no, el general. type_client no interviene.
+    // Misma regla que precioCatalogo() de ventaRetail.ts.
+    private function precioBaseCatalogo(Product $producto, ?Client $cliente, BigDecimal $cantidadTotal): BigDecimal
     {
-        $empresa = $cliente && (string) $cliente->type_client === '2' && (float) $producto->price_company > 0;
-        $bruto = BigDecimal::of((string) ($empresa ? $producto->price_company : $producto->price_general));
+        $mayorista = (float) $producto->price_company > 0 && (
+            ($cliente && $cliente->es_mayorista)
+            || ((float) $producto->cantidad_mayorista > 0
+                && $cantidadTotal->isGreaterThanOrEqualTo(BigDecimal::of((string) $producto->cantidad_mayorista)))
+        );
+        $bruto = BigDecimal::of((string) ($mayorista ? $producto->price_company : $producto->price_general));
 
         if (!$producto->include_igv) {
             return $bruto;

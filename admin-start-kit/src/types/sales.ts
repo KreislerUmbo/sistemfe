@@ -19,6 +19,8 @@ export type SaleConfig = {
 
 export type SaleDetail = {
     id?: string,
+    /** Solo de pantalla (T-115): el precio se escribió a mano y no se recalcula por cantidad/cliente. */
+    precio_manual?: boolean,
     product_id?: string,
     product: Product,
     product_categorie_id?: string,
@@ -87,6 +89,7 @@ export type Sale = {
         id: string,
         full_name: string,
         type_client?: number,
+        es_mayorista?: boolean,
         n_document: string,
         address?: string,
         phone?: string

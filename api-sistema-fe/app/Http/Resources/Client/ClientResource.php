@@ -24,6 +24,7 @@ class ClientResource extends JsonResource
             "email" => $this->email,
             "phone" => $this->phone,
             "type_client" => $this->type_client, //1 es cliente normal y 2 es empresa 
+            "es_mayorista" => (bool) $this->es_mayorista, // T-115
             "type_document" => $this->type_document,
             "n_document" => $this->n_document,
             "gender" => $this->gender,

@@ -13,7 +13,10 @@ export type Product = {
     categorie_id:number,
     categorie: ProductCategorie,
     price_general:number,
+    /** Precio mayorista (T-115). */
     price_company:number,
+    /** T-115: desde cuántas unidades rige el precio mayorista; null = solo clientes mayoristas. */
+    cantidad_mayorista?:number | string | null,
     description:string,
     is_discount:number,
     max_discount:number,

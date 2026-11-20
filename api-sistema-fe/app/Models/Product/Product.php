@@ -17,7 +17,8 @@ class Product extends Model
         "categorie_id",
         "imagen",
         "price_general",
-        "price_company",
+        "price_company", // precio mayorista (T-115)
+        "cantidad_mayorista", // desde cuántas unidades rige el precio mayorista; null = solo clientes mayoristas
         "description",
         "is_discount",
         "max_discount",
@@ -46,6 +47,7 @@ class Product extends Model
     protected $casts = [
         'price_general'  => 'decimal:6',
         'price_company'  => 'decimal:6',
+        'cantidad_mayorista' => 'decimal:3',
         'percentage_isc' => 'decimal:4',
         'monto_isc_fijo' => 'decimal:4',
         'contenido_neto_litros' => 'decimal:4',

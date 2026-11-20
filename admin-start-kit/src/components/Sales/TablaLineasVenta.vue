@@ -58,7 +58,7 @@
                                 <div class="input-group input-group-sm flex-nowrap justify-content-end">
                                     <input type="number" step="0.01" min="0" class="form-control text-end precio"
                                         :value="item.price_base" aria-label="Precio sin IGV" :readonly="!precioEditable(item)"
-                                        @change="cambiarPrecio(item, i, $event)" />
+                                        @input="marcarPrecioManual(item)" @change="cambiarPrecio(item, i, $event)" />
                                     <button v-if="precioEditable(item) && tienePreciosAlternos(item)" class="btn btn-outline-secondary" type="button"
                                         title="Elegir otro precio" aria-label="Elegir otro precio"
                                         @click="preciosAbierto = preciosAbierto === i ? null : i">▾</button>
@@ -125,7 +125,7 @@ import { computed, ref, watch } from 'vue';
 import type { SaleDetail } from '@/types/sales';
 import type { Product } from '@/types/products';
 import ModalDescripcionLinea from '@/components/Sales/ModalDescripcionLinea.vue';
-import { admiteDecimales, cantidadEnVenta, controlaStock as productoControlaStock, normalizarCantidad, precioCatalogoPorCliente } from '@/helpers/ventaRetail';
+import { admiteDecimales, cantidadEnVenta, controlaStock as productoControlaStock, normalizarCantidad, precioCatalogo } from '@/helpers/ventaRetail';
 
 export type LineaVenta = SaleDetail & { uid?: number; precio_manual?: boolean };
 
@@ -134,8 +134,8 @@ const props = defineProps<{
     moneda: string;
     /** Afectación IGV que corresponde al producto según destino/exportación (resolverTipAfeIgv). */
     afeDefecto: (producto: Product) => string;
-    /** type_client del cliente elegido (2 = empresa). */
-    tipoCliente?: number | string | null;
+    /** Cliente elegido: si es mayorista, sus líneas llevan el precio mayorista (T-115). */
+    cliente?: { es_mayorista?: boolean } | null;
     /** Permiso cambiar_precio_venta (T-109): sin él la casilla es de solo lectura y no hay ▾. */
     puedeCambiarPrecio?: boolean;
     /** Índice de la línea recién agregada: se resalta y se lleva a la vista. */
@@ -145,7 +145,7 @@ const props = defineProps<{
 const emit = defineEmits<{
     (e: 'cambio', indice: number): void;
     (e: 'quitar', indice: number): void;
-    (e: 'elegir-precio', indice: number, nombre: 'General' | 'Empresa'): void;
+    (e: 'elegir-precio', indice: number, nombre: 'General' | 'Mayorista'): void;
 }>();
 
 const AFECTACIONES = [
@@ -174,19 +174,20 @@ const pocoStock = (it: LineaVenta) => controlaStock(it) && Number(it.product.sto
 const afectacionCambiada = (it: LineaVenta) => it.tip_afe_igv !== props.afeDefecto(it.product);
 const importe = (it: LineaVenta) => (Number(it.subtotal) || 0) + (Number(it.total_impuestos) || 0);
 
-const precioBruto = (it: LineaVenta) => precioCatalogoPorCliente(it.product, props.tipoCliente);
-const nombrePrecio = (it: LineaVenta) => precioBruto(it).nombre;
+// T-115: el precio depende de la suma de TODAS las líneas del producto (precio mayorista por cantidad).
+const precioBruto = (it: LineaVenta) => precioCatalogo(it.product, props.cliente, cantidadEnVenta(props.items, it.product.id));
+const nombrePrecio = (it: LineaVenta) => precioBruto(it).motivo;
 // Con el permiso, siempre. Sin él, solo los productos «a precio variable» (catálogo en 0): el backend
 // no compara contra nada en ese caso (PrecioVentaValidator).
 const precioEditable = (it: LineaVenta) => !!props.puedeCambiarPrecio || precioBruto(it).valor === 0;
 const tienePreciosAlternos = (it: LineaVenta) =>
     Number(it.product.price_company) > 0 && Number(it.product.price_company) !== Number(it.product.price_general);
 const opcionesPrecio = (it: LineaVenta) => {
-    const lista: { nombre: 'General' | 'Empresa'; valor: number }[] = [{ nombre: 'General', valor: Number(it.product.price_general) || 0 }];
-    if (Number(it.product.price_company) > 0) lista.push({ nombre: 'Empresa', valor: Number(it.product.price_company) });
-    return lista.map((o) => ({ ...o, activo: !it.precio_manual && o.nombre === nombrePrecio(it) }));
+    const lista: { nombre: 'General' | 'Mayorista'; valor: number }[] = [{ nombre: 'General', valor: Number(it.product.price_general) || 0 }];
+    if (Number(it.product.price_company) > 0) lista.push({ nombre: 'Mayorista', valor: Number(it.product.price_company) });
+    return lista.map((o) => ({ ...o, activo: !it.precio_manual && o.nombre === precioBruto(it).nombre }));
 };
-const elegirPrecio = (i: number, nombre: 'General' | 'Empresa') => {
+const elegirPrecio = (i: number, nombre: 'General' | 'Mayorista') => {
     emit('elegir-precio', i, nombre);
     preciosAbierto.value = null;
 };
@@ -200,6 +201,8 @@ const cambiarCantidad = (it: LineaVenta, i: number, e: Event) => {
     (e.target as HTMLInputElement).value = String(it.quantity);
     emit('cambio', i);
 };
+// T-115: escribir en la casilla ya es precio a mano, aunque el número sea el mismo (@change no se dispara si no cambia).
+const marcarPrecioManual = (it: LineaVenta) => { it.precio_manual = true; };
 const cambiarPrecio = (it: LineaVenta, i: number, e: Event) => {
     it.price_base = Math.max(0, Number((e.target as HTMLInputElement).value) || 0);
     it.precio_manual = true;

@@ -27,6 +27,7 @@ class Client extends Authenticatable implements JWTSubject
         "n_document",
         "cod_tipo_doc_sunat",
         "es_amazonia",
+        "es_mayorista", // T-115: siempre recibe el precio mayorista
         "gender",
         "birth_date", //fecha de cumpleaños
         "user_id",
@@ -54,6 +55,7 @@ class Client extends Authenticatable implements JWTSubject
     protected $hidden = ['password', 'remember_token']; //ocultar la contraseña
 
       protected $casts = [
+        'es_mayorista' => 'boolean',
         'es_amazonia' => 'boolean', // garantiza true/false, nunca "0"/"1" como string
         'es_agente_retencion' => 'boolean',
     ]; 

@@ -25,7 +25,7 @@
               <span class="fw-semibold text-dark"><i class="fas fa-id-card me-2 text-primary"></i>Datos del cliente</span>
             </div>
             <div class="card-body">
-              <ClienteDatosBase v-model="form" id="ficha" :errores="errores" completo :tributarios="!contexto.creditos" />
+              <ClienteDatosBase v-model="form" id="ficha" :errores="errores" completo :tributarios="!contexto.creditos" :mayorista="!contexto.creditos" />
             </div>
           </div>
 
@@ -452,7 +452,7 @@ async function guardar() {
   errores.value = {}
   guardando.value = true
   try {
-    const payload = aPayload(form.value, { tributarios: !contexto.value.creditos })
+    const payload = aPayload(form.value, { tributarios: !contexto.value.creditos, mayorista: !contexto.value.creditos })
     if (!clienteId.value && contexto.value.creditos && cartera.asesor_id) payload.asesor_id = cartera.asesor_id
     if (contexto.value.giro === 'agencia_viajes' && origenes.value.length) payload.origen_contacto_id = origenContactoId.value
 

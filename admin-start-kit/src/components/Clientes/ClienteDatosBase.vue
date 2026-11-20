@@ -125,6 +125,12 @@
     </div>
 
     <!-- Datos tributarios: solo empresas y solo donde se factura -->
+    <div v-if="completo && mayorista" class="col-12">
+      <div class="form-check">
+        <input :id="`${id}-mayorista`" v-model="form.es_mayorista" type="checkbox" class="form-check-input" />
+        <label class="form-check-label small" :for="`${id}-mayorista`">Cliente mayorista (siempre precio mayorista)</label>
+      </div>
+    </div>
     <template v-if="tributarios && form.type_document === 'RUC'">
       <div class="col-12 col-md-6">
         <label class="form-label mb-1 small fw-semibold text-secondary" :for="`${id}-regimen`">Régimen tributario</label>
@@ -162,7 +168,9 @@ const props = withDefaults(defineProps<{
   /** Página del cliente: tipo de cliente, nacimiento, género y estado. */
   completo?: boolean
   tributarios?: boolean
-}>(), { id: 'cliente', errores: () => ({}), completo: false, tributarios: false })
+  /** T-115: casilla «Cliente mayorista» (retail/agencia; no en Créditos). */
+  mayorista?: boolean
+}>(), { id: 'cliente', errores: () => ({}), completo: false, tributarios: false, mayorista: false })
 
 const errores = computed(() => props.errores)
 const hoy = hoyEnLima()

@@ -54,8 +54,8 @@
                         @crear="openQuickProductModal" />
                 </div>
                 <TablaLineasVenta :items="sale_details" :moneda="currency" :afe-defecto="resolverTipAfeIgv"
-                    :tipo-cliente="tipoClienteElegido" :puede-cambiar-precio="puedeCambiarPrecio"
-                    :resaltado="lineaResaltada" @cambio="updateItem"
+                    :cliente="client_selected" :puede-cambiar-precio="puedeCambiarPrecio"
+                    :resaltado="lineaResaltada" @cambio="alCambiarLinea"
                     @quitar="removeItem" @elegir-precio="elegirPrecioLinea" />
                 <div class="p-3 border-top">
                     <label class="form-label small fw-semibold text-secondary mb-1" for="venta-obs">Observaciones</label>
@@ -162,7 +162,7 @@ import AdelantosVenta from '@/components/Sales/AdelantosVenta.vue';
 import AvisoVenta from '@/components/Sales/AvisoVenta.vue';
 import { imprimirDirecto, verPdfComprobante, type FormatoImpresion } from '@/composables/usePrintComprobante';
 import { getPrecioBaseSinIgv } from '@/composables/useProductPricing';
-import { cantidadEnVenta, controlaStock, indiceLineaIntacta, motivoBloqueoCobro, productoSinStock, precioCatalogoPorCliente, redondear2 } from '@/helpers/ventaRetail';
+import { cantidadEnVenta, controlaStock, indiceLineaIntacta, motivoBloqueoCobro, productoSinStock, precioCatalogo, redondear2 } from '@/helpers/ventaRetail';
 import { formatFecha, partesFechaHoraPeru } from '@/helpers/fecha';
 import type { CashStatusResponse } from '@/types/cash-session';
 import { useAuthStore } from '@/stores/auth';
@@ -398,34 +398,50 @@ const avisar = (texto: string, acciones: { texto: string; fn: () => void }[] = [
     aviso.value?.mostrar(texto, acciones, ms);
 
 // ── Precio según el cliente ───────────────────────────────────────
-// Precio base (sin IGV) de un producto para el cliente dado: el precio crudo del catálogo puede venir CON IGV
-// incluido (product.include_igv), así que se revierte para obtener el P. BASE real, igual que el registro de producto.
-const precioBaseDe = (product: Product, cliente?: Client): number =>
-    Number(getPrecioBaseSinIgv(precioCatalogoPorCliente(product, cliente?.type_client).valor, product, {
+// Precio base (sin IGV) de un producto para el cliente y la cantidad total del producto en la venta (T-115):
+// el precio crudo del catálogo puede venir CON IGV incluido (product.include_igv), así que se revierte para
+// obtener el P. BASE real, igual que el registro de producto.
+const precioBaseDe = (product: Product, cliente: Client | undefined, cantidadTotal: number): number =>
+    Number(getPrecioBaseSinIgv(precioCatalogo(product, cliente, cantidadTotal).valor, product, {
         igvGeneral: getIgvGeneralTasa(),
         ivap: getIvapTasa(),
     }));
 
-// Al cambiar de cliente se recalculan las líneas SIN precio puesto a mano y se avisa cuántas cambiaron.
-const recalcularPreciosPorCliente = () => {
+// Recalcula las líneas SIN precio puesto a mano (T-115): el precio depende del cliente y de la suma de
+// las cantidades del producto en toda la venta. Cada línea que cambia recalcula sus importes (updateItem
+// → sumDetails), que T-114 valida contra la cabecera. Devuelve cuántas cambiaron.
+const recalcularPrecios = (): number => {
     let cambiadas = 0;
     sale_details.value.forEach((d, i) => {
         if (d.precio_manual) return;
-        const nuevo = precioBaseDe(d.product, client_selected.value);
+        const nuevo = precioBaseDe(d.product, client_selected.value, cantidadEnVenta(sale_details.value, d.product.id));
         if (Math.abs(nuevo - Number(d.price_base)) > 0.0001) {
             d.price_base = nuevo;
             updateItem(i);
             cambiadas++;
         }
     });
+    return cambiadas;
+};
+
+// Al cambiar de cliente se avisa cuántas líneas cambiaron de precio; al cambiar la cantidad no hay aviso
+// (basta la etiqueta de la línea: «Mayorista (desde 12 u.)»).
+const recalcularPreciosPorCliente = () => {
+    const cambiadas = recalcularPrecios();
     if (cambiadas) avisar(`Se actualizó el precio de ${cambiadas} producto${cambiadas > 1 ? 's' : ''} según el cliente.`);
 };
 
-// Precio elegido con el ▾ de la línea (General / Empresa): queda como precio puesto a mano.
-const elegirPrecioLinea = (i: number, nombre: 'General' | 'Empresa') => {
+// La tabla avisa que una línea cambió (cantidad, precio, descuento o afectación).
+const alCambiarLinea = (i: number) => {
+    updateItem(i);
+    recalcularPrecios();
+};
+
+// Precio elegido con el ▾ de la línea (General / Mayorista): queda como precio puesto a mano.
+const elegirPrecioLinea = (i: number, nombre: 'General' | 'Mayorista') => {
     const d = sale_details.value[i];
     if (!d) return;
-    const bruto = nombre === 'Empresa' ? Number(d.product.price_company) : Number(d.product.price_general);
+    const bruto = nombre === 'Mayorista' ? Number(d.product.price_company) : Number(d.product.price_general);
     d.price_base = Number(getPrecioBaseSinIgv(bruto || 0, d.product, { igvGeneral: getIgvGeneralTasa(), ivap: getIvapTasa() }));
     d.precio_manual = true;
     updateItem(i);
@@ -486,14 +502,16 @@ const agregarProducto = (product: Product, opciones: { cantidad?: number; precio
 
     // Si hay una línea intacta del producto (sin descripción editada y con el precio del sistema) se le suma;
     // si no, va una fila nueva (T-112). Un precio puesto a mano (cotización) siempre abre fila propia.
-    const precioSistema = precioBaseDe(product, client_selected.value);
+    // T-115: el precio del sistema es el de la cantidad que el producto lleva AHORA; tras sumar se recalcula todo.
+    const cantidadActual = cantidadEnVenta(sale_details.value, product.id);
+    const precioSistema = precioBaseDe(product, client_selected.value, cantidadActual);
     let indice = Number(opciones.precio) > 0 ? -1 : indiceLineaIntacta(sale_details.value, product.id, precioSistema);
     if (indice >= 0) {
         sale_details.value[indice].quantity = Number(sale_details.value[indice].quantity) + cantidad;
         updateItem(indice);
     } else {
         const manual = Number(opciones.precio) > 0;
-        const price = manual ? Number(opciones.precio) : precioBaseDe(product, client_selected.value);
+        const price = manual ? Number(opciones.precio) : precioBaseDe(product, client_selected.value, cantidadActual + cantidad);
 
         // Resolver el tipo de afectación IGV usando las reglas de negocio
         const tip_afe = resolverTipAfeIgv(product);
@@ -526,6 +544,7 @@ const agregarProducto = (product: Product, opciones: { cantidad?: number; precio
         updateItem(indice);
     }
 
+    recalcularPrecios();
     sumDetails();
     lineaResaltada.value = null;
     nextTick(() => {
@@ -628,12 +647,14 @@ const updateItem = (index: number) => {
 // Quitar una línea no pide confirmación: avisa y deja «Deshacer».
 const removeItem = (index: number) => {
     const [quitada] = sale_details.value.splice(index, 1);
+    recalcularPrecios(); // al bajar la suma del producto puede dejar de ser mayorista (T-115)
     sumDetails();
     if (!quitada) return;
     avisar(`Quitaste «${quitada.product.title}»`, [{
         texto: 'Deshacer',
         fn: () => {
             sale_details.value.splice(Math.min(index, sale_details.value.length), 0, quitada);
+            recalcularPrecios();
             sumDetails();
         },
     }]);
@@ -1371,7 +1392,6 @@ const cargarCaja = async () => {
 // ── Totales a mostrar y a cobrar ──────────────────────────────────
 const simbolo = computed(() => (currency.value === 'USD' ? 'US$' : 'S/'));
 const dinero = (n: number) => `${simbolo.value} ${n.toFixed(2)}`;
-const tipoClienteElegido = computed(() => client_selected.value?.type_client ?? null);
 
 // Lo que se cobra ahora: total de la venta menos los adelantos aplicados.
 const totalAPagar = computed(() => {
