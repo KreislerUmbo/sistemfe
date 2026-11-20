@@ -127,7 +127,15 @@ escrito a mano que no cambia al elegir el cliente; PDF igual a la pantalla.
   - Migración aplicada con `tenants:migrate-verticales` y, a mano, a la base de tests (`sistemafe_test_migrations`, con `migrate --path=… --force`).
   - CA8 verificado en los 7 tenants locales: 0 clientes mayoristas y 0 productos con mínimo.
   - `vite build` compila. `vue-tsc` ya tenía errores antes de la tarea (portal, fake-backend, router, `TourIncluidoForm`, `product/*.vue:132`, `sale/index.vue:443`, `sale/edit.vue:1821`); ninguno viene de lo tocado.
-  - **No hecho:** CA5 manual, CA7 (PDF = pantalla con Ghostscript) y la prueba en pantalla en umbo (el MCP de Playwright no conectó). Quedan para la revisión; CA5 tiene la lógica (`@input` marca a mano) pero sin test de componente.
+  - **Prueba en pantalla (20-nov, en la revisión, agencia-demo en vez de umbo):** script de `playwright-core`
+    con datos temporales (producto «PRUEBA T-109 Mouse» general 59 / mayorista 35,40 desde 12 u.; un
+    cliente empresa no mayorista y otro mayorista). En `register.vue`: empresa no mayorista 1 u. → 50
+    «General» (CA2); 11 u. → 50; 12 u. → 30 «Mayorista (desde 12 u.)»; vuelta a 11 → 50 (CA1); cliente
+    mayorista 1 u. → 30 «Mayorista (cliente)» (CA3); cambiar a un cliente no mayorista → 50. CA5: escribir
+    en la casilla el mismo número (sin evento `change`) → «Precio manual», y subir a 12 u. no lo cambia.
+    CA7: venta real de 12 u. guardada (200) y su PDF por Ghostscript: V.U. 30,000, P.U. 35,400, total
+    S/ 424,80, igual que el botón «Cobrar». Venta de prueba eliminada; producto y clientes restaurados
+    (0 mayoristas, 0 productos con mínimo). CA1 con dos líneas (7 + 5) queda cubierto por los tests.
 - **Desviaciones de la tarea y por qué:**
   - `indiceLineaIntacta()` no cambió de firma: quien llama (`agregarProducto()`) le pasa el precio para la cantidad que el producto lleva **antes** de sumar y luego recalcula todas las líneas. Si se le pasaba el precio de la cantidad ya sumada, al cruzar el mínimo abría una fila nueva en vez de sumar.
   - También se recalcula al **quitar** una línea (y al deshacer), porque la suma baja y puede dejar de ser mayorista. La tarea solo decía «al cambiar la cantidad».
