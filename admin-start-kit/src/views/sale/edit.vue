@@ -2,17 +2,39 @@
     <DefaultLayout>
 
         <!-- ═══════════════════════════════════════════════════
-             TOPBAR — Tipo de transacción
+             CABECERA — estado de la venta + «Datos de la venta» (T-106)
         ═══════════════════════════════════════════════════ -->
-        <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-4">
-            <div>
-                <h5 class="fw-bold mb-0 text-dark">
-                    <i class="fas fa-cash-register me-2 text-primary"></i>
-                    Editar Venta
-                </h5>
-                <small class="text-muted">Completa los pasos — los totales se actualizan en tiempo real</small>
-            </div>
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+            <h5 class="fw-bold mb-0 text-dark me-2">
+                <i class="fas fa-cash-register me-2 text-primary"></i>Editar venta
+            </h5>
+            <button type="button" class="chip" @click="datosAbiertos = true">Fecha <b>{{ formatFecha(today) }}</b></button>
+            <button type="button" class="chip" :class="{ 'chip-alerta': currency !== 'PEN' }" @click="datosAbiertos = true">
+                Moneda <b>{{ currency === 'PEN' ? 'Soles' : 'Dólares' }}</b>
+            </button>
+            <button v-if="puedeCambiarSucursal && nombreSucursal" type="button" class="chip" @click="datosAbiertos = true">
+                Sucursal <b>{{ nombreSucursal }}</b>
+            </button>
+            <button v-if="tipoEsFiscal && condicion_especial !== 'exportacion'" type="button" class="chip" @click="datosAbiertos = true">
+                Destino <b>{{ destino === 'amazonia' ? 'Amazonía' : 'Fuera' }}</b>
+            </button>
+            <button v-if="etiquetaCondicion" type="button" class="chip chip-alerta" @click="datosAbiertos = true">{{ etiquetaCondicion }}</button>
+            <button type="button" class="btn btn-link btn-sm fw-semibold" @click="datosAbiertos = !datosAbiertos">
+                Datos de la venta
+                <span v-if="noHabituales" class="badge bg-warning-subtle text-warning ms-1">{{ noHabituales }} no habitual{{ noHabituales > 1 ? 'es' : '' }}</span>
+                <i class="fas ms-1" :class="datosAbiertos ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+            </button>
+            <button type="button" class="btn btn-link btn-sm text-secondary ms-auto" @click="router.push({ name: 'sale.list' })">
+                Ver ventas →
+            </button>
         </div>
+
+        <DatosVentaPanel v-if="datosAbiertos" v-model:moneda="currency" v-model:fecha="today"
+            v-model:sucursal-id="branch_id_seleccionado" v-model:destino="destino" v-model:condicion="condicion_especial"
+            v-model:codigo-detraccion="codigo_detraccion_sel" v-model:n-transaccion="n_transaction"
+            :puede-cambiar-sucursal="puedeCambiarSucursal" :sucursal-bloqueada="yaReservoCorrelativo" mostrar-n-transaccion
+            :sucursales="branches" :es-fiscal="tipoEsFiscal" :codigos-detraccion="codigos_detraccion"
+            @detraccion-cambio="onDetractionCodeChange" @listo="cerrarDatos" />
 
         <!-- T-110: estructura de la pantalla nueva (T-106): productos a la izquierda, datos y cobro a la derecha.
              Los bloques de dentro se van reemplazando por los componentes de components/Sales/ paso a paso. -->
@@ -29,335 +51,43 @@
                     :ya-descontado="cantidadOriginal" @cambio="alCambiarLinea" @quitar="removeItem"
                     @elegir-precio="elegirPrecioLinea" />
 
-                <!-- Descuento global + totales -->
-                <div class="row g-0 border-top">
-                    <div class="col-12 col-md-6 p-3 border-end">
-                        <label class="form-label small fw-semibold text-secondary mb-1">
-                            <i class="fas fa-tag me-1"></i>Descuento Global
-                        </label>
-                        <div class="input-group input-group-sm" style="max-width:200px">
-                            <span class="input-group-text text-muted small">{{ currency }}</span>
-                            <b-form-input type="number" id="n-discount-global" v-model.number="discount_global"
-                                placeholder="0.00" size="sm" />
-                        </div>
-                    </div>
-                    <div class="col-12 col-md-6 p-3">
-                        <table class="table table-sm table-borderless mb-0 small">
-                            <tbody>
-                                <tr>
-                                    <td class="text-muted">Valor Venta</td>
-                                    <td class="text-end">{{ currency }} {{ sale_subtotal.toFixed(2) }}</td>
-                                </tr>
-                                <tr class="text-danger" v-if="(discount_total + discount_global) > 0">
-                                    <td>(-) Descuento</td>
-                                    <td class="text-end">{{ currency }} {{ (discount_total +
-                                        discount_global).toFixed(2)
-                                        }}</td>
-                                </tr>
-                                <tr>
-                                    <td class="text-muted">Base Imponible</td>
-                                    <td class="text-end">{{ currency }} {{ getSubTotalSale().toFixed(2) }}</td>
-                                </tr>
-                                <tr>
-                                    <td class="text-muted">IGV ({{ getTasaIgvGlobal() }}%)</td>
-                                    <td class="text-end">{{ currency }} {{ getIgvTotal().toFixed(2) }}</td>
-                                </tr>
-                                <tr v-if="icbper_total > 0">
-                                    <td class="text-muted">ICBPER (bolsas)</td>
-                                    <td class="text-end">{{ currency }} {{ icbper_total.toFixed(2) }}</td>
-                                </tr>
-                                <tr v-if="isc_total > 0">
-                                    <td class="text-muted">ISC</td>
-                                    <td class="text-end">{{ currency }} {{ isc_total.toFixed(2) }}</td>
-                                </tr>
-                                <tr class="border-top fw-semibold">
-                                    <td>Total Factura</td>
-                                    <td class="text-end">
-                                        {{ currency }} {{ (getSubTotalSale() + getIgvTotal() + icbper_total +
-                                            isc_total).toFixed(2) }}
-                                    </td>
-                                </tr>
-                                <!-- Condiciones especiales — solo si aplica -->
-                                <tr v-if="condicion_especial == '3'" class="text-info">
-                                    <td>(+) Percepción {{ (porcentaje_percepcion_sel * 100).toFixed(1) }}%</td>
-                                    <td class="text-end">{{ currency }} {{ monto_percepcion.toFixed(2) }}</td>
-                                </tr>
-                                <tr v-if="condicion_especial == '1'" class="text-danger">
-                                    <td>(-) Retención {{ (porcentaje_retencion_sel * 100).toFixed(1) }}%</td>
-                                    <td class="text-end">-{{ currency }} {{ monto_retencion.toFixed(2) }}</td>
-                                </tr>
-                                <tr v-if="condicion_especial == '2'" class="text-warning">
-                                    <td>(-) Detracción {{ (porcentaje_detraccion_sel * 100).toFixed(1) }}% [{{
-                                        codigo_detraccion_sel }}]</td>
-                                    <td class="text-end">{{ currency }} {{ monto_detraccion.toFixed(2) }}</td>
-                                </tr>
-                            </tbody>
-                            <tfoot>
-                                <tr class="bg-primary text-white">
-                                    <td class="fw-bold fs-6 ps-2">MONTO A PAGAR</td>
-                                    <td class="fw-bold fs-6 text-end pe-2">
-                                        {{ currency }} {{ getTotalSales().toFixed(2) }}
-                                    </td>
-                                </tr>
-                                <tr class="text-success fw-semibold">
-                                    <td class="pt-1">Total Pagado</td>
-                                    <td class="text-end pt-1">{{ currency }} {{ total_payments.toFixed(2) }}</td>
-                                </tr>
-                            </tfoot>
-                        </table>
-                    </div>
+                <div class="p-3 border-top">
+                    <label class="form-label small fw-semibold text-secondary mb-1" for="venta-obs">Observaciones</label>
+                    <textarea id="venta-obs" v-model="description" rows="2" class="form-control form-control-sm"
+                        placeholder="Notas internas que no salen en el comprobante (opcional)"></textarea>
                 </div>
             </div>
         </div>
             </div>
             <div class="panel-cobro">
-        <!-- ═══════════════════════════════════════════════════
-             PASO 1 — DATOS GENERALES
-        ═══════════════════════════════════════════════════ -->
         <div class="card border-0 shadow-sm mb-3">
-            <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-2">
-                <span class="badge bg-primary rounded-pill">1</span>
-                <span class="fw-semibold text-dark">Datos Generales</span>
+            <div class="p-3 border-bottom">
+                <PanelClienteComprobante :cliente="client_selected" v-model:direccion-id="client_address_id"
+                    v-model:tipo="tipo_comprobante_codigo" :tipos="tiposComprobanteVisibles"
+                    :serie="serieResuelta" :error-serie="errorSeriePreview" :tipo-bloqueado="yaReservoCorrelativo"
+                    :serie-fija="yaReservoCorrelativo ? serieActual : undefined" @seleccionar="selectClient"
+                    @limpiar="clearClientSelection" @registrar="openQuickClientModalWithData" />
             </div>
-            <div class="card-body py-3">
-                <div class="row g-3 align-items-end">
-
-                    <!-- ── Condiciones especiales de venta ─────────────────
-                         Selector simple que despliega solo lo necesario.
-                         Reemplaza los 4 botones de retención/detracción/percepción/anticipo
-                    ───────────────────────────────────────────────────── -->
-                    <div class="col-6 col-md-4" v-if="is_exportacion == 0 && tipoEsFiscal">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">
-                            <i class="fas fa-sliders-h me-1"></i>Condiciones Especiales
-                        </label>
-                        <div>
-                            <select v-model="condicion_especial" class="form-select form-select-sm">
-                                <option value="0">— Ninguna (venta normal) —</option>
-                                <option value="anticipo">Anticipo (comprobante previo)</option>
-                                <option value="exportacion">Exportación (0% IGV)</option>
-                                <option value="1">Retención IGV 3% (R.S. 037-2002)</option>
-                                <option value="2">Detracción SPOT (R.S. 183-2004)</option>
-                                <option value="3">Percepción (R.S. 058-2006)</option>
-                            </select>
-                        </div> <small class="text-muted">
-                            <i class="fas fa-info-circle me-1"></i>Retenciones, detracciones, percepciones y anticipos
-                            ...
-                        </small>
-                    </div>
-                    <div class="col-3 col-md-2">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">
-                            <i class="fas fa-sliders-h me-1"></i>Moneda
-                        </label>
-                        <select v-model="currency" class="form-select form-select-sm">
-                            <option value="PEN">—Soles —</option>
-                            <option value="USD">Dolares</option>
-                        </select>
-                        <small><i class="fas fa-money-bill me-1"></i>Moneda de venta </small>
-                    </div>
-
-                    <!-- Destino (Ley 27037) -->
-                    <div class="col-3 col-md-3" v-if="condicion_especial !== 'exportacion' && tipoEsFiscal">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">
-                            <i class="fas fa-map-marker-alt me-1"></i>Destino
-                        </label>
-                        <div class="btn-group w-100" role="group">
-                            <input type="radio" class="btn-check" name="destino-c" id="dest-amazonia" value="amazonia"
-                                :checked="destino == 'amazonia'" @click="destino = 'amazonia'" autocomplete="off">
-                            <label class="btn btn-outline-success btn-sm" for="dest-amazonia">
-                                <i class="fas fa-tree me-1"></i>Amazonía
-                            </label>
-                            <input type="radio" class="btn-check" name="destino-c" id="dest-nacional" value="nacional"
-                                :checked="destino == 'nacional'" @click="destino = 'nacional'" autocomplete="off">
-                            <label class="btn btn-outline-secondary btn-sm" for="dest-nacional">
-                                <i class="fas fa-truck me-1"></i>Fuera
-                            </label>
-                        </div>
-                        <small class="text-muted">
-                            {{ destino == 'amazonia' ? 'Exonerado IGV (Ley 27037)' : 'Gravado IGV normal' }}
-                        </small>
-                    </div>
-
-
-                    <!-- ── CLIENTE con búsqueda inteligente ─────────────────── -->
-                    <div class="row g-3 align-items-end mt-1">
-                        <div class="col-12 col-md-8 position-relative">
-                            <label for="client-search" class="form-label mb-1 small fw-semibold text-secondary">
-                                <i class="fas fa-user me-1"></i>Cliente
-                                <span v-if="client_selected" class="badge ms-1 fw-semibold" :class="client_selected.type_document === 'RUC'
-                                    ? 'bg-info-subtle text-info border border-info-subtle'
-                                    : 'bg-success-subtle text-success border border-success-subtle'">
-                                    {{ client_selected.type_document === 'RUC' ? 'RUC → Factura' : 'DNI → Boleta' }}
-                                </span>
-                            </label>
-                            <div class="input-group input-group-sm">
-                                <input type="text" id="client-search" class="form-control" v-model="clientSearchText"
-                                    placeholder="Buscar por DNI, RUC, nombre o teléfono..." @input="onClientSearchInput"
-                                    @keydown.enter="searchClientByDocument" @focus="onClientSearchFocus"
-                                    @blur="onClientSearchBlur" autocomplete="off" />
-                                <button class="btn btn-outline-primary" type="button" @click="searchClientByDocument"
-                                    title="Buscar por DNI/RUC">
-                                    <i class="fas fa-search"></i>
-                                </button>
-                                <button v-if="client_selected" class="btn btn-outline-danger" type="button"
-                                    @click="clearClientSelection" title="Quitar cliente">
-                                    <i class="fas fa-times"></i>
-                                </button>
-                                <button class="btn btn-success" type="button" @click="openQuickClientModal"
-                                    title="Registrar nuevo cliente">
-                                    <i class="fas fa-user-plus"></i>
-                                </button>
-                            </div>
-                            <!-- Sugerencias -->
-                            <div v-if="clientSuggestions.length > 0 && !client_selected"
-                                class="list-group mt-1 position-absolute"
-                                style="max-height:220px;overflow-y:auto;z-index:1050;width:calc(100% - 2px);box-shadow:0 4px 8px rgba(0,0,0,.1)">
-                                <button type="button" class="list-group-item list-group-item-action"
-                                    v-for="client in clientSuggestions" :key="client.id"
-                                    @mousedown.prevent="selectClient(client)">
-                                    <div class="d-flex justify-content-between">
-                                        <span>{{ client.full_name }}</span>
-                                        <small class="text-muted">{{ client.n_document }}</small>
-                                    </div>
-                                    <small class="text-muted">{{ client.distrito }}, {{ client.region }}</small>
-                                </button>
-                            </div>
-                            <div v-if="clientNotFound && !client_selected && clientSearchText.length > 2"
-                                class="text-danger small mt-1">
-                                <i class="fas fa-exclamation-circle me-1"></i>
-                                No se encontró — <a href="#" @click.prevent="openQuickClientModal">regístralo
-                                    ahora</a>
-                            </div>
-                        </div>
-                        <div class="col-12 col-md-4">
-                            <!-- T-107: un solo campo; el texto «Dirección» que había no se enviaba al backend. -->
-                            <SelectorDireccionComprobante v-model="client_address_id" :cliente-id="client_selected?.id"
-                                :direccion-fiscal="client_selected?.address" />
-                        </div>
-                    </div>
-
-
-                    <!-- Sucursal — solo visible con permiso can_switch_branch. -->
-                    <!-- Bloqueada, igual que el tipo de documento, si la venta ya -->
-                    <!-- tiene un correlativo reservado (ver yaReservoCorrelativo). -->
-                    <div class="col-6 col-md-2" v-if="puedeCambiarSucursal">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">
-                            <i class="fas fa-store me-1"></i>Sucursal
-                        </label>
-                        <select v-model="branch_id_seleccionado" class="form-select form-select-sm"
-                            :disabled="yaReservoCorrelativo">
-                            <option v-for="b in branches" :key="b.id" :value="b.id">{{ b.name }}</option>
-                        </select>
-                    </div>
-
-                    <!-- Comprobante — tipo de documento, autocompletado según cliente. -->
-                    <!-- Bloqueado si la venta ya tiene un correlativo reservado -->
-                    <!-- (enviada a SUNAT o nota de venta ya numerada) — cambiar de -->
-                    <!-- tipo ahí dejaría un correlativo huérfano bajo otro tipo. -->
-                    <div class="col-6 col-md-2">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">
-                            <i class="fas fa-file-invoice me-1"></i>Tipo de Documento
-                        </label>
-                        <select v-model="tipo_comprobante_codigo" class="form-select form-select-sm"
-                            :disabled="yaReservoCorrelativo">
-                            <option v-for="t in tiposComprobanteVisibles" :key="t.codigo" :value="t.codigo">
-                                {{ t.nombre }}
-                            </option>
-                        </select>
-                        <small class="text-muted d-block" v-if="yaReservoCorrelativo">
-                            Serie: <strong>{{ serieActual }}</strong> — ya tiene correlativo reservado, no editable
-                        </small>
-                        <template v-else>
-                            <small class="text-muted d-block" v-if="serieResuelta">
-                                Serie: <strong>{{ serieResuelta.serie }}</strong> (próx. correlativo #{{ serieResuelta.siguiente_correlativo }})
-                            </small>
-                            <small class="text-danger d-block" v-else-if="errorSeriePreview">
-                                {{ errorSeriePreview }}
-                            </small>
-                            <small class="text-muted" v-if="client_selected">
-                                Auto según cliente
-                            </small>
-                        </template>
-                    </div>
-
-                    <!-- N° Documento interno -->
-                    <div class="col-6 col-md-2">
-                        <label for="n-transaction" class="form-label mb-1 small fw-semibold text-secondary">
-                            N° Documento
-                        </label>
-                        <b-form-input type="text" id="n-transaction" v-model="n_transaction" placeholder="000000"
-                            size="sm" />
-                    </div>
-
-                    <!-- Fecha de emisión -->
-                    <div class="col-6 col-md-2">
-                        <label for="n-f-emision" class="form-label mb-1 small fw-semibold text-secondary">
-                            Fecha Emisión
-                        </label>
-                        <b-form-input type="date" id="n-f-emision" v-model="today" size="sm" />
-                    </div>
-
-                    <!-- Exportación
-                    <div class="col-6 col-md-2">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">
-                            <i class="fas fa-globe me-1"></i>Exportación
-                        </label>
-                        <div class="btn-group w-100" role="group">
-                            <input type="radio" class="btn-check" name="is_exportacion-c" id="exp-no" value="0"
-                                :checked="is_exportacion == 0" @click="is_exportacion = 0" autocomplete="off">
-                            <label class="btn btn-outline-secondary btn-sm" for="exp-no">No</label>
-                            <input type="radio" class="btn-check" name="is_exportacion-c" id="exp-si" value="1"
-                                :checked="is_exportacion == 1" @click="is_exportacion = 1" autocomplete="off">
-                            <label class="btn btn-outline-warning btn-sm" for="exp-si">Sí</label>
-                        </div>
-                    </div> -->
-
-
-
-                    <!-- Campos que aparecen según condición seleccionada -->
-
-                    <!-- Anticipo -->
-                    <div class="col-12 col-md-4" v-if="condicion_especial === 'anticipo'">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">
-                            <i class="fas fa-receipt me-1"></i>N° Comprobante de Anticipo
-                        </label>
-                        <div class="input-group input-group-sm">
-                            <b-form-input type="text" v-model="n_comprobante_anticipo" @keyup.enter="searchAnticipo()"
-                                placeholder="Ej: F001-00000123" :disabled="sale_anticipo > 0" size="sm" />
-                            <button v-if="sale_anticipo > 0" type="button" class="btn btn-outline-danger btn-sm"
-                                @click="resetAnticipo()">
-                                <i class="fas fa-times"></i>
-                            </button>
-                            <button v-else type="button" class="btn btn-outline-primary btn-sm"
-                                @click="searchAnticipo()">
-                                <i class="fas fa-search"></i>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Detracción — selector de código del Anexo SUNAT -->
-                    <div class="col-12 col-md-5" v-if="condicion_especial == '2'">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">
-                            <i class="fas fa-list-ol me-1"></i>Código de Detracción (Anexo SUNAT)
-                        </label>
-                        <select v-model="codigo_detraccion_sel" class="form-select form-select-sm"
-                            @change="onDetractionCodeChange">
-                            <option value="">— Seleccionar código —</option>
-                            <option v-for="d in codigos_detraccion" :key="d.codigo" :value="d.codigo">
-                                [{{ d.codigo }}] {{ d.nombre }} ({{ Number(d.tasa_porcentaje).toFixed(1) }}%)
-                            </option>
-                        </select>
-                        <small class="text-muted" v-if="porcentaje_detraccion_sel > 0">
-                            <i class="fas fa-info-circle me-1"></i>
-                            Monto mínimo para aplicar detracción:
-                            S/ {{codigos_detraccion.find(d => d.codigo === codigo_detraccion_sel)?.monto_minimo ??
-                                700
-                            }}
-                        </small>
-                    </div>
-
+            <div class="p-3" :class="{ 'border-bottom': condicion_especial === 'anticipo' }">
+                <TotalesVenta v-model:descuento-global="discount_global" :filas="filasTotales" :total="sale_total"
+                    :simbolo="simbolo" etiqueta-total="Monto a pagar" :puede-descuento-global="puedeCambiarPrecio" />
+            </div>
+            <div v-if="condicion_especial === 'anticipo'" class="p-3">
+                <label class="form-label mb-1 small fw-semibold text-secondary">
+                    <i class="fas fa-receipt me-1"></i>N° Comprobante de Anticipo
+                </label>
+                <div class="input-group input-group-sm">
+                    <b-form-input type="text" v-model="n_comprobante_anticipo" @keyup.enter="searchAnticipo()"
+                        placeholder="Ej: F001-00000123" :disabled="sale_anticipo > 0" size="sm" />
+                    <button v-if="sale_anticipo > 0" type="button" class="btn btn-outline-danger btn-sm"
+                        @click="resetAnticipo()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                    <button v-else type="button" class="btn btn-outline-primary btn-sm"
+                        @click="searchAnticipo()">
+                        <i class="fas fa-search"></i>
+                    </button>
                 </div>
-
-
             </div>
         </div>
 
@@ -523,16 +253,6 @@
                         </div>
                     </div>
 
-                    <!-- Observaciones -->
-                    <div class="col-12 col-md-4">
-                        <label class="form-label small fw-semibold text-secondary mb-1">
-                            <i class="fas fa-comment-alt me-1"></i>Observaciones
-                        </label>
-                        <b-form-textarea v-model="description" rows="4"
-                            placeholder="Notas internas, referencias, instrucciones..."
-                            class="form-control form-control-sm" />
-                    </div>
-
                     <!-- Botones -->
                     <div class="col-12 col-md-3 d-flex flex-column gap-2 pt-md-4">
                         <button type="button" class="btn btn-success fw-bold py-2 shadow-sm" @click="store()">
@@ -624,6 +344,9 @@ import ClientFormQuick from '@/components/Sales/ClientFormQuick.vue';
 import ProductFormQuick from '@/components/Sales/ProductFormQuick.vue';
 import AvisoVenta from '@/components/Sales/AvisoVenta.vue';
 import BuscadorProductosVenta from '@/components/Sales/BuscadorProductosVenta.vue';
+import PanelClienteComprobante from '@/components/Sales/PanelClienteComprobante.vue';
+import DatosVentaPanel from '@/components/Sales/DatosVentaPanel.vue';
+import TotalesVenta from '@/components/Sales/TotalesVenta.vue';
 import TablaLineasVenta, { type LineaVenta } from '@/components/Sales/TablaLineasVenta.vue';
 import CronogramaCuotasCampos from '@/components/CronogramaCuotasCampos.vue';
 import SelectorDireccionComprobante from '@/components/Clientes/SelectorDireccionComprobante.vue';
@@ -632,6 +355,7 @@ import { getPrecioBaseSinIgv } from '@/composables/useProductPricing';
 import { useAuthStore } from '@/stores/auth';
 import { resolverTipAfeIgv as resolverTipAfeIgvPuro } from '@/utils/resolverTipAfeIgv';
 import { cantidadEnVenta, faltaStockEnEdicion, precioCatalogo } from '@/helpers/ventaRetail';
+import { formatFecha } from '@/helpers/fecha';
 import type { Branch } from '@/types/cash-session';
 import type { TipoComprobante } from '@/types/series-comprobante';
 
@@ -655,6 +379,7 @@ const router = useRouter();
 const sale_id = ref<string>(route.params.id as string);
 
 // ── Estado de la pantalla (T-110, igual que register.vue) ───────────
+const datosAbiertos = ref<boolean>(false); // panel «Datos de la venta»
 const aviso = ref<InstanceType<typeof AvisoVenta> | null>(null);
 let siguienteUid = 1; // identifica cada línea en pantalla; no viaja en el payload
 const avisar = (texto: string, acciones: { texto: string; fn: () => void }[] = [], ms = 6000) =>
@@ -667,13 +392,7 @@ const avisar = (texto: string, acciones: { texto: string; fn: () => void }[] = [
 const clients = ref<Client[]>([]);
 const products = ref<Product[]>([]);
 const client_selected = ref<Client | undefined>(undefined);
-
-// ── Búsqueda de clientes ──────────────────────────────────────────
-const clientSearchText = ref<string>('');
-const clientSuggestions = ref<Client[]>([]);
 const client_address_id = ref<number | null>(null); // T-107: null = dirección fiscal
-let clientSearchTimeout: any = null;
-const clientNotFound = ref<boolean>(false);
 
 // ── Modales rápidos ────────────────────────────────────────────────
 const showQuickClientModal = ref<boolean>(false);
@@ -839,91 +558,10 @@ const total_payments = ref<number>(0);
 const subtotalBrutoCobro = ref<number>(0);
 
 
-// ── MÉTODOS DE CLIENTE (idénticos a register) ────────────────────
-const onClientSearchInput = () => {
-    clearTimeout(clientSearchTimeout);
-    const query = clientSearchText.value.trim();
-    clientNotFound.value = false;
-    if (client_selected.value && query.length > 0) clearClientSelection();
-    if (query.length === 0) { clientSuggestions.value = []; return; }
-    if (/^\d{8}$/.test(query) || /^\d{11}$/.test(query)) {
-        searchClientByDocument(); return;
-    }
-    if (query.length >= 2) {
-        clientSearchTimeout = setTimeout(() => searchClients(query), 300);
-    }
-};
-const onClientSearchFocus = () => {
-    if (client_selected.value) return;
-    const query = clientSearchText.value.trim();
-    if (query.length >= 2) searchClients(query);
-};
-const onClientSearchBlur = () => {
-    setTimeout(() => {
-        clientSuggestions.value = [];
-        if (clientSearchText.value.trim().length > 2 && !client_selected.value) {
-            clientNotFound.value = true;
-        }
-    }, 200);
-};
-
-const searchClients = async (query: string) => {
-    try {
-        const res = await httpClient.get(`clients?search=${encodeURIComponent(query)}&take=10`);
-        clientSuggestions.value = res.data.clients.data;
-        clientNotFound.value = clientSuggestions.value.length === 0;
-    } catch {
-        clientSuggestions.value = [];
-        clientNotFound.value = true;
-    }
-};
-
-const searchClientByDocument = async () => {
-    const doc = clientSearchText.value.trim();
-    if (!doc) return;
-    if (client_selected.value) { clearClientSelection(); setTimeout(searchClientByDocument, 100); return; }
-
-    const existing = clients.value.find(c => c.n_document === doc);
-    if (existing) { selectClient(existing); return; }
-
-    if (/^\d{8}$/.test(doc)) await searchDocumentAPI('dni', doc);
-    else if (/^\d{11}$/.test(doc)) await searchDocumentAPI('ruc', doc);
-    else await searchClients(doc);
-};
-
-const searchDocumentAPI = async (type: string, number: string) => {
-    try {
-        const response = await httpClient.get(`/search-document/${type}/${number}`);
-        if (response.data.success === false) {
-            openQuickClientModalWithData({ type_document: type.toUpperCase(), n_document: number });
-            return;
-        }
-        const existing = clients.value.find(c => c.n_document === number);
-        if (existing) { selectClient(existing); return; }
-
-        const data = response.data;
-        let clientData: any = { type_document: type.toUpperCase(), n_document: number };
-        if (type === 'dni') {
-            clientData.name = data.nombres || '';
-            clientData.surname = `${data.apellidoPaterno || ''} ${data.apellidoMaterno || ''}`.trim();
-            clientData.full_name = `${clientData.name} ${clientData.surname}`;
-        } else {
-            clientData.full_name = data.razonSocial || '';
-            clientData.name_comerc = data.nombreComercial || '';
-            clientData.address = data.direccion || '';
-        }
-        openQuickClientModalWithData(clientData);
-    } catch {
-        openQuickClientModalWithData({ type_document: type.toUpperCase(), n_document: number });
-    }
-};
-
-
+// ── Cliente ───────────────────────────────────────────────────────
+// La búsqueda vive en PanelClienteComprobante.vue; acá solo lo que pasa al elegir o quitar un cliente.
 const selectClient = (client: Client) => {
     client_selected.value = client;
-    clientSearchText.value = client.full_name || client.name_comerc || client.name || '';
-    clientSuggestions.value = [];
-    clientNotFound.value = false;
 
     // ── Autocompletar tipo de documento según tipo de documento del cliente ──
     // Nunca si la venta ya tiene un correlativo reservado (yaReservoCorrelativo)
@@ -944,15 +582,15 @@ const selectClient = (client: Client) => {
     }
     // Si no es Amazonía, no cambiar automáticamente — puede ser
     // un cliente de Lima que compra acá o uno local que envía fuera
+
+    recalcularPreciosPorCliente();
 };
 const clearClientSelection = () => {
     client_selected.value = undefined;
-    clientSearchText.value = '';
-    clientSuggestions.value = [];
-    clientNotFound.value = false;
     if (!yaReservoCorrelativo.value) {
         tipo_comprobante_codigo.value = '03'; // resetear a boleta por defecto
     }
+    recalcularPreciosPorCliente();
 };
 
 // ── Resolver tip_afe_igv según las reglas de negocio ─────────────
@@ -975,7 +613,8 @@ const recalcularItemTipAfeIgv = (item: LineaVenta, index: number) => {
 // del producto, porque el precio mayorista cuenta la suma. Las líneas ya guardadas conservan su precio:
 // PrecioVentaValidator las acepta mientras no cambien de precio. Si no se recalculara, una línea nueva que
 // sube a ≥ N quedaría al general y el backend la rechazaría sin el permiso de precio.
-const recalcularPreciosNuevos = () => {
+const recalcularPreciosNuevos = (): number => {
+    let cambiadas = 0;
     sale_details.value.forEach((d, i) => {
         if (d.id || d.precio_manual) return;
         const bruto = precioCatalogo(d.product, client_selected.value, cantidadEnVenta(sale_details.value, d.product.id)).valor;
@@ -983,8 +622,15 @@ const recalcularPreciosNuevos = () => {
         if (Math.abs(nuevo - Number(d.price_base)) > 0.0001) {
             d.price_base = nuevo;
             updateItem(i);
+            cambiadas++;
         }
     });
+    return cambiadas;
+};
+// T-110: al cambiar de cliente las líneas NUEVAS sin precio a mano se reprecian (las guardadas conservan su precio).
+const recalcularPreciosPorCliente = () => {
+    const cambiadas = recalcularPreciosNuevos();
+    if (cambiadas) avisar(`Se actualizó el precio de ${cambiadas} producto${cambiadas > 1 ? 's' : ''} según el cliente.`);
 };
 // La tabla avisa que una línea cambió (cantidad, precio, descuento o afectación).
 const alCambiarLinea = (index: number) => {
@@ -2068,10 +1714,58 @@ watch(destino, async (_nuevoValor, valorAnterior) => {
 };
  */
 
+// ── Totales a mostrar ─────────────────────────────────────────────
+const simbolo = computed(() => (currency.value === 'USD' ? 'US$' : 'S/'));
+const dinero = (n: number) => `${simbolo.value} ${n.toFixed(2)}`;
+
+// Filas del resumen: solo las que aplican (misma base que los mto_oper_* del payload, netas del descuento global).
+const filasTotales = computed(() => {
+    if (sale_details.value.length === 0) return [];
+    const base = (...afectaciones: string[]) => sale_details.value
+        .filter(d => afectaciones.includes(d.tip_afe_igv))
+        .reduce((s, d) => s + subtotalNetoDescuentoGlobal(d, subtotalBrutoCobro.value), 0);
+    const filas: { etiqueta: string; valor: string; clase?: string }[] = [];
+    const desc = discount_total.value + (Number(discount_global.value) || 0);
+    if (desc > 0) filas.push({ etiqueta: 'Descuentos', valor: `− ${dinero(desc)}`, clase: 'text-danger' });
+    const g = base('10'), ivap = base('17'), ex = base('20'), ina = base('30'), exp = base('40'), gra = base('11');
+    if (g > 0) filas.push({ etiqueta: 'Op. gravada', valor: dinero(g) });
+    if (ivap > 0) filas.push({ etiqueta: 'Op. gravada IVAP', valor: dinero(ivap) });
+    if (getIgvTotal() > 0) filas.push({ etiqueta: 'IGV', valor: dinero(getIgvTotal()) });
+    if (ex > 0) filas.push({ etiqueta: 'Op. exonerada', valor: dinero(ex) });
+    if (ina > 0) filas.push({ etiqueta: 'Op. inafecta', valor: dinero(ina) });
+    if (exp > 0) filas.push({ etiqueta: 'Exportación', valor: dinero(exp) });
+    if (gra > 0) filas.push({ etiqueta: 'Op. gratuita', valor: dinero(gra) });
+    if (icbper_total.value > 0) filas.push({ etiqueta: 'ICBPER (bolsas)', valor: dinero(icbper_total.value) });
+    if (isc_total.value > 0) filas.push({ etiqueta: 'ISC', valor: dinero(isc_total.value) });
+    if (condicion_especial.value === '3') filas.push({ etiqueta: `(+) Percepción ${(porcentaje_percepcion_sel.value * 100).toFixed(1)}%`, valor: dinero(monto_percepcion.value), clase: 'text-info' });
+    if (condicion_especial.value === '1') filas.push({ etiqueta: `(−) Retención ${(porcentaje_retencion_sel.value * 100).toFixed(1)}%`, valor: `− ${dinero(monto_retencion.value)}`, clase: 'text-danger' });
+    if (condicion_especial.value === '2') filas.push({ etiqueta: `(−) Detracción ${(porcentaje_detraccion_sel.value * 100).toFixed(1)}% [${codigo_detraccion_sel.value}]`, valor: dinero(monto_detraccion.value), clase: 'text-warning' });
+    if (total_payments.value > 0) filas.push({ etiqueta: 'Total pagado', valor: dinero(total_payments.value), clase: 'text-success' });
+    return filas;
+});
+
+// ── Cabecera con etiquetas de estado ───────────────────────────────
+const nombreSucursal = computed(() => branches.value.find(b => b.id === branch_id_seleccionado.value)?.name ?? '');
+const noHabituales = computed(() => (condicion_especial.value !== '0' ? 1 : 0) + (currency.value !== 'PEN' ? 1 : 0));
+const etiquetaCondicion = computed(() => ({
+    anticipo: 'Con adelanto', exportacion: 'Exportación', '1': 'Retención 3%', '2': 'Detracción', '3': 'Percepción',
+} as Record<string, string>)[condicion_especial.value] ?? '');
+
+const cerrarDatos = () => {
+    datosAbiertos.value = false;
+    buscador.value?.enfocar();
+};
+
 onMounted(() => config());
 </script>
 
 <style scoped>
+.chip { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--bs-border-color); background: var(--bs-body-bg, #fff);
+    border-radius: 999px; padding: 3px 10px; font-size: .8rem; color: var(--bs-secondary-color); cursor: pointer; }
+.chip b { color: var(--bs-body-color); font-weight: 600; }
+.chip:hover { border-color: var(--bs-success); }
+.chip-alerta { background: var(--bs-warning-bg-subtle); color: var(--bs-warning-text-emphasis); border-color: transparent; }
+
 /* Pantalla de caja: productos a la izquierda, cobro a la derecha (T-106/T-110). */
 .grid-venta { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; align-items: start; }
 .panel-cobro { position: sticky; top: 110px; }
