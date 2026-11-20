@@ -21,6 +21,13 @@ registrar y editar se vean y se comporten igual.
   enviada a SUNAT o de reserva de Agencia (no editable desde Ventas, F5).
 - Descripción editada (T-108) y permiso de precio (T-109) también en la edición.
 - **Mismo payload de `PUT sales/{id}`** que antes.
+- **Heredado de T-113, T-114 y T-115 (20-nov):**
+  - Stock: lo disponible para la venta = almacén + lo que ella ya tenía (`faltaStockEnEdicion()`).
+  - Precio mayorista (`precioCatalogo()`, recorrido 78): las líneas **nuevas** sin precio a mano se
+    recalculan al cambiar la cantidad **y al cambiar de cliente** (hoy `edit.vue` no lo hace al cambiar
+    de cliente: sin el permiso de precio el backend rechaza esa línea). Las guardadas conservan su precio.
+  - Cada cambio de precio recalcula la línea y la cabecera (T-114 la valida).
+  - Retirar el bloque comentado de Selectr de `edit.vue` (~2131-2163, `getPriceBaseCF()`/`getPriceBaseCE()`).
 
 ## Fuera de alcance
 - El problema de pagos que se guardan al instante sin caja en «editar venta»
