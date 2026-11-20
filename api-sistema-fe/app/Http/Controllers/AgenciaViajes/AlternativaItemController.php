@@ -512,6 +512,14 @@ class AlternativaItemController extends Controller
             }
 
             if ($ajusteRedondeo !== null && $ajusteRedondeo != 0.0) {
+                // T-029 (H18): el ajuste toma el tratamiento de los servicios del tour si todos
+                // coinciden; si están mezclados (o no hay ninguno), el default de la agencia.
+                $tratamientoAjuste = collect($itemsCreados)
+                    ->map(fn ($i) => $i->tip_afe_igv.'|'.$i->destino_tributario)
+                    ->unique()->count() === 1
+                    ? ['tip_afe_igv' => $itemsCreados[0]->tip_afe_igv, 'destino_tributario' => $itemsCreados[0]->destino_tributario]
+                    : ConfiguracionAgencia::completarTratamientoTributario(null, null);
+
                 $itemsCreados[] = AlternativaItem::create([
                     'alternativa_id' => $alternativa->id,
                     'alternativa_destino_id' => $alternativaDestinoId,
@@ -524,6 +532,8 @@ class AlternativaItemController extends Controller
                     'costo_snapshot' => 0,
                     'precio_venta_snapshot' => $ajusteRedondeo,
                     'precio_convertido' => $this->priceEngine->convertirMoneda($ajusteRedondeo, $alternativa->moneda_cotizacion, $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
+                    'tip_afe_igv' => $tratamientoAjuste['tip_afe_igv'],
+                    'destino_tributario' => $tratamientoAjuste['destino_tributario'],
                 ]);
             }
 
@@ -552,6 +562,9 @@ class AlternativaItemController extends Controller
     {
         if ($entrada['proveedor_tarifa_id']) {
             $tarifa = ProveedorTarifa::findOrFail($entrada['proveedor_tarifa_id']);
+            // T-029 (H18): el ítem nace con tratamiento explícito (el de su tarifa, o el default de la
+            // agencia si la tarifa no lo trae), igual que AltaProveedor. Sin esto la facturación caía al '10'.
+            $tratamiento = ConfiguracionAgencia::completarTratamientoTributario($tarifa->tip_afe_igv, $tarifa->destino_tributario);
 
             // 'compartido' se cobra por pasajero REAL de
             // la cotización (no un adulto plano) — mismo cálculo que
@@ -568,8 +581,10 @@ class AlternativaItemController extends Controller
                 $ventaPorPersona = $conteo['adulto'] * ($entrada['precio_venta_adulto'] ?? 0)
                     + $conteo['nino'] * $entrada['precio_venta_nino']
                     + $conteo['infante'] * ($entrada['precio_venta_infante'] ?? 0);
+                // T-029 (H19): el costo no cuenta infantes, igual que AltaProveedor y el recálculo
+                // por pasajeros (decisión E2). La venta sí, con su tarifa de infante.
                 $costoPorPersona = ($entrada['precio_costo'] ?? 0)
-                    * ($conteo['adulto'] + $conteo['nino'] + $conteo['infante']);
+                    * ($conteo['adulto'] + $conteo['nino']);
 
                 return AlternativaItem::create([
                     'alternativa_id' => $alternativa->id,
@@ -588,6 +603,8 @@ class AlternativaItemController extends Controller
                     'costo_snapshot' => $costoPorPersona,
                     'precio_venta_snapshot' => $ventaPorPersona,
                     'precio_convertido' => $this->priceEngine->convertirMoneda($ventaPorPersona, $tarifa->moneda, $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
+                    'tip_afe_igv' => $tratamiento['tip_afe_igv'],
+                    'destino_tributario' => $tratamiento['destino_tributario'],
                 ]);
             }
 
@@ -604,6 +621,8 @@ class AlternativaItemController extends Controller
                 'costo_snapshot' => $entrada['costo'],
                 'precio_venta_snapshot' => $entrada['venta'],
                 'precio_convertido' => $this->priceEngine->convertirMoneda($entrada['venta'], $tarifa->moneda, $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
+                'tip_afe_igv' => $tratamiento['tip_afe_igv'],
+                'destino_tributario' => $tratamiento['destino_tributario'],
             ]);
         }
 
@@ -628,6 +647,9 @@ class AlternativaItemController extends Controller
             ];
 
             if ($guiaTarifa) {
+                // T-029 (H18): el guía no tiene tarifa de proveedor → default de la agencia, como AltaGuia.
+                $tratamiento = ConfiguracionAgencia::completarTratamientoTributario(null, null);
+
                 return AlternativaItem::create([
                     'alternativa_id' => $alternativa->id,
                     'alternativa_destino_id' => $alternativaDestinoId,
@@ -641,6 +663,8 @@ class AlternativaItemController extends Controller
                     'costo_snapshot' => $entrada['costo'],
                     'precio_venta_snapshot' => $entrada['venta'],
                     'precio_convertido' => $this->priceEngine->convertirMoneda($entrada['venta'], $guiaTarifa->moneda, $alternativa->moneda_cotizacion, (float) $alternativa->tipo_cambio_aplicado),
+                    'tip_afe_igv' => $tratamiento['tip_afe_igv'],
+                    'destino_tributario' => $tratamiento['destino_tributario'],
                 ]);
             }
         }

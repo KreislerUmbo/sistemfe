@@ -168,8 +168,8 @@ class PrecioPorPasajeroTest extends TestCase
         // 2 adultos × 50 + 1 niño × 30 + 1 infante × 0 = 130 (NO 50 plano).
         $this->assertEqualsWithDelta(130.0, (float) $items[0]->precio_venta_snapshot, 0.01);
         $this->assertSame('por_persona', $items[0]->modo_precio);
-        // costo también multiplicado por el total de pasajeros (4 × 20 = 80).
-        $this->assertEqualsWithDelta(80.0, (float) $items[0]->costo_snapshot, 0.01);
+        // T-029 (H19): el costo no cuenta infantes (decisión E2): 3 × 20 = 60, no 4 × 20.
+        $this->assertEqualsWithDelta(60.0, (float) $items[0]->costo_snapshot, 0.01);
     }
 
     public function test_privado_cargado_desde_plantilla_sigue_con_tarifa_fija_sin_multiplicar(): void
