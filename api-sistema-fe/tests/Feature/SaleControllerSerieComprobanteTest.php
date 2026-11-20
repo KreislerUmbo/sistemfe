@@ -247,6 +247,8 @@ class SaleControllerSerieComprobanteTest extends TestCase
             'subtotal' => 100.00,
             'igv' => 18.00,
             'total' => $total,
+            // T-114: la cabecera completa, como la manda la pantalla (los totales se validan contra las líneas).
+            'mto_oper_gravadas' => 100, 'total_impuestos' => 18, 'valor_venta' => 100, 'mto_imp_venta' => $total, 'redondeo' => 0,
             'discount' => 0,
             'discount_global' => 0,
             'retencion_igv' => 0,

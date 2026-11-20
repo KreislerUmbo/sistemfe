@@ -88,6 +88,9 @@ final class StockVentaTest extends CreditosTestCase
             'client_id' => $this->cliente->id, 'type_client' => 1, 'cod_tipo_doc_cliente' => '1',
             'currency' => 'PEN', 'is_exportacion' => 0, 'destino' => 'nacional', 'type_payment' => 1,
             'subtotal' => $subtotal, 'igv' => round($total - $subtotal, 2), 'total' => $total,
+            // T-114: la cabecera completa, como la manda la pantalla (los totales se validan contra las líneas).
+            'mto_oper_gravadas' => $subtotal, 'total_impuestos' => round($total - $subtotal, 2),
+            'valor_venta' => $subtotal, 'mto_imp_venta' => $total, 'redondeo' => 0,
             'discount' => 0, 'discount_global' => 0, 'retencion_igv' => 0,
             'state_payment' => 1, 'debt' => $total, 'paid_out' => 0,
             'sale_details' => $lineas, 'payments' => [], 'advance_applications' => [],
