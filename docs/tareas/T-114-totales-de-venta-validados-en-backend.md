@@ -75,8 +75,14 @@ Ventas reales desde la pantalla en agencia-demo (boleta Amazonía, factura con d
   (`Fila13Fase2cOperacionTest › en un viaje de varios días solo se mueve el tour`): falla igual en `main`
   sin estos cambios, tiene la fecha `2026-11-18` fija y hoy es 20-nov ("La nueva fecha no puede ser
   anterior a hoy"). No es de T-114.
-- **Prueba en pantalla (agencia-demo):** **pendiente**. El MCP de Playwright no conectó en esta sesión;
-  hay que hacer a mano una boleta Amazonía, una factura con detracción y una venta con anticipo.
+- **Prueba en pantalla (agencia-demo, 20-nov, en la revisión):** script de `playwright-core` que arma
+  cada venta en `register.vue` y captura el `POST sales` real del navegador: gravada con descuento
+  global, exonerada Amazonía, exportación, gratuita + gravada, retención, percepción, detracción
+  (código 004) y con adelanto. Los 9 envíos pasan el validador y, con el `total` −1 o el `igv` −0,50,
+  dan 422. Una venta se guardó de verdad (200) y se guardó otra vez desde `edit.vue` (PATCH 200, y su
+  envío también pasa). Las ventas de prueba (37 y 38) se eliminaron por la API; el stock volvió a su
+  valor. No se probaron en pantalla IVAP, ISC ni ICBPER: agencia-demo no tiene productos con esos
+  impuestos (quedan cubiertos por los tests).
 - **Comparación de `sumDetails()` (pedida por la tarea):** `register.vue` (~688) y `edit.vue` (~1358)
   dan **la misma cabecera en todos los regímenes**: mismo prorrateo del descuento global, IGV, ISC,
   ICBPER, retención, detracción y percepción; `updateItem()` de línea idéntico; los `mto_oper_*`, `ivap_total`,
