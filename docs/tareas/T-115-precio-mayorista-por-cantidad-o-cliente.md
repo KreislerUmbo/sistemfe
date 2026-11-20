@@ -37,8 +37,23 @@ si el comprobante es factura o boleta; el precio menor es para **quien lleva bas
 - **Cliente** (`ClienteDatosBase.vue`): casilla «Cliente mayorista (siempre precio mayorista)».
 - **Backend:** `PrecioVentaValidator::precioBaseCatalogo()` aplica la misma regla, sumando las
   cantidades del producto en todo el payload. Así la pantalla, lo que se guarda y el PDF coinciden.
-- `sale/edit.vue` (~línea 1157): usar el helper nuevo en vez de `type_client === '2'`, para que el
-  backend no rechace las líneas que agrega la edición. El rediseño de esa pantalla lo hace T-110.
+- `sale/edit.vue` (~línea 1164, `selectAndAddProduct()`): usar el helper nuevo en vez de
+  `type_client === '2'`, para que el backend no rechace las líneas que agrega la edición. El rediseño
+  de esa pantalla lo hace T-110.
+
+**Ojo (20-nov, tras T-113 y T-114):**
+- **T-114 valida la cabecera contra las líneas.** Cada vez que el precio de una línea cambie (por cliente
+  o por cantidad), recalcular sus importes (`updateItem()`) y la cabecera (`sumDetails()`); si no,
+  `TotalesVentaValidator` responde 422.
+- **`edit.vue` también tiene que recalcular por cantidad.** `PrecioVentaValidator::precioValido()` acepta
+  solo **el** precio que corresponde (no «general o mayorista»), salvo en líneas guardadas que no
+  cambiaron de precio. Si en la edición se sube una línea nueva a ≥ N y queda al precio general, el
+  backend la rechaza sin el permiso de precio. Mínimo: en `edit.vue`, las líneas sin precio a mano se
+  recalculan al cambiar la cantidad con el mismo helper. Las líneas guardadas que no se tocan conservan
+  su precio (el validador ya las acepta).
+- `edit.vue` (~2131 y ~2159) tiene otros dos lugares que eligen el precio por `type_client`
+  (`getPriceBaseCF()`/`getPriceBaseCE()`, en los eventos de Selectr). Comprobar si siguen vivos: si sí,
+  mismo helper; si es código muerto, anotarlo como hallazgo y **no** borrarlo en esta tarea.
 
 ## Fuera de alcance
 - Varias escalas (1-11 / 12-49 / 50+): se descartó (decisión 2).
