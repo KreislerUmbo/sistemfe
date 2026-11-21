@@ -434,6 +434,36 @@ class SaleController extends Controller
         }
     }
 
+    // T-116: anticipo de un comprobante previo (n_comprobante_anticipo / amount_anticipo) en la
+    // edición. Antes update() no lo guardaba y lo editado se perdía. resumenImpresion() lo resta
+    // del total impreso, por eso no puede pasar del total ni quedar sin su comprobante. Sin
+    // comprobante el monto es 0 (la condición «Con adelanto» se quitó). Un payload que no trae
+    // los campos conserva lo guardado.
+    private function anticipoDeLaEdicion(Request $request): array
+    {
+        if (!$request->has('n_comprobante_anticipo') && !$request->has('amount_anticipo')) {
+            return [];
+        }
+
+        $comprobante = trim((string) $request->n_comprobante_anticipo);
+        $monto = $comprobante === '' ? '0' : (string) ($request->amount_anticipo ?? 0);
+
+        if (!is_numeric($monto) || BigDecimal::of($monto)->isNegative()) {
+            throw new HttpException(422, 'El monto del anticipo no es válido.');
+        }
+        if (mb_strlen($comprobante) > 150) {
+            throw new HttpException(422, 'El número del comprobante de anticipo no puede pasar de 150 caracteres.');
+        }
+        if (BigDecimal::of($monto)->isGreaterThan(BigDecimal::of((string) ($request->total ?? 0)))) {
+            throw new HttpException(422, 'El anticipo no puede ser mayor que el total de la venta.');
+        }
+
+        return [
+            'n_comprobante_anticipo' => $comprobante === '' ? null : $comprobante,
+            'amount_anticipo'        => $monto,
+        ];
+    }
+
     private function validarConfiguracionCredito(Request $request): void
     {
         if ((int) $request->type_payment !== 2) {
@@ -1142,6 +1172,7 @@ public function update(Request $request, string $id)
 
     $this->validarRegimenEspecial($request);
     $this->validarCodigoDetraccion($request);
+    $anticipo = $this->anticipoDeLaEdicion($request);
     // T-065: si llega client_address_id se valida contra el cliente nuevo; si cambió el cliente
     // y no llega una dirección suya, la elegida antes deja de aplicar (era de otro cliente).
     // Reenviar la misma dirección ya elegida se acepta aunque se haya desactivado después.
@@ -1248,7 +1279,7 @@ public function update(Request $request, string $id)
             "saldo_pendiente" => $request->debt,
 
             "description"   => $request->description,
-        ]);
+        ] + $anticipo);
 
         // T-064: una venta editable no tiene CDR; su copia del cliente se
         // rehace (pudo cambiar de cliente o el cliente se corrigió).

@@ -34,7 +34,6 @@ cobro de la edición por el de registro (sigue la decisión del 20-nov).
 ## Fuera de alcance
 - Unificar el cobro de edición con `CobroContado`/`CobroCredito`/`AdelantosVenta`.
 - Implementar la búsqueda del comprobante de anticipo («Función pendiente»).
-- Que `update()` guarde `n_comprobante_anticipo`/`amount_anticipo` (hoy no los toca).
 
 ## Dónde tocar
 - `admin-start-kit/src/views/sale/edit.vue` → `store()`, `loadSale()`, `cargarTiposYSucursales()`
@@ -84,8 +83,12 @@ npm run type-check && npm run build
   agencia-demo no tiene ventas con anticipo, ni dos sucursales, ni una boleta nacional con cliente de
   Amazonía. No se guardó de verdad una venta a crédito, para no dejar cuotas y movimientos en la demo.
 
+- **Ampliación (pedido del usuario, 20-nov):** `update()` guarda el anticipo
+  (`anticipoDeLaEdicion()`): sin comprobante el monto queda en 0; monto negativo, no numérico o mayor
+  que el total → 422; un payload sin los campos conserva lo guardado. Test `AnticipoEdicionVentaTest` (5).
+
 ## Hallazgos fuera de alcance
-- `SaleController::update()` no guarda `n_comprobante_anticipo` ni `amount_anticipo`: lo que se cambie
-  del anticipo en la edición se pierde.
+- Los pagos de la edición se validan contra el total sin restar `amount_anticipo` (en el front y en
+  `prepararPagosVenta()`, que solo resta `advance_applications`): con anticipo se puede cobrar de más.
 - Una venta a crédito en la base que en la edición se pasa a «Contado»: «Agregar pago» hace POST
   `sale_payments` y el backend responde 422 porque la venta todavía es a crédito. Ya pasaba antes.
