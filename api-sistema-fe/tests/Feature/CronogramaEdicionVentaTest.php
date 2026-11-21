@@ -89,6 +89,65 @@ class CronogramaEdicionVentaTest extends CreditosTestCase
         );
     }
 
+    // T-116 (decisión del usuario, 21-nov): sin cobros, una venta a crédito pasa a contado y sus cuotas
+    // quedan anuladas (antes daba 422 siempre, porque toda venta a crédito guardada tiene cuotas).
+    private function payloadContado(Sale $venta): array
+    {
+        $datos = array_replace($this->payload([], $venta), [
+            'type_payment' => 1, 'state_payment' => 3, 'debt' => 0, 'paid_out' => 118,
+            'payments' => [['method_payment' => 'EFECTIVO', 'amount' => 118.00, 'date_payment' => '2026-01-01']],
+        ]);
+        unset($datos['credit_type'], $datos['cronograma']);
+
+        return $datos;
+    }
+
+    private function ventaACreditoConUnaCuota(): Sale
+    {
+        app(SaleController::class)->store(new Request($this->payload([
+            ['numero_cuota' => 1, 'monto_programado' => 118, 'fecha_vencimiento' => '2026-12-31'],
+        ])));
+
+        return Sale::orderByDesc('id')->first();
+    }
+
+    public function test_una_venta_a_credito_sin_cobros_pasa_a_contado_y_anula_sus_cuotas(): void
+    {
+        $venta = $this->ventaACreditoConUnaCuota();
+        $venta->update(['aplica_mora' => true, 'tasa_mora' => 1, 'tipo_mora' => 'porcentaje_diario']);
+
+        app(SaleController::class)->update(new Request($this->payloadContado($venta)), (string) $venta->id);
+
+        $venta->refresh();
+        $this->assertSame(1, (int) $venta->type_payment);
+        $this->assertSame('contado', $venta->condicion_pago);
+        $this->assertEquals(0, (float) $venta->saldo_pendiente);
+        $this->assertFalse((bool) $venta->aplica_mora);
+        $this->assertSame(0, $venta->cuotasVigentes()->count());
+        $this->assertSame(['anulada'], $venta->installments()->pluck('estado')->unique()->values()->all());
+        $this->assertSame([], app(SaleController::class)->show((string) $venta->id)->getData(true)['cronograma']);
+    }
+
+    public function test_una_venta_a_credito_con_una_cuota_cobrada_no_pasa_a_contado(): void
+    {
+        $venta = $this->ventaACreditoConUnaCuota();
+        app(\App\Http\Controllers\Credit\CreditPaymentController::class)->store(new Request([
+            'monto_total' => 50, 'fecha_pago' => '2026-01-01', 'medio_pago' => 'EFECTIVO',
+            'aplicaciones' => [['sale_id' => $venta->id, 'installment_id' => $venta->cuotasVigentes()->first()->id, 'monto_aplicado' => 50]],
+        ]), $this->cliente);
+
+        try {
+            app(SaleController::class)->update(new Request($this->payloadContado($venta)), (string) $venta->id);
+            $this->fail('Debió rechazar el paso a contado.');
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+            $this->assertSame(422, $e->getStatusCode());
+            $this->assertStringContainsString('cuotas cobradas', $e->getMessage());
+        }
+
+        $this->assertSame(2, (int) $venta->fresh()->type_payment);
+        $this->assertSame(1, $venta->cuotasVigentes()->count());
+    }
+
     public function test_show_de_una_venta_al_contado_no_trae_cronograma(): void
     {
         $datos = array_replace($this->payload([]), [

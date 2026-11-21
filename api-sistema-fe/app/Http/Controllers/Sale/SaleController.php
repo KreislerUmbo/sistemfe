@@ -1120,16 +1120,17 @@ public function update(Request $request, string $id)
     // cronograma/pagos ya reales si alguien intenta destildar "Crédito"
     // desde este formulario. Chequeo ANTES de abrir la transacción, mismo
     // criterio que el resto de los validadores de este controlador.
-    if ((int) $venta->type_payment === 2 && (int) $request->type_payment !== 2) {
-        $tieneSeguimientoReal = $venta->installments()->exists() || $venta->paymentApplications()->exists();
-        if ($tieneSeguimientoReal) {
-            throw new HttpException(
-                422,
-                "La venta #{$venta->id} ya tiene cronograma de cuotas y/o pagos aplicados del " .
-                "módulo de amortizaciones — no se puede cambiar a 'contado' sin antes anular ese " .
-                "seguimiento (ver CreditInstallmentController/CreditPaymentController)."
-            );
-        }
+    // T-116 (decisión del usuario, 21-nov-2026): antes bloqueaba si existía CUALQUIER cuota, y toda
+    // venta a crédito guardada tiene cuotas, así que nunca podía volver a contado. Ahora solo bloquea
+    // si hay plata cobrada (aplicación activa). Sin cobros, las cuotas se anulan más abajo, igual que
+    // al regenerar el cronograma (quedan en el historial). El adelanto se bloquea aparte, abajo.
+    $pasaAContado = (int) $venta->type_payment === 2 && (int) $request->type_payment !== 2;
+    if ($pasaAContado && $venta->paymentApplications()->where('estado', 'activo')->exists()) {
+        throw new HttpException(
+            422,
+            "La venta #{$venta->id} ya tiene cuotas cobradas: no se puede pasar a contado. " .
+            "Anula primero esos cobros desde Cuentas por Cobrar."
+        );
     }
 
     // ── Blindaje: venta con adelanto aplicado, sin importar type_payment ──
@@ -1445,6 +1446,18 @@ public function update(Request $request, string $id)
                 "tasa_mora"       => $request->boolean('aplica_mora') ? $request->tasa_mora : null,
                 "tipo_mora"       => $request->boolean('aplica_mora') ? $request->tipo_mora : null,
             ]);
+        } elseif ($pasaAContado) {
+            // T-116: de crédito a contado sin cobros (ya validado arriba): las cuotas quedan anuladas
+            // y la mora deja de aplicar. Lo que falte pagar queda como deuda de contado (saldo_pendiente).
+            Installment::where('sale_id', $venta->id)
+                ->where('estado', '!=', 'anulada')
+                ->update([
+                    "estado"           => 'anulada',
+                    "motivo_anulacion" => 'La venta pasó de crédito a contado antes de enviarse a SUNAT.',
+                    "anulado_por"      => auth('api')->user()->id,
+                    "anulado_en"       => now(),
+                ]);
+            $venta->update(["aplica_mora" => false, "tasa_mora" => null, "tipo_mora" => null]);
         }
 
         DB::commit();

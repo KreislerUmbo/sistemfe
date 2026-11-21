@@ -112,3 +112,27 @@ npm run type-check && npm run build
     previa de serie extra que podía llegar después de la correcta.
   - Navegador (`e2e/verif-t116-cronograma.mjs`, crédito simulado): abre con 1 cuota «mensual» y con
     2 cuotas «quincenal», la suma calza y el PATCH reenvía las mismas cuotas. Backend: 775 en verde.
+- **Ampliación 4 (pedido del usuario, 21-nov — UX del cobro y del cronograma, puntos A, B, C y E):**
+  - `CronogramaCuotasCampos` (lo usan también registrar y facturar una reserva): si la suma no calza
+    dice «Faltan/Sobran S/ X» con **Regenerar** y **Ajustar última cuota** (B); si cambian el N° de
+    cuotas o la periodicidad después de armar la tabla avisa que quedó desactualizada y resalta
+    «Regenerar cronograma», sin regenerar solo (C); cada cuota tiene un botón para quitarla (se
+    renumeran y baja el N° de cuotas); una cuota sin fecha («Personalizada») se marca en rojo.
+  - `CobroEdicion`: bajo «Agregar pago» dice si el pago se guarda al instante o con «Guardar cambios», y
+    los pagos en memoria llevan la marca «Sin guardar»; quitar un pago ya guardado en memoria lo avisa (A).
+    Se quitó el aviso fijo «hay que regenerar el cronograma» (desactualizado desde la ampliación 3).
+    Tabla de pagos con el nombre del método, el monto con 2 decimales y el n.º de operación bajo el
+    método; botón «Todo el saldo» en el monto (E).
+  - Venta 41 de umbo: la fecha de la cuota sí se edita en la tabla (escribiéndola o con el calendario) y
+    se guarda con «Guardar cambios». «31/11» no existe: flatpickr lo convierte sin avisar en 01/12.
+  - Navegador (`e2e/verif-t116-fecha-cuota.mjs`, venta 35 simulada con 1 cuota al 31-12): fecha corregida
+    a 30/11 llega al PATCH; aviso de desactualizado con 2 cuotas y sin él al volver a 1; pago de 100 con
+    «Sin guardar»; «Sobran PEN 100.00» → Ajustar última cuota → calza (180); quitar la cuota deja
+    «Generar cronograma sugerido». Vitest (350) y `vite build` en verde.
+- **Ampliación 5 (decisión del usuario, 21-nov — crédito → contado):** `update()` bloqueaba pasar a contado
+  si la venta tenía *cualquier* cuota (anulada o no), así que una venta guardada a crédito nunca podía volver
+  a contado. Ahora solo bloquea si hay cobros activos (`payment_applications.estado='activo'`), con un mensaje
+  para el usuario; sin cobros anula las cuotas vigentes (quedan en el historial) y apaga la mora. El adelanto
+  aplicado sigue bloqueando aparte. `CobroEdicion` avisa al pasar a «Contado» que las cuotas se anularán.
+  Tests nuevos en `CronogramaEdicionVentaTest` (4 en total); backend Sale/Cobro/Venta/Credit/Caja/Cash/Advance:
+  820 en verde. Navegador: el PATCH sale con `type_payment` 1, `debt` 0 y los pagos en memoria.
