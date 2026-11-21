@@ -99,3 +99,16 @@ npm run type-check && npm run build
   - Navegador (`e2e/verif-t116-anticipo-pagos.mjs`, venta 35 con anticipo y crédito simulados): aviso
     «superan lo que queda por cobrar (PEN 1.00, ya restado el anticipo)» sin PATCH; en crédito → Contado,
     ningún POST/DELETE a `sale_payments` y el pago va en `payments`. Backend Sale/Cobro/Venta/Credit/Caja: 773 en verde.
+- **Ampliación 3 (pedido del usuario, 21-nov, venta 41 de umbo):**
+  - El cronograma guardado no se veía al volver a editar: estaba bien en la base (1 cuota de S/ 120 al
+    31-12), pero `edit.vue` no lo cargaba a propósito (Amortizaciones Fase 8: «se exige regenerar») y
+    abría con «3 cuotas mensuales». `GET sales/{id}` devuelve `cronograma` (cuotas vigentes, no en
+    `SaleResource` para no agregar consultas al listado) y la edición lo carga con su número de cuotas y la
+    periodicidad deducida de las fechas. Si cambia el monto a financiar, `store()` sigue exigiendo que la
+    suma calce. Test `CronogramaEdicionVentaTest` (2).
+  - Carga lenta: `config()` hacía 5 GET en cadena (~3-4 s en local, ~0,6 s cada uno); ahora van en
+    paralelo y la venta se aplica con los catálogos listos: líneas visibles en ~1,5 s
+    (`e2e/medir-carga-edicion.mjs`). La sucursal provisional (`branches[0]`) ya no dispara una vista
+    previa de serie extra que podía llegar después de la correcta.
+  - Navegador (`e2e/verif-t116-cronograma.mjs`, crédito simulado): abre con 1 cuota «mensual» y con
+    2 cuotas «quincenal», la suma calza y el PATCH reenvía las mismas cuotas. Backend: 775 en verde.

@@ -296,10 +296,10 @@ const paymentMethods = ref<PaymentMethod[]>([]);
 
 // ── Configuración de Crédito (edición previa a envío a SUNAT) ──────
 // Solo credit_type='cuotas_fijas', mismo alcance que register.vue.
-// Cualquier edición de una venta a crédito exige regenerar el
-// cronograma completo (ver SaleController::update()) — no se prellena
-// con las cuotas viejas, se fuerza "Generar cronograma sugerido" antes
-// de guardar, igual que en register.vue.
+// update() reemplaza el cronograma completo en cada guardado (anula las
+// cuotas viejas). T-116: la pantalla abre con las cuotas vigentes; si
+// cambia el monto a financiar, store() exige que la suma vuelva a calzar
+// (regenerar o ajustar las cuotas).
 const credit_type = ref<string>('cuotas_fijas');
 const num_cuotas = ref<number>(3);
 const periodicidad = ref<string>('mensual');
@@ -746,6 +746,17 @@ const totalACobrar = (): number => Math.max(0, Number((getTotalSales() - anticip
 
 const montoAFinanciar = (): number => Math.max(0, totalACobrar() - total_payments.value);
 
+// T-116: periodicidad de un cronograma guardado (no se persiste), deducida de los días entre
+// vencimientos; si no son parejos es «personalizada». Una sola cuota queda en «mensual».
+const periodicidadDe = (fechas: string[]): string => {
+    if (fechas.length < 2) return 'mensual';
+    const dias = fechas.slice(1).map((f, i) => Math.round((Date.parse(f) - Date.parse(fechas[i]!)) / 86_400_000));
+    if (dias.every(d => d === 7)) return 'semanal';
+    if (dias.every(d => d >= 14 && d <= 16)) return 'quincenal';
+    if (dias.every(d => d >= 28 && d <= 31)) return 'mensual';
+    return 'personalizada';
+};
+
 const sumaCronograma = (): number =>
     cronograma.value.reduce((s, c) => s + (Number(c.monto_programado) || 0), 0);
 
@@ -944,13 +955,14 @@ const precioGuardado = (d: any): 'General' | 'Mayorista' | 'Otro' | undefined =>
 };
 
 // ── CARGAR DATOS DE LA VENTA ──────────────────────────────────────
-const loadSale = async () => {
+// T-116: `pedido` es el GET de la venta ya lanzado por config(), en paralelo con los catálogos.
+const loadSale = async (pedido?: Promise<AxiosResponse<SaleResponse>>) => {
     // Evita que los watchers de destino/condicion_especial/is_exportacion
     // recalculen tip_afe_igv o descarten sale_details mientras hidratamos
     // los valores ya guardados en la API.
     isHydrating.value = true;
     try {
-        const res: AxiosResponse<SaleResponse> = await httpClient.get(`sales/${sale_id.value}`);
+        const res: AxiosResponse<SaleResponse> = await (pedido ?? httpClient.get(`sales/${sale_id.value}`));
         if (res.data.code === 405) {
             (Swal as TVueSwalInstance).fire('Error', res.data.message, 'error');
             return;
@@ -968,8 +980,13 @@ const loadSale = async () => {
         guardada_a_credito.value = Number(sale.type_payment) === 2;
 
         // Configuración de Crédito — la venta ya trae esto persistido
-        // (SaleResource) si es a crédito; el cronograma en sí no se
-        // prellena (se exige regenerar antes de guardar, ver store()).
+        // (SaleResource) si es a crédito. T-116: también las cuotas vigentes
+        // (GET sales/{id} → cronograma), con su número y periodicidad.
+        cronograma.value = (res.data.cronograma ?? []).map(c => ({ ...c, monto_programado: Number(c.monto_programado) }));
+        if (cronograma.value.length) {
+            num_cuotas.value = cronograma.value.length;
+            periodicidad.value = periodicidadDe(cronograma.value.map(c => c.fecha_vencimiento));
+        }
         credit_type.value = sale.credit_type || 'cuotas_fijas';
         aplica_mora.value = Boolean(sale.aplica_mora);
         tasa_mora.value = Number(sale.tasa_mora || 0);
@@ -1128,13 +1145,13 @@ const loadPaymentMethods = async () => {
 // ── Módulo de series de comprobantes ──────────────────────────────
 const cargarTiposYSucursales = async () => {
     try {
-        const resTipos = await httpClient.get<{ tipos_comprobante: TipoComprobante[] }>(
-            'tipos-comprobante?disponibles_para_serie=1'
-        );
+        const [resTipos, resBranches] = await Promise.all([
+            httpClient.get<{ tipos_comprobante: TipoComprobante[] }>('tipos-comprobante?disponibles_para_serie=1'),
+            puedeCambiarSucursal.value ? httpClient.get<{ branches: Branch[] }>('branches?active=1') : Promise.resolve(null),
+        ]);
         tiposComprobante.value = resTipos.data.tipos_comprobante;
 
-        if (puedeCambiarSucursal.value) {
-            const resBranches = await httpClient.get<{ branches: Branch[] }>('branches?active=1');
+        if (resBranches) {
             branches.value = resBranches.data.branches;
             branch_id_seleccionado.value = branches.value[0]?.id;
         }
@@ -1143,24 +1160,30 @@ const cargarTiposYSucursales = async () => {
     }
 };
 
+// T-116: antes eran 5 peticiones una tras otra (~3-4 s en local). Ahora van todas a la vez; la
+// venta se aplica después de tener los catálogos (usa los códigos de detracción y las sucursales).
+// isHydrating desde el inicio: la sucursal provisional (branches[0]) no dispara una vista previa
+// de serie que después compita con la de la sucursal real de la venta.
 const config = async () => {
+    isHydrating.value = true;
+    const pedidoVenta = httpClient.get<SaleResponse>(`sales/${sale_id.value}`);
+    pedidoVenta.catch(() => {}); // el error se maneja en loadSale()
     try {
-        const res: AxiosResponse<SaleConfig> = await httpClient.get('sales/config');
+        const [res] = await Promise.all([
+            httpClient.get<SaleConfig>('sales/config').catch((error) => { console.error(error); return null; }),
+            loadPaymentMethods(),
+            cargarTiposYSucursales(),
+        ]);
         // No asignamos n_transaction ni today porque ya vienen de la venta cargada
-        parametros_tributarios.value = (res.data as any).parametros_tributarios ?? {};
-        codigos_detraccion.value = (res.data as any).codigos_detraccion ?? [];
+        parametros_tributarios.value = (res?.data as any)?.parametros_tributarios ?? {};
+        codigos_detraccion.value = (res?.data as any)?.codigos_detraccion ?? [];
 
         porcentaje_retencion_sel.value = getRetencionTasa();
         porcentaje_percepcion_sel.value = getPercepcionTasa();
-
-        await loadPaymentMethods();
-        await cargarTiposYSucursales();
-
-        // Cargar venta después de tener los catálogos
-        await loadSale();
     } catch (error) {
         console.error(error);
     }
+    await loadSale(pedidoVenta);
 };
 
 

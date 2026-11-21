@@ -172,6 +172,8 @@ export type SaleResponse = {
     sale_id?: string | number,
     /** T-116: sucursal de la serie de la venta (solo en GET sales/{id}). */
     branch_id?: number | null,
+    /** T-116: cuotas vigentes de una venta a crédito (solo en GET sales/{id}). */
+    cronograma?: { numero_cuota: number; monto_programado: number; fecha_vencimiento: string }[],
     error?: any,
 
 }

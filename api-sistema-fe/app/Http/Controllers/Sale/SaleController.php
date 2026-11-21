@@ -1069,6 +1069,15 @@ class SaleController extends Controller
             "branch_id" => $venta?->serie_comprobante_id
                 ? SerieComprobante::whereKey($venta->serie_comprobante_id)->value('branch_id')
                 : null,
+            // T-116: cronograma vigente de una venta a crédito, para que la edición abra con las
+            // cuotas guardadas (antes abría vacío y con «3 cuotas mensuales» por defecto).
+            "cronograma" => $venta && (int) $venta->type_payment === 2
+                ? $venta->cuotasVigentes()->map(fn ($c) => [
+                    'numero_cuota'      => (int) $c->numero_cuota,
+                    'monto_programado'  => (float) $c->monto_programado,
+                    'fecha_vencimiento' => substr((string) $c->fecha_vencimiento, 0, 10),
+                ])->values()
+                : [],
             "code" => 200,
         ]);
     }
