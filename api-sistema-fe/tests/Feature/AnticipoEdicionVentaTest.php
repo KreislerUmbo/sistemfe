@@ -122,6 +122,32 @@ class AnticipoEdicionVentaTest extends CreditosTestCase
         $this->assertSame(0.0, (float) $this->venta->fresh()->amount_anticipo);
     }
 
+    public function test_los_pagos_no_pueden_pasar_del_total_menos_el_anticipo(): void
+    {
+        // 118 − 80 = 38 por cobrar; el pago de 50 se pasa
+        try {
+            $this->editar(['n_comprobante_anticipo' => 'F001-00000123', 'amount_anticipo' => 80]);
+            $this->fail('Debió rechazar pagos por encima de lo que queda por cobrar.');
+        } catch (HttpException $e) {
+            $this->assertSame(422, $e->getStatusCode());
+            $this->assertStringContainsString('38.00', $e->getMessage());
+        }
+        $this->assertSame(0.0, (float) $this->venta->fresh()->amount_anticipo);
+
+        // 118 − 68 = 50: el pago de 50 calza justo
+        $venta = $this->editar(['n_comprobante_anticipo' => 'F001-00000123', 'amount_anticipo' => 68]);
+        $this->assertSame(68.0, (float) $venta->amount_anticipo);
+    }
+
+    public function test_sin_los_campos_los_pagos_se_miden_contra_el_anticipo_guardado(): void
+    {
+        $this->editar(['n_comprobante_anticipo' => 'F001-00000123', 'amount_anticipo' => 68]);
+
+        // queda 50 por cobrar: un pago de 60 se pasa aunque el payload no traiga el anticipo
+        $this->expectException(HttpException::class);
+        $this->editar(['payments' => [['method_payment' => 'EFECTIVO', 'amount' => 60.00, 'date_payment' => '2026-01-01']]]);
+    }
+
     public function test_anticipo_negativo_o_no_numerico_da_422(): void
     {
         foreach ([-1, 'abc'] as $monto) {

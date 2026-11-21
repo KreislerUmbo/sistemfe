@@ -178,8 +178,10 @@ const props = defineProps<{
     moneda: string;
     /** Fecha de emisión de la venta: base de las fechas de las cuotas. */
     fechaBase: string;
-    /** Total de la venta (lo que los pagos no pueden superar). */
+    /** Lo que queda por cobrar: total de la venta menos el anticipo (los pagos no pueden superarlo). */
     totalVenta: number;
+    /** La venta está guardada a crédito: sale_payments rechaza POST/DELETE aunque en pantalla se pase a Contado. */
+    guardadaACredito: boolean;
     totalPagado: number;
     /** Lo que financia el cronograma (total − anticipo − pagos). */
     montoAFinanciar: number;
@@ -231,6 +233,9 @@ const resetAnticipo = () => {
 };
 
 // ── PAGOS ───────────────────────────────────────────────────────────
+// Crédito en pantalla o venta guardada a crédito: los pagos se arman en memoria (ver addPayment()).
+const pagosEnMemoria = (): boolean => typePayment.value == 2 || props.guardadaACredito;
+
 const addPayment = () => {
     if (!methodPayment.value) {
         (Swal as TVueSwalInstance).fire('Error', 'El método de pago es obligatorio.', 'error'); return;
@@ -242,7 +247,7 @@ const addPayment = () => {
         (Swal as TVueSwalInstance).fire('Error', 'La fecha de pago es obligatoria en crédito.', 'error'); return;
     }
     if (props.totalVenta < (amount.value + props.totalPagado)) {
-        (Swal as TVueSwalInstance).fire('Error', 'El monto no puede superar el total de la venta.', 'error'); return;
+        (Swal as TVueSwalInstance).fire('Error', 'El monto no puede superar lo que queda por cobrar de la venta.', 'error'); return;
     }
     if (methodPayment.value === 'EFECTIVO' && pagos.value.some(p => p.method_payment === 'EFECTIVO')) {
         (Swal as TVueSwalInstance).fire('Error', 'Ya hay un pago en efectivo registrado.', 'error'); return;
@@ -258,8 +263,8 @@ const addPayment = () => {
 
     // T-116: en crédito el pago inicial queda en memoria y lo guarda «Guardar cambios»
     // (PATCH sales/{id} reemplaza todos los pagos con los del payload). POST sale_payments
-    // rechaza con 422 las ventas a crédito: ahí el cobro se hace desde Cuentas por Cobrar.
-    if (typePayment.value == 2) {
+    // rechaza con 422 las ventas guardadas a crédito, también si en pantalla se pasó a Contado.
+    if (pagosEnMemoria()) {
         pagos.value.push({
             method_payment: methodPayment.value,
             amount: amount.value,
@@ -294,7 +299,7 @@ const removePayment = (index: number) => {
     if (!payment) return;
     // T-116: en crédito (o un pago que todavía no está en el backend) se quita de la lista y
     // el cambio se guarda con «Guardar cambios»; DELETE sale_payments rechaza ventas a crédito.
-    if (typePayment.value == 2 || !payment.id) {
+    if (pagosEnMemoria() || !payment.id) {
         pagos.value.splice(index, 1);
         emit('cambio');
         return;

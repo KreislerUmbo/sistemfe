@@ -327,7 +327,9 @@ class SaleController extends Controller
     // anticipo" más abajo), así que acá se resta lo mismo que ya se
     // validó en validarAdelantosPayload() para comparar contra lo que
     // realmente queda por pagar.
-    private function prepararPagosVenta(Request $request): array
+    // T-116: $anticipo es el anticipo de un comprobante previo (amount_anticipo) que queda en la
+    // venta: ya está pagado, así que tampoco se puede volver a cobrar.
+    private function prepararPagosVenta(Request $request, float $anticipo = 0): array
     {
         $pagos = $request->payments ?? [];
 
@@ -345,7 +347,7 @@ class SaleController extends Controller
 
         $this->cobro->validarContraSaldo(
             $preparados,
-            round((float) $request->total - $suma_adelantos, 2),
+            round((float) $request->total - $suma_adelantos - $anticipo, 2),
             (string) $request->currency,
             exacto: false
         );
@@ -1180,7 +1182,11 @@ public function update(Request $request, string $id)
     $direccionId = $request->has("client_address_id")
         ? DireccionDelComprobante::validar($request->client_address_id, $request->client_id, $mismoCliente ? $venta->client_address_id : null)
         : ($mismoCliente ? $venta->client_address_id : null);
-    $pagosPreparados = $this->prepararPagosVenta($request);
+    // Sin los campos del anticipo en el payload vale el guardado (anticipoDeLaEdicion() lo conserva).
+    $pagosPreparados = $this->prepararPagosVenta(
+        $request,
+        (float) ($anticipo['amount_anticipo'] ?? $venta->amount_anticipo ?? 0)
+    );
     $serieResuelta = $this->resolverSerieComprobanteUpdate($venta, $request);
     $this->validarBoletaSinDocumento($request, $serieResuelta['tipo']?->codigo);
     $this->validarPrecioDeVenta($request, $venta);

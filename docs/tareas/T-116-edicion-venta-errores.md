@@ -86,9 +86,16 @@ npm run type-check && npm run build
 - **Ampliación (pedido del usuario, 20-nov):** `update()` guarda el anticipo
   (`anticipoDeLaEdicion()`): sin comprobante el monto queda en 0; monto negativo, no numérico o mayor
   que el total → 422; un payload sin los campos conserva lo guardado. Test `AnticipoEdicionVentaTest` (5).
-
-## Hallazgos fuera de alcance
-- Los pagos de la edición se validan contra el total sin restar `amount_anticipo` (en el front y en
-  `prepararPagosVenta()`, que solo resta `advance_applications`): con anticipo se puede cobrar de más.
-- Una venta a crédito en la base que en la edición se pasa a «Contado»: «Agregar pago» hace POST
-  `sale_payments` y el backend responde 422 porque la venta todavía es a crédito. Ya pasaba antes.
+- **Ampliación 2 (pedido del usuario, 20-nov — los dos hallazgos de la ampliación 1):**
+  - Pagos contra total − anticipo: `prepararPagosVenta()` resta el anticipo en `update()` (el del
+    payload o, si no viene, el guardado); en `edit.vue`, `totalACobrar()` = total − anticipo mide el
+    límite de pagos (al agregar y al guardar), `state_payment`, `debt` y el monto a financiar. Antes,
+    con anticipo, una venta a crédito no se podía guardar: el cronograma sumaba total − anticipo −
+    pagos y `debt` iba como total − pagos (el backend valida el cronograma contra `debt`). El resumen
+    muestra «Anticipo (ya pagado)». Tests nuevos en `AnticipoEdicionVentaTest` (7 en total).
+  - Venta guardada a crédito pasada a «Contado»: `CobroEdicion` arma los pagos en memoria si la venta
+    está guardada a crédito (`guardadaACredito`); los guarda el PATCH, que con cronograma responde con
+    su aviso (mostrado por `store()`).
+  - Navegador (`e2e/verif-t116-anticipo-pagos.mjs`, venta 35 con anticipo y crédito simulados): aviso
+    «superan lo que queda por cobrar (PEN 1.00, ya restado el anticipo)» sin PATCH; en crédito → Contado,
+    ningún POST/DELETE a `sale_payments` y el pago va en `payments`. Backend Sale/Cobro/Venta/Credit/Caja: 773 en verde.

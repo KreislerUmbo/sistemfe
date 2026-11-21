@@ -78,7 +78,7 @@
                     v-model:aplica-mora="aplica_mora" v-model:tasa-mora="tasa_mora" v-model:tipo-mora="tipo_mora"
                     v-model:n-comprobante-anticipo="n_comprobante_anticipo" v-model:sale-anticipo="sale_anticipo"
                     :sale-id="sale_id" :metodos="paymentMethods" :moneda="currency" :fecha-base="today"
-                    :total-venta="sale_total" :total-pagado="total_payments" :monto-a-financiar="montoAFinanciar()"
+                    :total-venta="totalACobrar()" :guardada-a-credito="guardada_a_credito" :total-pagado="total_payments" :monto-a-financiar="montoAFinanciar()"
                     :tiene-cobros-formales="tiene_cobros_formales" :condicion-especial="condicion_especial"
                     @cambio="sumDetails" />
             </div>
@@ -310,6 +310,9 @@ const tipo_mora = ref<string>('porcentaje_diario');
 // true si la venta ya tiene cuotas cobradas o un adelanto aplicado —
 // bloquea la edición de productos/pago inicial (SaleResource::tiene_cobros_formales).
 const tiene_cobros_formales = ref<boolean>(false);
+// T-116: condición con la que la venta está guardada (no la elegida en pantalla). Si es crédito,
+// sale_payments rechaza POST/DELETE y los pagos se guardan con «Guardar cambios».
+const guardada_a_credito = ref<boolean>(false);
 
 // Totales
 const igv_total = ref<number>(0);
@@ -733,10 +736,15 @@ const onDetractionCodeChange = () => {
 // Mismo cálculo que register.vue::montoAFinanciar(), adaptado al
 // mecanismo de anticipo que usa esta pantalla (sale_anticipo, no el
 // módulo Adelantos de register.vue — edit.vue no tiene ese selector).
-const montoAFinanciar = (): number => {
-    const totalAdelantos = condicion_especial.value === 'anticipo' ? sale_anticipo.value : 0;
-    return Math.max(0, getTotalSales() - totalAdelantos - total_payments.value);
-};
+// T-116: el anticipo (comprobante previo) ya está pagado: los pagos, el estado de pago, la deuda y
+// el cronograma se miden contra lo que queda por cobrar. Mismo criterio que el backend: sin
+// comprobante no hay anticipo (SaleController::anticipoDeLaEdicion()).
+const anticipoAplicado = (): number =>
+    condicion_especial.value === 'anticipo' && n_comprobante_anticipo.value.trim() ? Number(sale_anticipo.value) || 0 : 0;
+
+const totalACobrar = (): number => Math.max(0, Number((getTotalSales() - anticipoAplicado()).toFixed(2)));
+
+const montoAFinanciar = (): number => Math.max(0, totalACobrar() - total_payments.value);
 
 const sumaCronograma = (): number =>
     cronograma.value.reduce((s, c) => s + (Number(c.monto_programado) || 0), 0);
@@ -756,11 +764,12 @@ const store = async () => {
     // Re-validar acá (no solo en addPayment()): el total pudo bajar después
     // de agregar un pago (se quitó una línea, cambió un descuento/régimen),
     // dejando un pago ya agregado por encima del total sin que nada lo avise.
-    if (total_payments.value > getTotalSales() + 0.009) {
+    if (total_payments.value > totalACobrar() + 0.009) {
         (Swal as TVueSwalInstance).fire({
             icon: 'error', title: 'Error',
-            text: `Los pagos (${currency.value} ${total_payments.value.toFixed(2)}) superan el total de la venta ` +
-                `(${currency.value} ${getTotalSales().toFixed(2)}). Ajusta los pagos antes de guardar.`,
+            text: `Los pagos (${currency.value} ${total_payments.value.toFixed(2)}) superan lo que queda por cobrar ` +
+                `(${currency.value} ${totalACobrar().toFixed(2)}${anticipoAplicado() > 0 ? ', ya restado el anticipo' : ''}). ` +
+                'Ajusta los pagos antes de guardar.',
         }); return;
     }
     if (condicion_especial.value === '2' && !codigo_detraccion_sel.value) {
@@ -798,7 +807,7 @@ const store = async () => {
 
     // Estado de pago derivado automáticamente
     let estado_pago = 1; // pendiente
-    if (total_payments.value === getTotalSales()) estado_pago = 3;      // pagado completo
+    if (Math.abs(total_payments.value - totalACobrar()) < 0.01) estado_pago = 3;      // pagado completo
     else if (total_payments.value > 0) estado_pago = 2;      // pago parcial
 
     // Mapear condicion_especial → retencion_igv (campo de la BD)
@@ -877,7 +886,8 @@ const store = async () => {
 
         // Estado y deuda
         state_payment: estado_pago,
-        debt: getTotalSales() - total_payments.value,
+        // Neto del anticipo: el backend valida el cronograma contra este monto.
+        debt: Math.max(0, Number((totalACobrar() - total_payments.value).toFixed(2))),
         paid_out: total_payments.value,
 
         // Detalles — incluyen todos los campos para Greenter
@@ -955,6 +965,7 @@ const loadSale = async () => {
         description.value = sale.description || '';
         discount_global.value = Number(sale.discount_global || 0);
         type_payment.value = sale.type_payment || 1;
+        guardada_a_credito.value = Number(sale.type_payment) === 2;
 
         // Configuración de Crédito — la venta ya trae esto persistido
         // (SaleResource) si es a crédito; el cronograma en sí no se
@@ -1286,6 +1297,7 @@ const filasTotales = computed(() => {
     if (condicion_especial.value === '3') filas.push({ etiqueta: `(+) Percepción ${(porcentaje_percepcion_sel.value * 100).toFixed(1)}%`, valor: dinero(monto_percepcion.value), clase: 'text-info' });
     if (condicion_especial.value === '1') filas.push({ etiqueta: `(−) Retención ${(porcentaje_retencion_sel.value * 100).toFixed(1)}%`, valor: `− ${dinero(monto_retencion.value)}`, clase: 'text-danger' });
     if (condicion_especial.value === '2') filas.push({ etiqueta: `(−) Detracción ${(porcentaje_detraccion_sel.value * 100).toFixed(1)}% [${codigo_detraccion_sel.value}]`, valor: dinero(monto_detraccion.value), clase: 'text-warning' });
+    if (anticipoAplicado() > 0) filas.push({ etiqueta: 'Anticipo (ya pagado)', valor: `− ${dinero(anticipoAplicado())}`, clase: 'text-success' });
     if (total_payments.value > 0) filas.push({ etiqueta: 'Total pagado', valor: dinero(total_payments.value), clase: 'text-success' });
     return filas;
 });
