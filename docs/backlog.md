@@ -8,7 +8,7 @@
 
 Cada línea: ID · qué · estado · depende de · rama o commit. El detalle está en
 `docs/tareas/T-…md` (se borra al cerrar; para una tarea hecha, el commit es la referencia).
-Próximo ID libre: **T-118**.
+Próximo ID libre: **T-119**.
 
 ## Orden de construcción (27-oct-2026)
 
@@ -48,6 +48,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-101 | TRA | Dejar `npm run type-check` (vue-tsc) en 0 errores para que `npm run build` vuelva a servir de criterio de aceptación. Medido el 10-nov: 47 errores en 17 archivos, todos previos a T-035; los que más pesan: `views/recursos/manual.vue` (11), `helpers/fake-backend.ts` (7), `portal/Favoritos.vue` (4), `recursos/index.vue` (4); el resto, 1-2 por archivo en ventas, productos, portal, agencia y router. Corregir tipos sin cambiar comportamiento, por módulo. Sin archivo de tarea todavía | por hacer | — | |
 | T-029 | AGE | Tour clásico desde plantilla: cada servicio nace con su tratamiento tributario; costo sin infantes (H18, H19) | por hacer: desbloqueada el 07-nov (D-AGE-035: el guía toma el valor por defecto de la agencia) | — | |
 | T-117 | UI | Campo de fecha: una fecha escrita que no existe («31/11/2026») se rechaza con aviso bajo el campo y se conserva la anterior, en vez de convertirse sin avisar en otra (01/12/2026). Arregla todos los campos de fecha (`CampoFecha.vue`) | por hacer | — | — |
+| T-118 | VEN | Venta a crédito con una cuota por defecto (fecha con el calendario) y «Pagar en varias cuotas» para el cronograma, en registrar y editar; la edición abre en una cuota si la venta tiene una | en curso | — | `feat/T-118-credito-una-cuota` |
 
 ## Por analizar
 

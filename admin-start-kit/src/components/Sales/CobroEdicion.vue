@@ -98,7 +98,7 @@
              de calzar, CronogramaCuotasCampos dice cuánto falta y ofrece Regenerar / Ajustar última cuota. -->
         <div class="row g-2 cronograma-campos" v-if="typePayment == 2 && !tieneCobrosFormales">
             <CronogramaCuotasCampos v-model="cronograma" v-model:num-cuotas="numCuotas" v-model:periodicidad="periodicidad"
-                :monto-a-financiar="montoAFinanciar" :moneda="moneda" :fecha-base="fechaBase" />
+                :monto-a-financiar="montoAFinanciar" :moneda="moneda" :fecha-base="fechaBase" permitir-una-cuota />
             <div class="col-12">
                 <div class="form-check form-switch">
                     <input class="form-check-input" type="checkbox" role="switch" id="aplica-mora-edit" v-model="aplicaMora">

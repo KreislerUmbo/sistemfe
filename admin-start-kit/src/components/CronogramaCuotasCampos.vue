@@ -1,13 +1,10 @@
 <template>
-    <!-- Modo (solo donde se permite una cuota: facturación de reservas) -->
+    <!-- T-118: una cuota por defecto; el interruptor abre el cronograma de varias cuotas. -->
     <div v-if="permitirUnaCuota" class="col-12">
-        <div class="btn-group btn-group-sm" role="group" aria-label="Cuotas">
-            <button type="button" class="btn" :class="modo === 'una' ? 'btn-primary' : 'btn-outline-primary'" @click="cambiarModo('una')">
-                Una cuota
-            </button>
-            <button type="button" class="btn" :class="modo === 'varias' ? 'btn-primary' : 'btn-outline-primary'" @click="cambiarModo('varias')">
-                Varias cuotas
-            </button>
+        <div class="form-check form-switch mb-0">
+            <input :id="idInterruptor" class="form-check-input" type="checkbox" role="switch"
+                :checked="modo === 'varias'" @change="cambiarModo(($event.target as HTMLInputElement).checked ? 'varias' : 'una')">
+            <label class="form-check-label small fw-semibold text-secondary" :for="idInterruptor">Pagar en varias cuotas</label>
         </div>
     </div>
 
@@ -122,13 +119,15 @@
 // céntimo con el monto a financiar.
 // - "Varias cuotas": número + periodicidad → "Generar cronograma sugerido"
 //   (POST installments/schedule-preview), tabla editable.
-// - "Una cuota" (permitirUnaCuota): todo el saldo con la fecha que se elija;
+// - "Una cuota" (permitirUnaCuota, T-118: también en registrar y editar venta): todo el saldo
+//   con la fecha que se elija; por defecto, salvo que lleguen varias cuotas guardadas;
 //   el uso típico de la agencia cuando el monto no es alto.
 import { computed, ref, watch } from 'vue';
 import httpClient from '@/helpers/http-client';
 import CampoFecha from '@/components/CampoFecha.vue';
 import { useToast } from '@/composables/useToast';
 import { redondear2 } from '@/helpers/ventaRetail';
+import { modoInicialCronograma, type ModoCronograma } from '@/helpers/cronogramaCuotas';
 
 export type CuotaCronograma = { numero_cuota: number; monto_programado: number; fecha_vencimiento: string };
 
@@ -148,8 +147,10 @@ const periodicidad = defineModel<string>('periodicidad', { default: 'mensual' })
 
 const toast = useToast();
 const generando = ref(false);
-const modo = ref<'una' | 'varias'>(props.permitirUnaCuota ? 'una' : 'varias');
-const fechaUnaCuota = ref<string>('');
+// T-118: abre en «una» salvo que la venta ya traiga varias cuotas (la edición abre con las guardadas).
+const modo = ref<ModoCronograma>(modoInicialCronograma(cronograma.value.length, props.permitirUnaCuota));
+const idInterruptor = `cuotas-varias-${Math.random().toString(36).slice(2, 8)}`;
+const fechaUnaCuota = ref<string>(modo.value === 'una' ? (cronograma.value[0]?.fecha_vencimiento ?? '') : '');
 
 const suma = computed(() => cronograma.value.reduce((s, c) => s + (Number(c.monto_programado) || 0), 0));
 const calza = computed(() => Math.abs(suma.value - props.montoAFinanciar) < 0.01);
@@ -193,20 +194,28 @@ const quitarCuota = (idx: number) => {
     cronograma.value = quedan;
 };
 
-// Una cuota: el cronograma es siempre una sola fila con todo el saldo.
+// Una cuota: el cronograma es siempre una sola fila con todo el saldo (sin saldo, ninguna: no se arma una cuota de 0).
 const armarUnaCuota = () => {
-    cronograma.value = fechaUnaCuota.value
-        ? [{ numero_cuota: 1, monto_programado: Math.round(props.montoAFinanciar * 100) / 100, fecha_vencimiento: fechaUnaCuota.value }]
+    const monto = redondear2(props.montoAFinanciar);
+    cronograma.value = fechaUnaCuota.value && monto > 0
+        ? [{ numero_cuota: 1, monto_programado: monto, fecha_vencimiento: fechaUnaCuota.value }]
         : [];
 };
 watch([fechaUnaCuota, () => props.montoAFinanciar], () => {
     if (modo.value === 'una') armarUnaCuota();
 });
 
-const cambiarModo = (nuevo: 'una' | 'varias') => {
+// T-118: de una a varias se conserva la cuota (N° = 1; al cambiar el N° el aviso invita a regenerar).
+// De varias a una: todo el saldo en una cuota, con la fecha ya elegida o la de la primera cuota.
+const cambiarModo = (nuevo: ModoCronograma) => {
+    if (nuevo === modo.value) return;
     modo.value = nuevo;
-    cronograma.value = [];
-    if (nuevo === 'una') armarUnaCuota();
+    if (nuevo === 'varias') {
+        if (cronograma.value.length) numCuotas.value = cronograma.value.length;
+        return;
+    }
+    fechaUnaCuota.value = fechaUnaCuota.value || cronograma.value[0]?.fecha_vencimiento || '';
+    armarUnaCuota();
 };
 
 const generarSugerido = async () => {
