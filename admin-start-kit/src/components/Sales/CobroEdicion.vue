@@ -7,6 +7,12 @@
                 @click="typePayment = 2">Crédito</button>
         </div>
 
+        <!-- T-116: de crédito a contado (permitido si no hay cuotas cobradas; si las hay, el backend lo rechaza). -->
+        <div v-if="guardadaACredito && typePayment == 1" class="small text-warning">
+            <i class="fas fa-info-circle me-1"></i>Al guardar, las cuotas de esta venta se anulan (quedan en el historial)
+            y lo que no se pague ahora queda como deuda al contado.
+        </div>
+
         <!-- Anticipo (comprobante previo): campo propio de la edición; no es el mecanismo de Adelantos de registro -->
         <div v-if="condicionEspecial === 'anticipo'">
             <label class="form-label mb-1 small fw-semibold text-secondary">
@@ -60,6 +66,10 @@
                     <input type="number" class="form-control" v-model.number="amount" placeholder="0.00"
                         :disabled="typePayment == 2 && tieneCobrosFormales" />
                 </div>
+                <button v-if="saldoPorCobrar > 0 && !(typePayment == 2 && tieneCobrosFormales)" type="button"
+                    class="btn btn-link btn-sm p-0 small" @click="amount = saldoPorCobrar">
+                    Todo el saldo ({{ moneda }} {{ saldoPorCobrar.toFixed(2) }})
+                </button>
             </div>
             <div class="col-6" v-if="typePayment == 2">
                 <label class="form-label mb-1 small fw-semibold text-secondary">Fecha de pago</label>
@@ -75,19 +85,18 @@
                     :disabled="typePayment == 2 && tieneCobrosFormales" @click="addPayment()">
                     <i class="fas fa-plus me-1"></i>{{ typePayment == 2 ? 'Agregar pago inicial' : 'Agregar pago' }}
                 </button>
+                <!-- T-116 (A): el mismo botón guarda al instante o deja el pago para «Guardar cambios». -->
+                <div class="small text-muted mt-1">
+                    <i class="fas me-1" :class="pagosEnMemoria() ? 'fa-clock' : 'fa-bolt'"></i>
+                    {{ pagosEnMemoria() ? 'El pago se guarda al pulsar «Guardar cambios».' : 'El pago se registra al instante en la venta.' }}
+                </div>
             </div>
         </div>
 
-        <!-- Configuración de crédito — solo editable si no hay cobros formales aún -->
+        <!-- Configuración de crédito — solo editable si no hay cobros formales aún.
+             T-116: el aviso fijo «hay que regenerar» se quitó: el cronograma guardado se carga y, si deja
+             de calzar, CronogramaCuotasCampos dice cuánto falta y ofrece Regenerar / Ajustar última cuota. -->
         <div class="row g-2 cronograma-campos" v-if="typePayment == 2 && !tieneCobrosFormales">
-            <div class="col-12">
-                <div class="alert alert-warning py-2 px-3 mb-0 small">
-                    <i class="fas fa-info-circle me-1"></i>
-                    Cualquier cambio en esta venta (productos, precios o pago inicial) invalida el
-                    cronograma actual — hay que regenerarlo antes de guardar. Las cuotas viejas
-                    quedan anuladas, no se pierden (quedan en el historial).
-                </div>
-            </div>
             <CronogramaCuotasCampos v-model="cronograma" v-model:num-cuotas="numCuotas" v-model:periodicidad="periodicidad"
                 :monto-a-financiar="montoAFinanciar" :moneda="moneda" :fecha-base="fechaBase" />
             <div class="col-12">
@@ -124,24 +133,26 @@
                         <tr class="small text-secondary text-uppercase">
                             <th>#</th>
                             <th>Método</th>
-                            <th>N.º operación</th>
                             <th class="text-end">Monto</th>
-                            <th v-if="typePayment == 2">Fecha</th>
+                            <th v-if="conFecha">Fecha</th>
                             <th></th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr v-if="pagos.length === 0">
-                            <td colspan="6" class="text-center text-muted fst-italic py-3 small">
+                            <td colspan="5" class="text-center text-muted fst-italic py-3 small">
                                 {{ typePayment == 2 ? 'Sin pago inicial' : 'Sin pagos aún' }}
                             </td>
                         </tr>
                         <tr v-for="(p, index) in pagos" :key="index">
                             <td class="text-muted small">{{ index + 1 }}</td>
-                            <td class="fw-semibold small">{{ p.method_payment }}</td>
-                            <td class="small text-muted">{{ p.nro_operacion || "—" }}</td>
-                            <td class="text-end fw-bold">{{ moneda }} {{ p.amount }}</td>
-                            <td v-if="typePayment == 2" class="small text-muted">{{ p.date_payment }}</td>
+                            <td class="small">
+                                <span class="fw-semibold">{{ nombreMetodo(p.method_payment) }}</span>
+                                <span v-if="!p.id" class="badge bg-warning-subtle text-warning ms-1" title="Se guarda al pulsar «Guardar cambios»">Sin guardar</span>
+                                <div v-if="p.nro_operacion" class="text-muted">Op. {{ p.nro_operacion }}</div>
+                            </td>
+                            <td class="text-end fw-bold text-nowrap">{{ moneda }} {{ (Number(p.amount) || 0).toFixed(2) }}</td>
+                            <td v-if="conFecha" class="small text-muted text-nowrap">{{ p.date_payment ? formatFecha(p.date_payment) : '—' }}</td>
                             <td>
                                 <button type="button" class="btn btn-outline-danger btn-sm py-0 px-2"
                                     :disabled="typePayment == 2 && tieneCobrosFormales" @click="removePayment(index)">
@@ -151,6 +162,10 @@
                         </tr>
                     </tbody>
                 </table>
+            </div>
+            <div v-if="quitadosSinGuardar > 0" class="small text-warning mt-1">
+                <i class="fas fa-clock me-1"></i>Quitaste {{ quitadosSinGuardar === 1 ? 'un pago' : `${quitadosSinGuardar} pagos` }}:
+                el cambio se aplica al pulsar «Guardar cambios».
             </div>
         </div>
     </div>
@@ -162,9 +177,11 @@
 // - un pago nuevo se registra AL INSTANTE (POST sale_payments) y un pago se borra al instante (DELETE sale_payments/{id});
 // - el anticipo usa el campo propio de la edición (n_comprobante_anticipo / amount_anticipo), no el mecanismo de Adelantos.
 // Los modelos son las mismas variables de edit.vue; al agregar o quitar un pago avisa con `cambio` para recalcular totales.
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import httpClient from '@/helpers/http-client';
+import { formatFecha } from '@/helpers/fecha';
+import { redondear2 } from '@/helpers/ventaRetail';
 import CampoFecha from '@/components/CampoFecha.vue';
 import CronogramaCuotasCampos from '@/components/CronogramaCuotasCampos.vue';
 import type { SalePayment } from '@/types/sales';
@@ -178,8 +195,10 @@ const props = defineProps<{
     moneda: string;
     /** Fecha de emisión de la venta: base de las fechas de las cuotas. */
     fechaBase: string;
-    /** Total de la venta (lo que los pagos no pueden superar). */
+    /** Lo que queda por cobrar: total de la venta menos el anticipo (los pagos no pueden superarlo). */
     totalVenta: number;
+    /** La venta está guardada a crédito: sale_payments rechaza POST/DELETE aunque en pantalla se pase a Contado. */
+    guardadaACredito: boolean;
     totalPagado: number;
     /** Lo que financia el cronograma (total − anticipo − pagos). */
     montoAFinanciar: number;
@@ -231,6 +250,17 @@ const resetAnticipo = () => {
 };
 
 // ── PAGOS ───────────────────────────────────────────────────────────
+// Crédito en pantalla o venta guardada a crédito: los pagos se arman en memoria (ver addPayment()).
+const pagosEnMemoria = (): boolean => typePayment.value == 2 || props.guardadaACredito;
+
+// T-116 (E): lo que falta cobrar (para «Todo el saldo»), el nombre del método y la columna de fecha
+// solo si algún pago la tiene.
+const saldoPorCobrar = computed(() => Math.max(0, redondear2(props.totalVenta - props.totalPagado)));
+const nombreMetodo = (codigo: string) => props.metodos.find((m) => m.code === codigo)?.name ?? codigo;
+const conFecha = computed(() => typePayment.value == 2 || pagos.value.some((p) => !!p.date_payment));
+// T-116 (A): pagos ya guardados que se quitaron de la lista en memoria (se borran con «Guardar cambios»).
+const quitadosSinGuardar = ref(0);
+
 const addPayment = () => {
     if (!methodPayment.value) {
         (Swal as TVueSwalInstance).fire('Error', 'El método de pago es obligatorio.', 'error'); return;
@@ -242,13 +272,35 @@ const addPayment = () => {
         (Swal as TVueSwalInstance).fire('Error', 'La fecha de pago es obligatoria en crédito.', 'error'); return;
     }
     if (props.totalVenta < (amount.value + props.totalPagado)) {
-        (Swal as TVueSwalInstance).fire('Error', 'El monto no puede superar el total de la venta.', 'error'); return;
+        (Swal as TVueSwalInstance).fire('Error', 'El monto no puede superar lo que queda por cobrar de la venta.', 'error'); return;
     }
     if (methodPayment.value === 'EFECTIVO' && pagos.value.some(p => p.method_payment === 'EFECTIVO')) {
         (Swal as TVueSwalInstance).fire('Error', 'Ya hay un pago en efectivo registrado.', 'error'); return;
     }
 
-    // Si estamos editando, guardar el pago en backend
+    const limpiarFormulario = () => setTimeout(() => {
+        methodPayment.value = '';
+        amount.value = 0;
+        datePayment.value = '';
+        nroOperacion.value = '';
+        emit('cambio');
+    }, 50);
+
+    // T-116: en crédito el pago inicial queda en memoria y lo guarda «Guardar cambios»
+    // (PATCH sales/{id} reemplaza todos los pagos con los del payload). POST sale_payments
+    // rechaza con 422 las ventas guardadas a crédito, también si en pantalla se pasó a Contado.
+    if (pagosEnMemoria()) {
+        pagos.value.push({
+            method_payment: methodPayment.value,
+            amount: amount.value,
+            date_payment: datePayment.value,
+            nro_operacion: nroOperacion.value.trim() || null,
+        } as SalePayment);
+        limpiarFormulario();
+        return;
+    }
+
+    // Contado: el pago se registra al instante en el backend (decisión del 20-nov, T-110)
     const data = {
         sale_id: props.saleId,
         method_payment: methodPayment.value,
@@ -260,13 +312,7 @@ const addPayment = () => {
     httpClient.post('sale_payments', data)
         .then(res => {
             pagos.value.push(res.data.payment);
-            setTimeout(() => {
-                methodPayment.value = '';
-                amount.value = 0;
-                datePayment.value = '';
-                nroOperacion.value = '';
-                emit('cambio');
-            }, 50);
+            limpiarFormulario();
         })
         .catch(err => {
             (Swal as TVueSwalInstance).fire('Error', err.response?.data?.message || 'Error al agregar pago', 'error');
@@ -276,6 +322,14 @@ const addPayment = () => {
 const removePayment = (index: number) => {
     const payment = pagos.value[index];
     if (!payment) return;
+    // T-116: en crédito (o un pago que todavía no está en el backend) se quita de la lista y
+    // el cambio se guarda con «Guardar cambios»; DELETE sale_payments rechaza ventas a crédito.
+    if (pagosEnMemoria() || !payment.id) {
+        if (payment.id) quitadosSinGuardar.value++;
+        pagos.value.splice(index, 1);
+        emit('cambio');
+        return;
+    }
     (Swal as TVueSwalInstance)
         .fire({
             title: "Confirmar eliminación",

@@ -78,7 +78,7 @@
                     v-model:aplica-mora="aplica_mora" v-model:tasa-mora="tasa_mora" v-model:tipo-mora="tipo_mora"
                     v-model:n-comprobante-anticipo="n_comprobante_anticipo" v-model:sale-anticipo="sale_anticipo"
                     :sale-id="sale_id" :metodos="paymentMethods" :moneda="currency" :fecha-base="today"
-                    :total-venta="sale_total" :total-pagado="total_payments" :monto-a-financiar="montoAFinanciar()"
+                    :total-venta="totalACobrar()" :guardada-a-credito="guardada_a_credito" :total-pagado="total_payments" :monto-a-financiar="montoAFinanciar()"
                     :tiene-cobros-formales="tiene_cobros_formales" :condicion-especial="condicion_especial"
                     @cambio="sumDetails" />
             </div>
@@ -296,10 +296,10 @@ const paymentMethods = ref<PaymentMethod[]>([]);
 
 // ── Configuración de Crédito (edición previa a envío a SUNAT) ──────
 // Solo credit_type='cuotas_fijas', mismo alcance que register.vue.
-// Cualquier edición de una venta a crédito exige regenerar el
-// cronograma completo (ver SaleController::update()) — no se prellena
-// con las cuotas viejas, se fuerza "Generar cronograma sugerido" antes
-// de guardar, igual que en register.vue.
+// update() reemplaza el cronograma completo en cada guardado (anula las
+// cuotas viejas). T-116: la pantalla abre con las cuotas vigentes; si
+// cambia el monto a financiar, store() exige que la suma vuelva a calzar
+// (regenerar o ajustar las cuotas).
 const credit_type = ref<string>('cuotas_fijas');
 const num_cuotas = ref<number>(3);
 const periodicidad = ref<string>('mensual');
@@ -310,6 +310,9 @@ const tipo_mora = ref<string>('porcentaje_diario');
 // true si la venta ya tiene cuotas cobradas o un adelanto aplicado —
 // bloquea la edición de productos/pago inicial (SaleResource::tiene_cobros_formales).
 const tiene_cobros_formales = ref<boolean>(false);
+// T-116: condición con la que la venta está guardada (no la elegida en pantalla). Si es crédito,
+// sale_payments rechaza POST/DELETE y los pagos se guardan con «Guardar cambios».
+const guardada_a_credito = ref<boolean>(false);
 
 // Totales
 const igv_total = ref<number>(0);
@@ -733,9 +736,25 @@ const onDetractionCodeChange = () => {
 // Mismo cálculo que register.vue::montoAFinanciar(), adaptado al
 // mecanismo de anticipo que usa esta pantalla (sale_anticipo, no el
 // módulo Adelantos de register.vue — edit.vue no tiene ese selector).
-const montoAFinanciar = (): number => {
-    const totalAdelantos = condicion_especial.value === 'anticipo' ? sale_anticipo.value : 0;
-    return Math.max(0, getTotalSales() - totalAdelantos - total_payments.value);
+// T-116: el anticipo (comprobante previo) ya está pagado: los pagos, el estado de pago, la deuda y
+// el cronograma se miden contra lo que queda por cobrar. Mismo criterio que el backend: sin
+// comprobante no hay anticipo (SaleController::anticipoDeLaEdicion()).
+const anticipoAplicado = (): number =>
+    condicion_especial.value === 'anticipo' && n_comprobante_anticipo.value.trim() ? Number(sale_anticipo.value) || 0 : 0;
+
+const totalACobrar = (): number => Math.max(0, Number((getTotalSales() - anticipoAplicado()).toFixed(2)));
+
+const montoAFinanciar = (): number => Math.max(0, totalACobrar() - total_payments.value);
+
+// T-116: periodicidad de un cronograma guardado (no se persiste), deducida de los días entre
+// vencimientos; si no son parejos es «personalizada». Una sola cuota queda en «mensual».
+const periodicidadDe = (fechas: string[]): string => {
+    if (fechas.length < 2) return 'mensual';
+    const dias = fechas.slice(1).map((f, i) => Math.round((Date.parse(f) - Date.parse(fechas[i]!)) / 86_400_000));
+    if (dias.every(d => d === 7)) return 'semanal';
+    if (dias.every(d => d >= 14 && d <= 16)) return 'quincenal';
+    if (dias.every(d => d >= 28 && d <= 31)) return 'mensual';
+    return 'personalizada';
 };
 
 const sumaCronograma = (): number =>
@@ -749,17 +768,19 @@ const store = async () => {
     if (sale_details.value.length === 0) {
         (Swal as TVueSwalInstance).fire({ icon: 'error', title: 'Error', text: 'Agrega al menos un producto.' }); return;
     }
-    if (sale_payments.value.length === 0 && getTotalSales() > 0) {
+    // T-116: igual que register.vue, a crédito no hace falta pago inicial (el cronograma financia todo).
+    if (sale_payments.value.length === 0 && getTotalSales() > 0 && type_payment.value != 2) {
         (Swal as TVueSwalInstance).fire({ icon: 'error', title: 'Error', text: 'Agrega al menos un pago para la venta.' }); return;
     }
     // Re-validar acá (no solo en addPayment()): el total pudo bajar después
     // de agregar un pago (se quitó una línea, cambió un descuento/régimen),
     // dejando un pago ya agregado por encima del total sin que nada lo avise.
-    if (total_payments.value > getTotalSales() + 0.009) {
+    if (total_payments.value > totalACobrar() + 0.009) {
         (Swal as TVueSwalInstance).fire({
             icon: 'error', title: 'Error',
-            text: `Los pagos (${currency.value} ${total_payments.value.toFixed(2)}) superan el total de la venta ` +
-                `(${currency.value} ${getTotalSales().toFixed(2)}). Ajusta los pagos antes de guardar.`,
+            text: `Los pagos (${currency.value} ${total_payments.value.toFixed(2)}) superan lo que queda por cobrar ` +
+                `(${currency.value} ${totalACobrar().toFixed(2)}${anticipoAplicado() > 0 ? ', ya restado el anticipo' : ''}). ` +
+                'Ajusta los pagos antes de guardar.',
         }); return;
     }
     if (condicion_especial.value === '2' && !codigo_detraccion_sel.value) {
@@ -797,7 +818,7 @@ const store = async () => {
 
     // Estado de pago derivado automáticamente
     let estado_pago = 1; // pendiente
-    if (total_payments.value === getTotalSales()) estado_pago = 3;      // pagado completo
+    if (Math.abs(total_payments.value - totalACobrar()) < 0.01) estado_pago = 3;      // pagado completo
     else if (total_payments.value > 0) estado_pago = 2;      // pago parcial
 
     // Mapear condicion_especial → retencion_igv (campo de la BD)
@@ -876,12 +897,13 @@ const store = async () => {
 
         // Estado y deuda
         state_payment: estado_pago,
-        debt: getTotalSales() - total_payments.value,
+        // Neto del anticipo: el backend valida el cronograma contra este monto.
+        debt: Math.max(0, Number((totalACobrar() - total_payments.value).toFixed(2))),
         paid_out: total_payments.value,
 
         // Detalles — incluyen todos los campos para Greenter
-        // (sin precio_manual ni uid: son solo de pantalla)
-        sale_details: sale_details.value.map(({ precio_manual, uid, ...linea }) => linea),
+        // (sin precio_manual, uid ni precio_guardado: son solo de pantalla)
+        sale_details: sale_details.value.map(({ precio_manual, uid, precio_guardado, ...linea }) => linea),
 
         // Pagos
         payments: sale_payments.value,
@@ -911,20 +933,36 @@ const store = async () => {
             const formatoDefault = useAuthStore().getUser()?.formato_impresion_default ?? 'a4';
             await imprimirComprobante(sale_id.value, formatoDefault);
             router.push({ name: 'sale.list' });
+            return;
         }
+        // T-116: update() responde HTTP 200 con code 405 si la venta ya se envió a SUNAT.
+        (Swal as TVueSwalInstance).fire('No se guardó', String(resp.data.message ?? 'No se pudo guardar la venta.'), 'warning');
     } catch (e: any) {
         (Swal as TVueSwalInstance).fire('Error', e.response?.data?.message ?? 'Error inesperado', 'error');
     }
 };
 
+// T-116: qué precio de catálogo tiene una línea guardada, comparando su propio precio sin IGV
+// (misma tolerancia que PrecioVentaValidator). Si no coincide con ninguno: «Precio guardado».
+const precioGuardado = (d: any): 'General' | 'Mayorista' | 'Otro' | undefined => {
+    if (!d.product) return undefined;
+    const tasas = { igvGeneral: getIgvGeneralTasa(), ivap: getIvapTasa() };
+    const precio = Number(d.price_base ?? 0);
+    const igual = (bruto: number) => bruto > 0 && Math.abs(getPrecioBaseSinIgv(bruto, d.product, tasas) - precio) <= 0.0001;
+    if (igual(Number(d.product.price_general))) return 'General';
+    if (igual(Number(d.product.price_company))) return 'Mayorista';
+    return 'Otro';
+};
+
 // ── CARGAR DATOS DE LA VENTA ──────────────────────────────────────
-const loadSale = async () => {
+// T-116: `pedido` es el GET de la venta ya lanzado por config(), en paralelo con los catálogos.
+const loadSale = async (pedido?: Promise<AxiosResponse<SaleResponse>>) => {
     // Evita que los watchers de destino/condicion_especial/is_exportacion
     // recalculen tip_afe_igv o descarten sale_details mientras hidratamos
     // los valores ya guardados en la API.
     isHydrating.value = true;
     try {
-        const res: AxiosResponse<SaleResponse> = await httpClient.get(`sales/${sale_id.value}`);
+        const res: AxiosResponse<SaleResponse> = await (pedido ?? httpClient.get(`sales/${sale_id.value}`));
         if (res.data.code === 405) {
             (Swal as TVueSwalInstance).fire('Error', res.data.message, 'error');
             return;
@@ -936,14 +974,19 @@ const loadSale = async () => {
         n_transaction.value = sale.n_transaction;
         today.value = sale.created_at_format || sale.date || '';
         currency.value = sale.currency || 'PEN';
-        destino.value = sale.destino || 'nacional';
         description.value = sale.description || '';
         discount_global.value = Number(sale.discount_global || 0);
         type_payment.value = sale.type_payment || 1;
+        guardada_a_credito.value = Number(sale.type_payment) === 2;
 
         // Configuración de Crédito — la venta ya trae esto persistido
-        // (SaleResource) si es a crédito; el cronograma en sí no se
-        // prellena (se exige regenerar antes de guardar, ver store()).
+        // (SaleResource) si es a crédito. T-116: también las cuotas vigentes
+        // (GET sales/{id} → cronograma), con su número y periodicidad.
+        cronograma.value = (res.data.cronograma ?? []).map(c => ({ ...c, monto_programado: Number(c.monto_programado) }));
+        if (cronograma.value.length) {
+            num_cuotas.value = cronograma.value.length;
+            periodicidad.value = periodicidadDe(cronograma.value.map(c => c.fecha_vencimiento));
+        }
         credit_type.value = sale.credit_type || 'cuotas_fijas';
         aplica_mora.value = Boolean(sale.aplica_mora);
         tasa_mora.value = Number(sale.tasa_mora || 0);
@@ -953,6 +996,18 @@ const loadSale = async () => {
         // Cliente
         if (sale.client) {
             selectClient(sale.client);
+        }
+        // T-116: el destino guardado va DESPUÉS de selectClient(), que sugiere «amazonia» si el
+        // cliente es de esa zona y pisaba el de una venta nacional.
+        destino.value = sale.destino || 'nacional';
+
+        // T-116: anticipo guardado en la venta (antes se abría vacío y se guardaba en 0).
+        n_comprobante_anticipo.value = sale.n_comprobante_anticipo ?? '';
+        sale_anticipo.value = Number(sale.amount_anticipo ?? 0);
+
+        // T-116: la sucursal de la venta es la de su serie; antes arrancaba en la primera de la lista.
+        if (puedeCambiarSucursal.value && res.data.branch_id) {
+            branch_id_seleccionado.value = res.data.branch_id;
         }
         // T-107: se reenvía tal cual la dirección guardada (el backend la acepta aunque se haya desactivado).
         client_address_id.value = sale.client_address_id ?? null;
@@ -1000,6 +1055,7 @@ const loadSale = async () => {
                 igv: Number(d.igv ?? 0),
                 icbper: Number(d.icbper ?? 0),
                 price_final: Number(d.price_final ?? 0),
+                precio_guardado: precioGuardado(d),
             }));
             cantidadOriginal.value = {};
             for (const d of sale.sale_details as any[]) {
@@ -1089,13 +1145,13 @@ const loadPaymentMethods = async () => {
 // ── Módulo de series de comprobantes ──────────────────────────────
 const cargarTiposYSucursales = async () => {
     try {
-        const resTipos = await httpClient.get<{ tipos_comprobante: TipoComprobante[] }>(
-            'tipos-comprobante?disponibles_para_serie=1'
-        );
+        const [resTipos, resBranches] = await Promise.all([
+            httpClient.get<{ tipos_comprobante: TipoComprobante[] }>('tipos-comprobante?disponibles_para_serie=1'),
+            puedeCambiarSucursal.value ? httpClient.get<{ branches: Branch[] }>('branches?active=1') : Promise.resolve(null),
+        ]);
         tiposComprobante.value = resTipos.data.tipos_comprobante;
 
-        if (puedeCambiarSucursal.value) {
-            const resBranches = await httpClient.get<{ branches: Branch[] }>('branches?active=1');
+        if (resBranches) {
             branches.value = resBranches.data.branches;
             branch_id_seleccionado.value = branches.value[0]?.id;
         }
@@ -1104,24 +1160,30 @@ const cargarTiposYSucursales = async () => {
     }
 };
 
+// T-116: antes eran 5 peticiones una tras otra (~3-4 s en local). Ahora van todas a la vez; la
+// venta se aplica después de tener los catálogos (usa los códigos de detracción y las sucursales).
+// isHydrating desde el inicio: la sucursal provisional (branches[0]) no dispara una vista previa
+// de serie que después compita con la de la sucursal real de la venta.
 const config = async () => {
+    isHydrating.value = true;
+    const pedidoVenta = httpClient.get<SaleResponse>(`sales/${sale_id.value}`);
+    pedidoVenta.catch(() => {}); // el error se maneja en loadSale()
     try {
-        const res: AxiosResponse<SaleConfig> = await httpClient.get('sales/config');
+        const [res] = await Promise.all([
+            httpClient.get<SaleConfig>('sales/config').catch((error) => { console.error(error); return null; }),
+            loadPaymentMethods(),
+            cargarTiposYSucursales(),
+        ]);
         // No asignamos n_transaction ni today porque ya vienen de la venta cargada
-        parametros_tributarios.value = (res.data as any).parametros_tributarios ?? {};
-        codigos_detraccion.value = (res.data as any).codigos_detraccion ?? [];
+        parametros_tributarios.value = (res?.data as any)?.parametros_tributarios ?? {};
+        codigos_detraccion.value = (res?.data as any)?.codigos_detraccion ?? [];
 
         porcentaje_retencion_sel.value = getRetencionTasa();
         porcentaje_percepcion_sel.value = getPercepcionTasa();
-
-        await loadPaymentMethods();
-        await cargarTiposYSucursales();
-
-        // Cargar venta después de tener los catálogos
-        await loadSale();
     } catch (error) {
         console.error(error);
     }
+    await loadSale(pedidoVenta);
 };
 
 
@@ -1258,6 +1320,7 @@ const filasTotales = computed(() => {
     if (condicion_especial.value === '3') filas.push({ etiqueta: `(+) Percepción ${(porcentaje_percepcion_sel.value * 100).toFixed(1)}%`, valor: dinero(monto_percepcion.value), clase: 'text-info' });
     if (condicion_especial.value === '1') filas.push({ etiqueta: `(−) Retención ${(porcentaje_retencion_sel.value * 100).toFixed(1)}%`, valor: `− ${dinero(monto_retencion.value)}`, clase: 'text-danger' });
     if (condicion_especial.value === '2') filas.push({ etiqueta: `(−) Detracción ${(porcentaje_detraccion_sel.value * 100).toFixed(1)}% [${codigo_detraccion_sel.value}]`, valor: dinero(monto_detraccion.value), clase: 'text-warning' });
+    if (anticipoAplicado() > 0) filas.push({ etiqueta: 'Anticipo (ya pagado)', valor: `− ${dinero(anticipoAplicado())}`, clase: 'text-success' });
     if (total_payments.value > 0) filas.push({ etiqueta: 'Total pagado', valor: dinero(total_payments.value), clase: 'text-success' });
     return filas;
 });

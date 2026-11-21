@@ -127,7 +127,8 @@ import type { Product } from '@/types/products';
 import ModalDescripcionLinea from '@/components/Sales/ModalDescripcionLinea.vue';
 import { admiteDecimales, cantidadEnVenta, controlaStock as productoControlaStock, normalizarCantidad, precioCatalogo } from '@/helpers/ventaRetail';
 
-export type LineaVenta = SaleDetail & { uid?: number; precio_manual?: boolean };
+// precio_guardado (T-116, solo edición): qué precio tenía la línea ya guardada, calculado al cargarla con su propio precio.
+export type LineaVenta = SaleDetail & { uid?: number; precio_manual?: boolean; precio_guardado?: 'General' | 'Mayorista' | 'Otro' };
 
 const props = defineProps<{
     items: LineaVenta[];
@@ -179,7 +180,11 @@ const importe = (it: LineaVenta) => (Number(it.subtotal) || 0) + (Number(it.tota
 
 // T-115: el precio depende de la suma de TODAS las líneas del producto (precio mayorista por cantidad).
 const precioBruto = (it: LineaVenta) => precioCatalogo(it.product, props.cliente, cantidadEnVenta(props.items, it.product.id));
-const nombrePrecio = (it: LineaVenta) => precioBruto(it).motivo;
+// T-116: una línea ya guardada conserva su precio, así que su etiqueta sale de ese precio
+// (precio_guardado), no del catálogo y el cliente de hoy.
+const nombrePrecio = (it: LineaVenta) =>
+    it.precio_guardado ? (it.precio_guardado === 'Otro' ? 'Precio guardado' : it.precio_guardado) : precioBruto(it).motivo;
+const nombreActivo = (it: LineaVenta) => it.precio_guardado ?? precioBruto(it).nombre;
 // Con el permiso, siempre. Sin él, solo los productos «a precio variable» (catálogo en 0): el backend
 // no compara contra nada en ese caso (PrecioVentaValidator).
 const precioEditable = (it: LineaVenta) => !!props.puedeCambiarPrecio || precioBruto(it).valor === 0;
@@ -188,7 +193,7 @@ const tienePreciosAlternos = (it: LineaVenta) =>
 const opcionesPrecio = (it: LineaVenta) => {
     const lista: { nombre: 'General' | 'Mayorista'; valor: number }[] = [{ nombre: 'General', valor: Number(it.product.price_general) || 0 }];
     if (Number(it.product.price_company) > 0) lista.push({ nombre: 'Mayorista', valor: Number(it.product.price_company) });
-    return lista.map((o) => ({ ...o, activo: !it.precio_manual && o.nombre === precioBruto(it).nombre }));
+    return lista.map((o) => ({ ...o, activo: !it.precio_manual && o.nombre === nombreActivo(it) }));
 };
 const elegirPrecio = (i: number, nombre: 'General' | 'Mayorista') => {
     emit('elegir-precio', i, nombre);

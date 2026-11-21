@@ -337,4 +337,20 @@ class SaleControllerSerieComprobanteTest extends TestCase
 
         $this->assertSame(0, Sale::count());
     }
+
+    // T-116: GET sales/{id} devuelve la sucursal de la serie de la venta, para que la edición
+    // arranque en ella y no en la primera sucursal de la lista.
+    public function test_show_devuelve_la_sucursal_de_la_serie_de_la_venta(): void
+    {
+        $this->branchConSerie('01', 'F001'); // otra sucursal, creada antes
+        [$branch, $serie] = $this->branchConSerie('03', 'B002');
+        $venta = Sale::factory()->create(['serie' => 'B002', 'tipo_comprobante_codigo' => '03', 'serie_comprobante_id' => $serie->id]);
+        $sinSerie = Sale::factory()->create(['serie_comprobante_id' => null]);
+
+        $json = app(SaleController::class)->show((string) $venta->id)->getData(true);
+        $this->assertSame($branch->id, $json['branch_id']);
+
+        $json = app(SaleController::class)->show((string) $sinSerie->id)->getData(true);
+        $this->assertNull($json['branch_id']);
+    }
 }

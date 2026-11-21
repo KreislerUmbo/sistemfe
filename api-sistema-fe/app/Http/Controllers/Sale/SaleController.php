@@ -327,7 +327,9 @@ class SaleController extends Controller
     // anticipo" más abajo), así que acá se resta lo mismo que ya se
     // validó en validarAdelantosPayload() para comparar contra lo que
     // realmente queda por pagar.
-    private function prepararPagosVenta(Request $request): array
+    // T-116: $anticipo es el anticipo de un comprobante previo (amount_anticipo) que queda en la
+    // venta: ya está pagado, así que tampoco se puede volver a cobrar.
+    private function prepararPagosVenta(Request $request, float $anticipo = 0): array
     {
         $pagos = $request->payments ?? [];
 
@@ -345,7 +347,7 @@ class SaleController extends Controller
 
         $this->cobro->validarContraSaldo(
             $preparados,
-            round((float) $request->total - $suma_adelantos, 2),
+            round((float) $request->total - $suma_adelantos - $anticipo, 2),
             (string) $request->currency,
             exacto: false
         );
@@ -432,6 +434,36 @@ class SaleController extends Controller
         if ($total->isGreaterThan('700')) {
             throw new HttpException(422, 'SUNAT pide el DNI del cliente en boletas de más de S/ 700.');
         }
+    }
+
+    // T-116: anticipo de un comprobante previo (n_comprobante_anticipo / amount_anticipo) en la
+    // edición. Antes update() no lo guardaba y lo editado se perdía. resumenImpresion() lo resta
+    // del total impreso, por eso no puede pasar del total ni quedar sin su comprobante. Sin
+    // comprobante el monto es 0 (la condición «Con adelanto» se quitó). Un payload que no trae
+    // los campos conserva lo guardado.
+    private function anticipoDeLaEdicion(Request $request): array
+    {
+        if (!$request->has('n_comprobante_anticipo') && !$request->has('amount_anticipo')) {
+            return [];
+        }
+
+        $comprobante = trim((string) $request->n_comprobante_anticipo);
+        $monto = $comprobante === '' ? '0' : (string) ($request->amount_anticipo ?? 0);
+
+        if (!is_numeric($monto) || BigDecimal::of($monto)->isNegative()) {
+            throw new HttpException(422, 'El monto del anticipo no es válido.');
+        }
+        if (mb_strlen($comprobante) > 150) {
+            throw new HttpException(422, 'El número del comprobante de anticipo no puede pasar de 150 caracteres.');
+        }
+        if (BigDecimal::of($monto)->isGreaterThan(BigDecimal::of((string) ($request->total ?? 0)))) {
+            throw new HttpException(422, 'El anticipo no puede ser mayor que el total de la venta.');
+        }
+
+        return [
+            'n_comprobante_anticipo' => $comprobante === '' ? null : $comprobante,
+            'amount_anticipo'        => $monto,
+        ];
     }
 
     private function validarConfiguracionCredito(Request $request): void
@@ -1031,8 +1063,22 @@ class SaleController extends Controller
 
         return response()->json([
             "sale" => SaleResource::make($venta),
+            // T-116: la venta no guarda sucursal; es la de su serie. La edición arranca en ella
+            // (antes en la primera sucursal de la lista). Va acá y no en SaleResource para no
+            // agregar una consulta por fila al listado.
+            "branch_id" => $venta?->serie_comprobante_id
+                ? SerieComprobante::whereKey($venta->serie_comprobante_id)->value('branch_id')
+                : null,
+            // T-116: cronograma vigente de una venta a crédito, para que la edición abra con las
+            // cuotas guardadas (antes abría vacío y con «3 cuotas mensuales» por defecto).
+            "cronograma" => $venta && (int) $venta->type_payment === 2
+                ? $venta->cuotasVigentes()->map(fn ($c) => [
+                    'numero_cuota'      => (int) $c->numero_cuota,
+                    'monto_programado'  => (float) $c->monto_programado,
+                    'fecha_vencimiento' => substr((string) $c->fecha_vencimiento, 0, 10),
+                ])->values()
+                : [],
             "code" => 200,
-           
         ]);
     }
 
@@ -1074,16 +1120,17 @@ public function update(Request $request, string $id)
     // cronograma/pagos ya reales si alguien intenta destildar "Crédito"
     // desde este formulario. Chequeo ANTES de abrir la transacción, mismo
     // criterio que el resto de los validadores de este controlador.
-    if ((int) $venta->type_payment === 2 && (int) $request->type_payment !== 2) {
-        $tieneSeguimientoReal = $venta->installments()->exists() || $venta->paymentApplications()->exists();
-        if ($tieneSeguimientoReal) {
-            throw new HttpException(
-                422,
-                "La venta #{$venta->id} ya tiene cronograma de cuotas y/o pagos aplicados del " .
-                "módulo de amortizaciones — no se puede cambiar a 'contado' sin antes anular ese " .
-                "seguimiento (ver CreditInstallmentController/CreditPaymentController)."
-            );
-        }
+    // T-116 (decisión del usuario, 21-nov-2026): antes bloqueaba si existía CUALQUIER cuota, y toda
+    // venta a crédito guardada tiene cuotas, así que nunca podía volver a contado. Ahora solo bloquea
+    // si hay plata cobrada (aplicación activa). Sin cobros, las cuotas se anulan más abajo, igual que
+    // al regenerar el cronograma (quedan en el historial). El adelanto se bloquea aparte, abajo.
+    $pasaAContado = (int) $venta->type_payment === 2 && (int) $request->type_payment !== 2;
+    if ($pasaAContado && $venta->paymentApplications()->where('estado', 'activo')->exists()) {
+        throw new HttpException(
+            422,
+            "La venta #{$venta->id} ya tiene cuotas cobradas: no se puede pasar a contado. " .
+            "Anula primero esos cobros desde Cuentas por Cobrar."
+        );
     }
 
     // ── Blindaje: venta con adelanto aplicado, sin importar type_payment ──
@@ -1137,6 +1184,7 @@ public function update(Request $request, string $id)
 
     $this->validarRegimenEspecial($request);
     $this->validarCodigoDetraccion($request);
+    $anticipo = $this->anticipoDeLaEdicion($request);
     // T-065: si llega client_address_id se valida contra el cliente nuevo; si cambió el cliente
     // y no llega una dirección suya, la elegida antes deja de aplicar (era de otro cliente).
     // Reenviar la misma dirección ya elegida se acepta aunque se haya desactivado después.
@@ -1144,7 +1192,11 @@ public function update(Request $request, string $id)
     $direccionId = $request->has("client_address_id")
         ? DireccionDelComprobante::validar($request->client_address_id, $request->client_id, $mismoCliente ? $venta->client_address_id : null)
         : ($mismoCliente ? $venta->client_address_id : null);
-    $pagosPreparados = $this->prepararPagosVenta($request);
+    // Sin los campos del anticipo en el payload vale el guardado (anticipoDeLaEdicion() lo conserva).
+    $pagosPreparados = $this->prepararPagosVenta(
+        $request,
+        (float) ($anticipo['amount_anticipo'] ?? $venta->amount_anticipo ?? 0)
+    );
     $serieResuelta = $this->resolverSerieComprobanteUpdate($venta, $request);
     $this->validarBoletaSinDocumento($request, $serieResuelta['tipo']?->codigo);
     $this->validarPrecioDeVenta($request, $venta);
@@ -1243,7 +1295,7 @@ public function update(Request $request, string $id)
             "saldo_pendiente" => $request->debt,
 
             "description"   => $request->description,
-        ]);
+        ] + $anticipo);
 
         // T-064: una venta editable no tiene CDR; su copia del cliente se
         // rehace (pudo cambiar de cliente o el cliente se corrigió).
@@ -1394,6 +1446,18 @@ public function update(Request $request, string $id)
                 "tasa_mora"       => $request->boolean('aplica_mora') ? $request->tasa_mora : null,
                 "tipo_mora"       => $request->boolean('aplica_mora') ? $request->tipo_mora : null,
             ]);
+        } elseif ($pasaAContado) {
+            // T-116: de crédito a contado sin cobros (ya validado arriba): las cuotas quedan anuladas
+            // y la mora deja de aplicar. Lo que falte pagar queda como deuda de contado (saldo_pendiente).
+            Installment::where('sale_id', $venta->id)
+                ->where('estado', '!=', 'anulada')
+                ->update([
+                    "estado"           => 'anulada',
+                    "motivo_anulacion" => 'La venta pasó de crédito a contado antes de enviarse a SUNAT.',
+                    "anulado_por"      => auth('api')->user()->id,
+                    "anulado_en"       => now(),
+                ]);
+            $venta->update(["aplica_mora" => false, "tasa_mora" => null, "tipo_mora" => null]);
         }
 
         DB::commit();
