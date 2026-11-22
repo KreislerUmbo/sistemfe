@@ -77,7 +77,7 @@
                     v-model:cronograma="cronograma" v-model:num-cuotas="num_cuotas" v-model:periodicidad="periodicidad"
                     v-model:aplica-mora="aplica_mora" v-model:tasa-mora="tasa_mora" v-model:tipo-mora="tipo_mora"
                     v-model:n-comprobante-anticipo="n_comprobante_anticipo" v-model:sale-anticipo="sale_anticipo"
-                    :sale-id="sale_id" :metodos="paymentMethods" :moneda="currency" :fecha-base="today"
+                    :metodos="paymentMethods" :moneda="currency" :fecha-base="today"
                     :total-venta="totalACobrar()" :guardada-a-credito="guardada_a_credito" :total-pagado="total_payments" :monto-a-financiar="montoAFinanciar()"
                     :tiene-cobros-formales="tiene_cobros_formales" :condicion-especial="condicion_especial"
                     @cambio="sumDetails" />
@@ -310,8 +310,8 @@ const tipo_mora = ref<string>('porcentaje_diario');
 // true si la venta ya tiene cuotas cobradas o un adelanto aplicado —
 // bloquea la edición de productos/pago inicial (SaleResource::tiene_cobros_formales).
 const tiene_cobros_formales = ref<boolean>(false);
-// T-116: condición con la que la venta está guardada (no la elegida en pantalla). Si es crédito,
-// sale_payments rechaza POST/DELETE y los pagos se guardan con «Guardar cambios».
+// T-116: condición con la que la venta está guardada (no la elegida en pantalla). CobroEdicion avisa
+// qué pasa con las cuotas si se pasa a Contado.
 const guardada_a_credito = ref<boolean>(false);
 
 // Totales

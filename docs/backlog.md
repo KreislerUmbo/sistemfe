@@ -8,7 +8,7 @@
 
 Cada línea: ID · qué · estado · depende de · rama o commit. El detalle está en
 `docs/tareas/T-…md` (se borra al cerrar; para una tarea hecha, el commit es la referencia).
-Próximo ID libre: **T-119**.
+Próximo ID libre: **T-120**.
 
 ## Orden de construcción (27-oct-2026)
 
@@ -49,6 +49,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | T-029 | AGE | Tour clásico desde plantilla: cada servicio nace con su tratamiento tributario; costo sin infantes (H18, H19) | por hacer: desbloqueada el 07-nov (D-AGE-035: el guía toma el valor por defecto de la agencia) | — | |
 | T-117 | UI | Campo de fecha: una fecha escrita que no existe («31/11/2026») se rechaza con aviso bajo el campo y se conserva la anterior, en vez de convertirse sin avisar en otra (01/12/2026). Arregla todos los campos de fecha (`CampoFecha.vue`) | por hacer | — | — |
 | T-118 | VEN | Venta a crédito con una cuota por defecto (fecha con el calendario) y «Pagar en varias cuotas» para el cronograma, en registrar y editar; la edición abre en una cuota si la venta tiene una | en curso | — | `feat/T-118-credito-una-cuota` |
+| T-119 | VEN | Editar venta: los pagos al contado también se guardan con «Guardar cambios» (que sincroniza la caja), no al instante; al contado sin pagos el formulario trae Efectivo y el saldo. Estado de pago invertido en `SalePaymentController::destroy()` | en curso | T-118 | `fix/T-119-cobro-edicion-al-guardar` |
 
 ## Por analizar
 
@@ -67,6 +68,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | VEN | `GET sales/config` devuelve todos los clientes y productos activos; la pantalla nueva busca por API y ya no los necesita. Desde T-110 `edit.vue` tampoco los usa: ya se puede recortar. `sale_details` también se manda con el objeto `product` completo | hallazgo de T-106, 19-nov-2026 |
 | AGE | `Fila13Fase2cOperacionTest`: desde el 21-nov-2026 fallan 4 tests de reprogramar (antes 1, desde el 19-nov): reprograman a fechas fijas (`2026-11-18`, `2026-11-20`) y el controller rechaza «anterior a hoy». Es un test que caduca, no un error del código: fijar el reloj (`Carbon::setTestNow`) o usar fechas relativas a `HoraPeru::hoy()`. Revisar si otros tests tienen fechas fijas futuras que caducarán igual | suite de T-102, 19-nov-2026 |
 | CLI | Marcar un cliente como mayorista (precio menor en todas sus compras) queda con el permiso de editar clientes. Decisión del 20-nov: así por ahora; revisar si hace falta un permiso propio | revisión de T-115, 20-nov-2026 |
+| VEN | `POST`/`DELETE sale_payments` (`SalePaymentController::store()`/`destroy()`) no mueven la caja: el ingreso queda sin registrar o sin corregir hasta un `PATCH sales/{id}`. Desde T-119 el panel no los usa; confirmar que el portal e-commerce tampoco y retirarlos (o 410) | T-119, venta 41 de umbo, 21-nov-2026 |
 | POR | Revisar si el portal e-commerce usa `price_company` (desde T-115 es el «precio mayorista», no el de empresa) | hallazgo de T-115, 20-nov-2026 |
 | VEN | `price_company` sigue llamándose así en la base y en `useProductPricing.ts`; desde T-115 es el precio mayorista. Renombrar solo si se toca esa zona | hallazgo de T-115, 20-nov-2026 |
 | VEN | `sales` no tiene `porcentaje_retencion` y `store()` no lo guarda (sí el de detracción y el de percepción): no se sabe con qué tasa se retuvo una venta ya emitida. Migración nueva + guardarlo | hallazgo de T-114, 20-nov-2026 |

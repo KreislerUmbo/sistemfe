@@ -38,7 +38,7 @@
             desde <strong>Cuentas por Cobrar</strong> (cuota/pago) o el módulo de <strong>Adelantos</strong>.
         </div>
 
-        <!-- Pago nuevo: se registra al instante (POST sale_payments), no al guardar la venta -->
+        <!-- Pago nuevo: queda en la lista y lo guarda «Guardar cambios» (T-119) -->
         <div class="row g-2">
             <div class="col-12" v-if="typePayment == 2 && !tieneCobrosFormales">
                 <p class="small text-muted mb-0">
@@ -85,10 +85,10 @@
                     :disabled="typePayment == 2 && tieneCobrosFormales" @click="addPayment()">
                     <i class="fas fa-plus me-1"></i>{{ typePayment == 2 ? 'Agregar pago inicial' : 'Agregar pago' }}
                 </button>
-                <!-- T-116 (A): el mismo botón guarda al instante o deja el pago para «Guardar cambios». -->
+                <!-- T-116 (A) / T-119: los pagos se guardan con «Guardar cambios», que también cuadra la caja. -->
                 <div class="small text-muted mt-1">
-                    <i class="fas me-1" :class="pagosEnMemoria() ? 'fa-clock' : 'fa-bolt'"></i>
-                    {{ pagosEnMemoria() ? 'El pago se guarda al pulsar «Guardar cambios».' : 'El pago se registra al instante en la venta.' }}
+                    <i class="fas fa-clock me-1"></i>
+                    El pago se guarda al pulsar «Guardar cambios».
                 </div>
             </div>
         </div>
@@ -172,14 +172,16 @@
 </template>
 
 <script setup lang="ts">
-// Cobro de la EDICIÓN de una venta (T-110). Es el cobro de edit.vue movido tal cual, sin cambiar su comportamiento
-// (por eso no usa CobroContado/CobroCredito de registro, que arman los pagos en memoria y los mandan al guardar):
-// - un pago nuevo se registra AL INSTANTE (POST sale_payments) y un pago se borra al instante (DELETE sale_payments/{id});
-// - el anticipo usa el campo propio de la edición (n_comprobante_anticipo / amount_anticipo), no el mecanismo de Adelantos.
-// Los modelos son las mismas variables de edit.vue; al agregar o quitar un pago avisa con `cambio` para recalcular totales.
+// Cobro de la EDICIÓN de una venta (T-110, T-116, T-119).
+// - T-119: todos los pagos se arman EN MEMORIA y los guarda «Guardar cambios» (PATCH sales/{id}), que
+//   reemplaza los pagos y sincroniza la caja en la misma transacción. Antes, al contado, un pago se
+//   registraba al instante con POST/DELETE sale_payments, que no mueven la caja (la dejaban descuadrada
+//   hasta el siguiente guardado) y podían quedar a medias si no se guardaba la venta.
+// - Al contado sin pagos, el formulario trae Efectivo y el saldo: el caso normal es pulsar «Agregar pago».
+// - El anticipo usa el campo propio de la edición (n_comprobante_anticipo / amount_anticipo), no Adelantos.
+// Los modelos son las mismas variables de edit.vue; al agregar o quitar un pago avisa con `cambio`.
 import { computed, ref, watch } from 'vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
-import httpClient from '@/helpers/http-client';
 import { formatFecha } from '@/helpers/fecha';
 import { redondear2 } from '@/helpers/ventaRetail';
 import CampoFecha from '@/components/CampoFecha.vue';
@@ -190,14 +192,13 @@ import type { PaymentMethod } from '@/types/cash';
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 
 const props = defineProps<{
-    saleId: string;
     metodos: PaymentMethod[];
     moneda: string;
     /** Fecha de emisión de la venta: base de las fechas de las cuotas. */
     fechaBase: string;
     /** Lo que queda por cobrar: total de la venta menos el anticipo (los pagos no pueden superarlo). */
     totalVenta: number;
-    /** La venta está guardada a crédito: sale_payments rechaza POST/DELETE aunque en pantalla se pase a Contado. */
+    /** La venta está guardada a crédito (para avisar qué pasa si se pasa a Contado). */
     guardadaACredito: boolean;
     totalPagado: number;
     /** Lo que financia el cronograma (total − anticipo − pagos). */
@@ -220,20 +221,40 @@ const nComprobanteAnticipo = defineModel<string>('nComprobanteAnticipo', { requi
 const saleAnticipo = defineModel<number>('saleAnticipo', { required: true });
 
 // Formulario del pago nuevo
-const methodPayment = ref<string>('EFECTIVO');
+const methodPayment = ref<string>('');
 const amount = ref<number>(0);
 const datePayment = ref<string>('');
 const nroOperacion = ref<string>(''); // T-010: opcional, max 50
 
-// Al cambiar contado/crédito se limpia el formulario del pago (igual que antes).
-watch(typePayment, () => {
-    setTimeout(() => {
-        methodPayment.value = '';
-        amount.value = 0;
-        datePayment.value = '';
-        nroOperacion.value = '';
-    }, 50);
-});
+// T-116 (E): lo que falta cobrar (para «Todo el saldo»), el nombre del método y la columna de fecha
+// solo si algún pago la tiene.
+const saldoPorCobrar = computed(() => Math.max(0, redondear2(props.totalVenta - props.totalPagado)));
+const nombreMetodo = (codigo: string) => props.metodos.find((m) => m.code === codigo)?.name ?? codigo;
+const conFecha = computed(() => typePayment.value == 2 || pagos.value.some((p) => !!p.date_payment));
+// T-116 (A): pagos ya guardados que se quitaron de la lista (se borran con «Guardar cambios»).
+const quitadosSinGuardar = ref(0);
+
+const limpiarFormulario = () => {
+    methodPayment.value = '';
+    amount.value = 0;
+    datePayment.value = '';
+    nroOperacion.value = '';
+};
+
+// T-119: al contado y sin pagos, se sugiere cobrar el saldo en efectivo (como en registrar). Solo
+// llena el formulario: el pago no existe hasta pulsar «Agregar pago». A crédito el pago inicial es
+// opcional, así que el formulario queda vacío.
+const sugerirCobro = () => {
+    if (typePayment.value != 1 || pagos.value.length > 0 || saldoPorCobrar.value <= 0) return;
+    methodPayment.value = (props.metodos.find((m) => m.code === 'EFECTIVO') ?? props.metodos[0])?.code ?? '';
+    amount.value = saldoPorCobrar.value;
+};
+// Al cambiar contado/crédito se limpia el formulario (y al contado se vuelve a sugerir).
+watch(typePayment, () => { limpiarFormulario(); sugerirCobro(); });
+// Los métodos y el total llegan después de montar (la edición carga la venta en paralelo).
+watch([() => props.metodos.length, saldoPorCobrar], () => {
+    if (!amount.value && !methodPayment.value) sugerirCobro();
+}, { immediate: true });
 
 // ── Anticipo ──────────────────────────────────────────────────────
 const searchAnticipo = () => {
@@ -249,18 +270,7 @@ const resetAnticipo = () => {
     saleAnticipo.value = 0;
 };
 
-// ── PAGOS ───────────────────────────────────────────────────────────
-// Crédito en pantalla o venta guardada a crédito: los pagos se arman en memoria (ver addPayment()).
-const pagosEnMemoria = (): boolean => typePayment.value == 2 || props.guardadaACredito;
-
-// T-116 (E): lo que falta cobrar (para «Todo el saldo»), el nombre del método y la columna de fecha
-// solo si algún pago la tiene.
-const saldoPorCobrar = computed(() => Math.max(0, redondear2(props.totalVenta - props.totalPagado)));
-const nombreMetodo = (codigo: string) => props.metodos.find((m) => m.code === codigo)?.name ?? codigo;
-const conFecha = computed(() => typePayment.value == 2 || pagos.value.some((p) => !!p.date_payment));
-// T-116 (A): pagos ya guardados que se quitaron de la lista en memoria (se borran con «Guardar cambios»).
-const quitadosSinGuardar = ref(0);
-
+// ── PAGOS (en memoria; los guarda «Guardar cambios») ───────────────────
 const addPayment = () => {
     if (!methodPayment.value) {
         (Swal as TVueSwalInstance).fire('Error', 'El método de pago es obligatorio.', 'error'); return;
@@ -278,81 +288,24 @@ const addPayment = () => {
         (Swal as TVueSwalInstance).fire('Error', 'Ya hay un pago en efectivo registrado.', 'error'); return;
     }
 
-    const limpiarFormulario = () => setTimeout(() => {
-        methodPayment.value = '';
-        amount.value = 0;
-        datePayment.value = '';
-        nroOperacion.value = '';
-        emit('cambio');
-    }, 50);
-
-    // T-116: en crédito el pago inicial queda en memoria y lo guarda «Guardar cambios»
-    // (PATCH sales/{id} reemplaza todos los pagos con los del payload). POST sale_payments
-    // rechaza con 422 las ventas guardadas a crédito, también si en pantalla se pasó a Contado.
-    if (pagosEnMemoria()) {
-        pagos.value.push({
-            method_payment: methodPayment.value,
-            amount: amount.value,
-            date_payment: datePayment.value,
-            nro_operacion: nroOperacion.value.trim() || null,
-        } as SalePayment);
-        limpiarFormulario();
-        return;
-    }
-
-    // Contado: el pago se registra al instante en el backend (decisión del 20-nov, T-110)
-    const data = {
-        sale_id: props.saleId,
+    pagos.value.push({
         method_payment: methodPayment.value,
         amount: amount.value,
         date_payment: datePayment.value,
-        nro_operacion: nroOperacion.value.trim() || null
-    };
-
-    httpClient.post('sale_payments', data)
-        .then(res => {
-            pagos.value.push(res.data.payment);
-            limpiarFormulario();
-        })
-        .catch(err => {
-            (Swal as TVueSwalInstance).fire('Error', err.response?.data?.message || 'Error al agregar pago', 'error');
-        });
+        nro_operacion: nroOperacion.value.trim() || null,
+    } as SalePayment);
+    limpiarFormulario();
+    emit('cambio');
 };
 
 const removePayment = (index: number) => {
     const payment = pagos.value[index];
     if (!payment) return;
-    // T-116: en crédito (o un pago que todavía no está en el backend) se quita de la lista y
-    // el cambio se guarda con «Guardar cambios»; DELETE sale_payments rechaza ventas a crédito.
-    if (pagosEnMemoria() || !payment.id) {
-        if (payment.id) quitadosSinGuardar.value++;
-        pagos.value.splice(index, 1);
-        emit('cambio');
-        return;
-    }
-    (Swal as TVueSwalInstance)
-        .fire({
-            title: "Confirmar eliminación",
-            text: `¿Estás seguro de eliminar el pago ${payment.method_payment}?`,
-            icon: "warning",
-            showCancelButton: true,
-            confirmButtonColor: "#3085d6",
-            cancelButtonColor: "#d33",
-            confirmButtonText: "Sí, eliminar",
-            cancelButtonText: "Cancelar"
-        })
-        .then(async (result: any) => {
-            if (result.isConfirmed) {
-                try {
-                    await httpClient.delete(`sale_payments/${payment.id}`);
-                    pagos.value.splice(index, 1);
-                    (Swal as TVueSwalInstance).fire('Eliminado', 'Pago eliminado correctamente', 'success');
-                    emit('cambio');
-                } catch (err: any) {
-                    (Swal as TVueSwalInstance).fire('Error', err.response?.data?.message || 'Error al eliminar', 'error');
-                }
-            }
-        });
+    if (payment.id) quitadosSinGuardar.value++;
+    pagos.value.splice(index, 1);
+    emit('cambio');
+    // Sin pagos al contado, se vuelve a sugerir el cobro del saldo (después de recalcular totales).
+    setTimeout(sugerirCobro, 0);
 };
 </script>
 

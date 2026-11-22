@@ -102,6 +102,18 @@ class CronogramaEdicionVentaTest extends CreditosTestCase
         return $datos;
     }
 
+    private function ventaAlContadoPagada(): Sale
+    {
+        $datos = array_replace($this->payload([]), [
+            'type_payment' => 1, 'state_payment' => 3, 'debt' => 0, 'paid_out' => 118,
+            'payments' => [['method_payment' => 'EFECTIVO', 'amount' => 118.00, 'date_payment' => '2026-01-01']],
+        ]);
+        unset($datos['credit_type'], $datos['cronograma']);
+        app(SaleController::class)->store(new Request($datos));
+
+        return Sale::orderByDesc('id')->first();
+    }
+
     private function ventaACreditoConUnaCuota(): Sale
     {
         app(SaleController::class)->store(new Request($this->payload([
@@ -146,6 +158,39 @@ class CronogramaEdicionVentaTest extends CreditosTestCase
 
         $this->assertSame(2, (int) $venta->fresh()->type_payment);
         $this->assertSame(1, $venta->cuotasVigentes()->count());
+    }
+
+    // T-119: borrar el único pago de una venta al contado la deja «pendiente» (1), no «parcial» (2).
+    public function test_borrar_el_unico_pago_de_una_venta_al_contado_la_deja_pendiente(): void
+    {
+        $venta = $this->ventaAlContadoPagada();
+
+        app(\App\Http\Controllers\Sale\SalePaymentController::class)
+            ->destroy((string) \App\Models\Sale\SalePayment::where('sale_id', $venta->id)->value('id'));
+
+        $venta->refresh();
+        $this->assertSame(1, (int) $venta->state_payment);
+        $this->assertEquals(0, (float) $venta->paid_out);
+        $this->assertEquals(118, (float) $venta->debt);
+    }
+
+    // T-119: la edición ya no borra pagos con DELETE sale_payments (no mueve la caja); los quita del
+    // payload del PATCH, que corrige el ingreso en caja (caso de la venta 41 de umbo).
+    public function test_quitar_el_pago_al_editar_una_venta_al_contado_corrige_la_caja(): void
+    {
+        $venta = $this->ventaAlContadoPagada();
+        $ingreso = \App\Models\Cash\CashMovement::where('reference_type', 'sale')->where('reference_id', $venta->id)
+            ->where('type', 'sale_payment')->firstOrFail();
+
+        $sinPago = array_replace($this->payloadContado($venta), [
+            'state_payment' => 1, 'debt' => 118, 'paid_out' => 0, 'payments' => [],
+        ]);
+        app(SaleController::class)->update(new Request($sinPago), (string) $venta->id);
+
+        $this->assertNotNull($ingreso->fresh()->corrected_by);
+        $this->assertTrue(\App\Models\Cash\CashMovement::where('corrected_movement_id', $ingreso->id)->where('type', 'correction')->exists());
+        $this->assertSame(0, \App\Models\Sale\SalePayment::where('sale_id', $venta->id)->count());
+        $this->assertEquals(118, (float) $venta->fresh()->saldo_pendiente);
     }
 
     public function test_show_de_una_venta_al_contado_no_trae_cronograma(): void
