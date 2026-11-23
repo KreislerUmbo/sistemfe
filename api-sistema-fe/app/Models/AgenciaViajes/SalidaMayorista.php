@@ -16,7 +16,6 @@ class SalidaMayorista extends Model
         'proveedor_id',
         'nombre',
         'fecha_salida',
-        'fecha_retorno',
         'cupo_total',
         'cupo_ocupado',
         'precio_costo',
@@ -27,7 +26,6 @@ class SalidaMayorista extends Model
 
     protected $casts = [
         'fecha_salida' => 'date',
-        'fecha_retorno' => 'date',
         'precio_costo' => 'decimal:2',
     ];
 

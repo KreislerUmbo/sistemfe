@@ -234,7 +234,7 @@ class ReservaModificacionAplicarTest extends TestCase
         if (isset($opciones['cupo_total'])) {
             $proveedor = Proveedor::create(['razon_social' => 'Mayorista Test SAC', 'estado' => true]);
             $this->salidaMayorista = SalidaMayorista::create([
-                'proveedor_id' => $proveedor->id, 'nombre' => 'Salida test', 'fecha_salida' => '2026-11-10', 'fecha_retorno' => '2026-11-13',
+                'proveedor_id' => $proveedor->id, 'nombre' => 'Salida test', 'fecha_salida' => '2026-11-10',
                 'cupo_total' => $opciones['cupo_total'], 'cupo_ocupado' => 0, 'moneda' => 'PEN', 'estado' => 'abierta',
             ]);
             OpcionMayorista::create([

@@ -272,8 +272,18 @@ class ReporteOperativoCheckinTest extends TestCase
 
     // ── CA4 ─────────────────────────────────────────────────────────────────
 
+    // T-083 quitó las columnas viejas (checkin_realizado/checkin_hora). Los dos tests de abajo las
+    // vuelven a crear con el down() de esa migración, dentro de la transacción del test (en Postgres
+    // el DDL también se deshace al final).
+    private function migracionTanda1T083(): object
+    {
+        return require database_path('migrations/tenant/verticals/agencia-viajes/2026_11_23_100000_quitar_columnas_sin_uso_tanda1.php');
+    }
+
     public function test_ca4_la_migracion_copia_los_checkins_viejos_y_no_toca_asignaciones(): void
     {
+        $tanda1 = $this->migracionTanda1T083();
+        $tanda1->down();
         $f = $this->crearReservaConItemSinVinculo();
         // Como lo dejaba el check-in viejo: asignación de todos y el check-in en la fila.
         $hora = '2026-09-10 13:45:00';
@@ -295,6 +305,29 @@ class ReporteOperativoCheckinTest extends TestCase
         $this->assertTrue($filas->get($f['pasajero1']->id)['checkin_realizado']);
         $this->assertSame($hora, $filas->get($f['pasajero1']->id)['checkin_hora']);
         $this->assertFalse($filas->get($f['pasajero2']->id)['checkin_realizado']);
+
+        // Con el check-in ya copiado, T-083 puede quitar las columnas viejas.
+        $tanda1->up();
+        $this->assertFalse(\Illuminate\Support\Facades\Schema::hasColumn('reserva_item_pasajero', 'checkin_realizado'));
+    }
+
+    public function test_t083_no_quita_las_columnas_si_hay_un_checkin_viejo_sin_copiar(): void
+    {
+        $tanda1 = $this->migracionTanda1T083();
+        $tanda1->down();
+        $f = $this->crearReservaConItemSinVinculo();
+        DB::table('reserva_item_pasajero')->insert([
+            'reserva_item_id' => $f['item']->id, 'reserva_pasajero_id' => $f['pasajero1']->id,
+            'checkin_realizado' => true, 'checkin_hora' => '2026-09-10 13:45:00', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        try {
+            $tanda1->up();
+            $this->fail('La migración tenía que detenerse');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('reserva_item_pasajero.checkin_realizado', $e->getMessage());
+        }
+        $this->assertTrue(\Illuminate\Support\Facades\Schema::hasColumn('reserva_item_pasajero', 'checkin_realizado'), 'no tocó nada');
     }
 
     // ── CA6 ─────────────────────────────────────────────────────────────────
