@@ -3,7 +3,7 @@
         <div class="cronograma-campos">
             <div class="row g-2">
                 <CronogramaCuotasCampos v-model="cronograma" v-model:num-cuotas="numCuotas" v-model:periodicidad="periodicidad"
-                    :monto-a-financiar="montoAFinanciar" :moneda="moneda" :fecha-base="fechaBase" />
+                    :monto-a-financiar="montoAFinanciar" :moneda="moneda" :fecha-base="fechaBase" permitir-una-cuota />
             </div>
         </div>
 

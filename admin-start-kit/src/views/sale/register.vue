@@ -940,7 +940,7 @@ const store = async () => {
             (Swal as TVueSwalInstance).fire({ icon: 'error', title: 'Error', text: 'Solo se soporta crédito con cuotas fijas por ahora.' }); return;
         }
         if (cronograma.value.length === 0) {
-            (Swal as TVueSwalInstance).fire({ icon: 'error', title: 'Error', text: 'Genera el cronograma de cuotas antes de guardar.' }); return;
+            (Swal as TVueSwalInstance).fire({ icon: 'error', title: 'Error', text: 'Elige la fecha de vencimiento de la cuota (o genera el cronograma) antes de guardar.' }); return;
         }
         if (Math.abs(sumaCronograma() - montoAFinanciar()) > 0.01) {
             (Swal as TVueSwalInstance).fire({
