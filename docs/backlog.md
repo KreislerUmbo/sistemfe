@@ -54,6 +54,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | Módulo | Qué | Origen |
 |---|---|---|
+| VEN | Pantalla de venta: el descuento global (`TotalesVenta.vue::cambiar()`) solo se limita a ≥ 0; acepta uno mayor que el subtotal, muestra «Monto a pagar» negativo y al guardar el aviso no habla del descuento («los pagos superan…» o «el anticipo no puede ser mayor…»). El backend ya lo rechaza (T-120); limitarlo al subtotal en la pantalla con un aviso claro | prueba funcional de T-120, 23-nov-2026 |
 | VEN | Pantalla de venta: la casilla de precio de solo lectura (sin `cambiar_precio_venta`) se ve igual que una editable; darle aspecto de bloqueada (fondo gris) | prueba de T-109, 19-nov-2026 |
 | VEN | `SaleController::config()` no devuelve `es_default` de `tax_configs` (`get([...])` sin esa columna): `getIgvGeneralTasa()` de `register.vue` nunca encuentra el IGV «default» y usa 18 de respaldo. Hoy coincide con la tasa real; si el IGV general cambiara, el front calcularía mal el precio sin IGV y el backend (`PrecioVentaValidator`, que sí lee `es_default`) rechazaría la venta. Arreglo: agregar `es_default` al `get()` de `config()` | T-109 (revisión del 19-nov) |
 | NOT | Línea de nota sin texto editado: el XML dice el título (`NoteDetail::descripcionParaSunat()`) y el PDF `description ?? título`. Solo difiere en líneas de adelanto (`description` la escribe `AdvanceController`); decidir cuál vale e igualarlos | revisión de T-108, 19-nov-2026 |

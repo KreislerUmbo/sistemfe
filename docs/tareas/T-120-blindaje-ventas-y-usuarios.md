@@ -119,9 +119,19 @@ descuento global) y crear un usuario desde Usuarios.
   `UsuarioEdicionPassword`: 147 en verde (revisión del 23-nov). Suite completa (Postgres):
   2448 en verde y 1 falla, el intermitente conocido `Fila13Fase1cFacturacionTest::descuento_del_combo…`
   (pasa 3 de 3 corrido solo).
+- **Prueba funcional** (`admin-start-kit/e2e/verif-t120-blindaje.mjs`, agencia-demo, 23-nov):
+  editar la venta 35 con descuento global 999999 → el PATCH real da 422 y la venta no cambia;
+  en la edición lo frena antes la regla del anticipo (`anticipoDeLaEdicion()`: anticipo 0 > total
+  negativo), así que el mensaje de B se ve en `store()` y en payloads sin los campos del anticipo
+  (cubierto por los tests). Usuarios: la lista carga, sin rol la pantalla frena, con rol «Cajero»
+  se crea (200, `role` correcto) y se borró al final.
 - **Desviaciones de la tarea y por qué:** la parte D pasó a T-121 (decisión del usuario,
   23-nov): falta confirmar en los logs de producción que nadie usa esas rutas.
 
 ## Hallazgos fuera de alcance
 - A: si el payload trae dos veces el mismo `id` de línea, pasa la validación y la línea se
   actualiza dos veces (gana la última). Sin daño; no se arregla.
+- Pantalla de venta (`TotalesVenta.vue::cambiar()`): el descuento global solo se limita a ≥ 0;
+  acepta uno mayor que el subtotal, muestra «Monto a pagar» negativo y el aviso que sale al
+  guardar no habla del descuento («los pagos superan…» o «el anticipo no puede ser mayor…»).
+  Limitarlo al subtotal en la pantalla con un aviso claro. → «Por analizar».
