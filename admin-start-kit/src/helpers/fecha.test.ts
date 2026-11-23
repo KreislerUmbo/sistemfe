@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { diferenciaDiasISO, formatDiaCorto, formatFechaHora, hoyPeru, soloFechaISO, sumarDiasISO } from './fecha'
+import { diferenciaDiasISO, formatDiaCorto, formatFechaHora, hoyPeru, parsearFechaEscrita, soloFechaISO, sumarDiasISO } from './fecha'
 
 // Regla única de fechas (08-oct-2026): todo se muestra en hora de Perú, sin depender de la
 // zona horaria de la PC. Los casos van de 19:00 a 24:00 de Perú, donde UTC ya es el día siguiente.
@@ -80,3 +80,37 @@ describe('diferenciaDiasISO', () => {
     expect(diferenciaDiasISO('2026-12-13', '2026-12-10')).toBe(-3);
   });
 });
+
+// T-117: una fecha escrita que no existe se rechaza (antes «31/11/2026» pasaba a ser 01/12/2026).
+describe('parsearFechaEscrita', () => {
+  it('rechaza fechas que no existen', () => {
+    expect(parsearFechaEscrita('31/11/2026')).toBeNull()
+    expect(parsearFechaEscrita('30/02/2026')).toBeNull()
+    expect(parsearFechaEscrita('29/02/2026')).toBeNull()
+    expect(parsearFechaEscrita('31/04/2026')).toBeNull()
+    expect(parsearFechaEscrita('29/02/2100')).toBeNull()
+    expect(parsearFechaEscrita('00/05/2026')).toBeNull()
+    expect(parsearFechaEscrita('15/13/2026')).toBeNull()
+  })
+
+  it('acepta fechas que existen, con o sin cero adelante', () => {
+    expect(parsearFechaEscrita('29/02/2028')).toBe('2028-02-29')
+    expect(parsearFechaEscrita('29/02/2000')).toBe('2000-02-29')
+    expect(parsearFechaEscrita('30/11/2026')).toBe('2026-11-30')
+    expect(parsearFechaEscrita('1/3/2026')).toBe('2026-03-01')
+    expect(parsearFechaEscrita(' 31/12/2026 ')).toBe('2026-12-31')
+  })
+
+  it('acepta «-» y «.» como separador, como el calendario', () => {
+    expect(parsearFechaEscrita('30-11-2026')).toBe('2026-11-30')
+    expect(parsearFechaEscrita('30.11.2026')).toBe('2026-11-30')
+  })
+
+  it('lo que no es una fecha da null', () => {
+    expect(parsearFechaEscrita('')).toBeNull()
+    expect(parsearFechaEscrita(null)).toBeNull()
+    expect(parsearFechaEscrita('2026-11-30')).toBeNull()
+    expect(parsearFechaEscrita('30/11/26')).toBeNull()
+    expect(parsearFechaEscrita('hoy')).toBeNull()
+  })
+})

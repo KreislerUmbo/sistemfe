@@ -100,3 +100,21 @@ export function formatDiaCorto(ymd?: string | null): string {
   const dia = DIAS_SEMANA[new Date(Date.UTC(a, m - 1, d)).getUTCDay()];
   return `${dia} ${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}`;
 }
+
+/**
+ * T-117: fecha escrita a mano en un campo de fecha («dd/mm/aaaa», también «d/m/aaaa» y con «-» o «.»
+ * como separador). Devuelve «YYYY-MM-DD» solo si la fecha existe; si no, null. Sin `new Date()`:
+ * JavaScript convierte «31/11» en 01/12 sin avisar, que es justo lo que se quiere evitar.
+ */
+export function parsearFechaEscrita(texto?: string | null): string | null {
+  const m = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/.exec((texto ?? '').trim());
+  if (!m) return null;
+  const dia = Number(m[1]);
+  const mes = Number(m[2]);
+  const anio = Number(m[3]);
+  if (mes < 1 || mes > 12 || dia < 1) return null;
+  const bisiesto = (anio % 4 === 0 && anio % 100 !== 0) || anio % 400 === 0;
+  const diasDelMes = [31, bisiesto ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][mes - 1]!;
+  if (dia > diasDelMes) return null;
+  return `${anio}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
+}

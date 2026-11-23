@@ -69,9 +69,22 @@ Navegador en agencia-demo: edición de venta (cuotas), fecha de viaje de una res
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
+- **Commits:** ver la rama `fix/T-117-campo-fecha-inexistente`.
+- **Tests:** `parsearFechaEscrita()` en `fecha.test.ts` (4 nuevos, CA1). Vitest 357 y `vite build` en verde;
+  `vue-tsc` sin errores en los archivos tocados.
+- **Navegador** (`e2e/verif-t117-campo-fecha.mjs`, agencia-demo, PATCH interceptado):
+  CA2 la cuota en 31/12/2026, escribir «31/11/2026» → sigue 31/12/2026, rojo, «31/11/2026 no existe.»; el PATCH lleva
+  `2026-12-31`. CA3 «30/11/2026» → sin aviso y el PATCH lleva `2026-11-30`. CA4 elegir el 25 con el calendario
+  quita el aviso; borrar el campo lo deja vacío (y la cuota única desaparece, como antes). Reportes comerciales:
+  «30/02/2026» deja «01/11/2026» con aviso. CA5 modal «Nueva consulta» (estático): «31/04/2026» con el campo vacío
+  → sigue vacío con aviso; el aviso se ve bajo el campo y el botón del calendario conserva su borde.
 - **Desviaciones de la tarea y por qué:**
+  - Caja no usa `CampoFecha`: en su lugar se probó el filtro de fechas de Reportes comerciales de Agencia.
+  - Se aceptan «-» y «.» como separador, además de «/»: el parser de flatpickr los aceptaba (sus separadores son
+    comodines) y quitarlos sería un cambio que nadie pidió.
+  - Texto que no es una fecha («mañana») también se rechaza con aviso («no es una fecha: escríbela como
+    dd/mm/aaaa»); antes vaciaba el campo sin avisar.
+  - `parseDate` lleva un cast: los tipos de flatpickr piden `Date`, pero su parser descarta un `undefined`.
 
 ## Hallazgos fuera de alcance
-- 
+- Ninguno.
