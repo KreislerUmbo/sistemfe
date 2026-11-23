@@ -116,7 +116,9 @@ descuento global) y crear un usuario desde Usuarios.
 - **Commits:** `613adbc6` (A), `4c759c5a` (B), `4399c0d5` (C)
 - **Tests:** nuevos `Ventas/T120BlindajeVentasTest` (5) y `T120BlindajeUsuariosTest` (3).
   Filtro de «Cómo verificar» + `GateBucketBRoutes`, `SeguridadRegistroYUsuarioInactivo`,
-  `UsuarioEdicionPassword`: 147 en verde (revisión del 23-nov). Suite completa: pendiente.
+  `UsuarioEdicionPassword`: 147 en verde (revisión del 23-nov). Suite completa (Postgres):
+  2448 en verde y 1 falla, el intermitente conocido `Fila13Fase1cFacturacionTest::descuento_del_combo…`
+  (pasa 3 de 3 corrido solo).
 - **Desviaciones de la tarea y por qué:** la parte D pasó a T-121 (decisión del usuario,
   23-nov): falta confirmar en los logs de producción que nadie usa esas rutas.
 
