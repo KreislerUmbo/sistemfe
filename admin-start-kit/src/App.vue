@@ -7,7 +7,6 @@ import { RouterView } from "vue-router";
 import { useLayoutStore } from "@/stores/layout";
 import { useAuthStore } from "@/stores/auth";
 import { iniciarVigilanciaSesion } from "@/helpers/sessionExpiryWatcher";
-// import configureFakeBackend from "@/helpers/fake-backend";
 import { onMounted } from "vue";
 
 onMounted(() => {
@@ -19,5 +18,4 @@ onMounted(() => {
   }
 });
 
-// configureFakeBackend();
 </script>

@@ -219,7 +219,7 @@ import { useUiStore } from '@/stores/ui' // si usas drawer
 import Swal from 'sweetalert2' // opcional para notificaciones
 import { productoService, type ProductoPortal } from '@/services/portal/productoService'
 // Computed para saber si el producto ya está en el carrito
-const yaEnCarrito = computed(() => carritoStore.isInCart(producto.value?.id))
+const yaEnCarrito = computed(() => producto.value ? carritoStore.isInCart(producto.value.id) : false)
 
 
 const route = useRoute()
@@ -248,7 +248,7 @@ const productosRelacionados = ref([
 
 // Cálculo de rating promedio (mock)
 const promedioRating = computed(() => {
-  if (reseñas.value.length === 0) return 0
+  if (reseñas.value.length === 0) return '0'
   const suma = reseñas.value.reduce((acc, r) => acc + r.rating, 0)
   return (suma / reseñas.value.length).toFixed(1)
 })

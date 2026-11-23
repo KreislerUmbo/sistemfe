@@ -1149,7 +1149,9 @@ const portalRoutes = [
             path: 'direcciones',
             name: 'portal.micuenta.datos',
             meta: { title: setTitle('Mis direcciones'), clientAuth: true },
-            // component: () => import('@/views/portal/MisDatos.vue'), 
+            // Sin pantalla todavía (MisDatos.vue no existe): lleva al panel de Mi cuenta. Una ruta
+            // sin componente ni redirect rompía el tipo del router (T-101).
+            redirect: { name: 'portal.micuenta.panel' },
           },
           {
             path: 'seguridad',

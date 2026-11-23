@@ -291,9 +291,11 @@ const eliminarFotoExistente = (path: string) => {
         title: 'Confirmar eliminación', text: '¿Eliminar esta foto?', icon: 'warning',
         showCancelButton: true, confirmButtonColor: '#d33', confirmButtonText: 'Sí, eliminar',
     }).then(async (result: any) => {
-        if (!result.isConfirmed || !props.tourExistente) return;
+        // Un tour ad-hoc (sin paquete_plantilla_id) no tiene fotos de catálogo que borrar.
+        const paqueteId = props.tourExistente?.paquete_plantilla_id;
+        if (!result.isConfirmed || !paqueteId) return;
         try {
-            await paquetePlantillaService.eliminarFoto(props.tourExistente.paquete_plantilla_id, path);
+            await paquetePlantillaService.eliminarFoto(paqueteId, path);
             fotosExistentes.value = fotosExistentes.value.filter((p) => p !== path);
             if (fotoPortada.value === path) fotoPortada.value = null;
             fotosDestacadas.value = fotosDestacadas.value.filter((p) => p !== path);
@@ -474,6 +476,9 @@ const guardar = async () => {
 
         if (esEdicion.value && props.tourExistente) {
             const paqueteId = props.tourExistente.paquete_plantilla_id;
+            // Un tour ad-hoc (sin paquete_plantilla_id) no tiene ficha de catálogo que actualizar:
+            // antes iba a PUT paquetes/null y fallaba igual; el catch de abajo muestra el aviso.
+            if (!paqueteId) throw new Error('Tour sin ficha de catálogo');
             await paquetePlantillaService.actualizar(paqueteId, fd);
 
             if (pasoItinerarioId.value) {

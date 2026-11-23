@@ -22,9 +22,9 @@
 
         <!-- Categorías -->
         <div v-else v-for="cat in categoriasDisponibles" :key="cat.id" class="col-6 col-md-4 col-lg-2">
-          <div class="card text-center bg-dark border-secondary h-100 category-card" @click="irACategoria(cat.id)" ">
+          <div class="card text-center bg-dark border-secondary h-100 category-card" @click="irACategoria(cat.id)">
             <div class="card-body d-flex flex-column align-items-center justify-content-center gap-2">
-              <img :src="getImageUrl(cat.imagen)":alt="cat.title" class="category-img" />
+              <img :src="getImageUrl(cat.imagen)" :alt="cat.title" class="category-img" />
               <h6 class="card-title text-white mb-0">{{ cat.title }}</h6>
             </div>
           </div>
@@ -59,13 +59,13 @@ const cargarCategorias = async () => {
     cargando.value = false   // ← crucial: apagar el spinner
   }
 }
-const getImageUrl = (path: string) => {
+const getImageUrl = (path?: string) => {
   if (!path) return '/img/default.png'
   if (path.startsWith('http')) return path
   const storageUrl = import.meta.env.APP_URL || 'http://localhost:8000/storage'
   return `${storageUrl}/${path}`
 }
-const irACategoria = (id: string) => {
+const irACategoria = (id: number) => {
   router.push({ path: '/catalogo', query: { categorie_id: id.toString() } })
 }
 

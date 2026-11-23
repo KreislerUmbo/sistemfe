@@ -85,15 +85,12 @@ export type Sale = {
     },
     client_id: string,
     client_address_id?: number | null,
-    client: {
-        id: string,
-        full_name: string,
-        type_client?: number,
-        es_mayorista?: boolean,
-        n_document: string,
-        address?: string,
-        phone?: string
-    },
+    // Lo que manda SaleResource::client: los campos del cliente que usan edit.vue (selectClient) y
+    // sus paneles. No es el Client completo (faltan user, estado, género…), por eso un Pick.
+    client: Pick<Client, 'id' | 'full_name' | 'name' | 'name_comerc' | 'type_client' | 'es_mayorista'
+        | 'type_document' | 'cod_tipo_doc_sunat' | 'n_document' | 'address' | 'phone' | 'email'
+        | 'ubigeo_region' | 'ubigeo_provincia' | 'ubigeo_distrito' | 'region' | 'provincia'
+        | 'distrito' | 'es_amazonia'>,
     n_document: string,
     correlativo: string,
     n_operacion: string,

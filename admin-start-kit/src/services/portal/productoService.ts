@@ -17,6 +17,8 @@ export interface ProductoPortal {
   descripcion: string;
   include_igv: string;
   especificaciones: { key: string; val: string }[];
+  // La API del portal no lo manda hoy: la insignia «Popular» del catálogo queda oculta.
+  popular?: boolean;
 }
 
 export interface CategoriaPortal {

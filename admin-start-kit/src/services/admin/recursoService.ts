@@ -17,6 +17,10 @@ export interface RecursoManual {
   updated_at?: string
 }
 
+// Un recurso tal como llega del listado de la API: ya guardado (tiene id) y con las rutas de
+// archivo/miniatura como texto (el File solo existe en el formulario, antes de subirlo).
+export type RecursoListado = RecursoManual & { id: number; archivo?: string; miniatura?: string }
+
 export const recursoService = {
   async listar(params: any = {}) {
     const response = await httpClient.get('/recursos', { params })

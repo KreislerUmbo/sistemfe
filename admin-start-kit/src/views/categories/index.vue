@@ -151,7 +151,7 @@ const categories = ref<Categorie[]>([]);// arreglo de categorías inicialmente v
 
 const title = ref<string>("");
 const FILE_IMAGEN = ref<File | undefined>(undefined);
-const IMAGEN_PREVIZUALIZA = ref<string | ArrayBuffer | null>(null);
+const IMAGEN_PREVIZUALIZA = ref<string | null>(null); // readAsDataURL siempre da texto (data URL)
 const state = ref<number>(1); // 1: Activo, 2: Inactivo
 
 
@@ -333,7 +333,7 @@ const loadFile = ($event: any) => {
     let reader = new FileReader();// crear un objeto FileReader para leer el archivo como una URL de datos
     if (FILE_IMAGEN.value) {
         reader.readAsDataURL(FILE_IMAGEN.value); // leer el archivo como una URL de datos
-        reader.onloadend = () => IMAGEN_PREVIZUALIZA.value = reader.result;// asignar la URL de datos a la variable reactiva IMAGEN_PREVIZUALIZA para previsualizar la imagen
+        reader.onloadend = () => IMAGEN_PREVIZUALIZA.value = reader.result as string;// asignar la URL de datos a la variable reactiva IMAGEN_PREVIZUALIZA para previsualizar la imagen
     }
 }
 

@@ -27,15 +27,13 @@
 </template>
 
 <script setup lang="ts">
-//import { useFavoritosStore } from '@/stores/favoritos'
+import { useFavoritosStore, type FavoritoItem } from '@/stores/favoritos'
 import { useCarritoStore } from '@/stores/carrito'
 
-/* const favoritosStore = useFavoritosStore()
+const favoritosStore = useFavoritosStore()
 const carritoStore = useCarritoStore()
 
-
-const agregarAlCarrito = (producto) => {
-  carritoStore.agregarProducto(producto)
-  // opcional: notificación
-} */
+const agregarAlCarrito = (producto: FavoritoItem) => {
+  carritoStore.agregarProducto({ ...producto, cantidad: 1 })
+}
 </script>

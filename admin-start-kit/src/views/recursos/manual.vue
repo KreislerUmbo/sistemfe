@@ -111,10 +111,10 @@
 import { sanearHtml } from '@/helpers/sanearHtml'
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
 import { ref, onMounted } from 'vue'
-import { recursoService } from '@/services/admin/recursoService'
+import { recursoService, type RecursoListado } from '@/services/admin/recursoService'
 import { formatFechaHora } from '@/helpers/fecha'
 
-const recursos = ref([])
+const recursos = ref<RecursoListado[]>([])
 const categorias = ref<string[]>([])
 const search = ref('')
 const filtroTipo = ref('')
@@ -127,13 +127,13 @@ const cargando = ref(true)
 const showModal = ref(false)
 const recursoSeleccionado = ref<any>(null)
 
-const urlStorage = (path: string) => {
+const urlStorage = (path?: string) => {
   if (!path) return ''
   if (path.startsWith('http')) return path
   return import.meta.env.VITE_STORAGE_URL + '/' + path
 }
 
-const truncate = (text: string, len: number) => text?.length > len ? text.slice(0, len) + '…' : text
+const truncate = (text: string | undefined, len: number) => text && text.length > len ? text.slice(0, len) + '…' : (text ?? '')
 const embedUrl = (url: string) => {
   if (url.includes('youtube.com/watch')) {
     const videoId = url.split('v=')[1]?.split('&')[0]
@@ -170,7 +170,7 @@ const cargarRecursos = async () => {//aqui lo que hago es llamar al metodo lista
     totalRecursos.value = res.total || 0
     totalPages.value = res.last_page || 1
     // Extraer categorías para filtro
-    const cats = new Set(recursos.value.map(r => r.categoria).filter(Boolean))
+    const cats = new Set(recursos.value.map(r => r.categoria).filter((c): c is string => !!c))
     categorias.value = Array.from(cats)
   } catch (e) { console.error(e) }
   finally { cargando.value = false }
