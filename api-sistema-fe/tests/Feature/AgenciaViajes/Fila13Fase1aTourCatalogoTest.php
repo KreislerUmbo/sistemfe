@@ -636,7 +636,8 @@ class Fila13Fase1aTourCatalogoTest extends TestCase
         $compartido = $items[0];
         $this->assertSame('por_persona', $compartido['modo_precio']);
         $this->assertEqualsWithDelta(130.0, (float) $compartido['precio_venta_snapshot'], 0.01); // 2×50 + 30 + 0
-        $this->assertEqualsWithDelta(80.0, (float) $compartido['costo_snapshot'], 0.01); // 4×20
+        // T-029 (H19): el costo no cuenta infantes (decisión E2): 3×20, no 4×20. La venta sí.
+        $this->assertEqualsWithDelta(60.0, (float) $compartido['costo_snapshot'], 0.01);
         $privado = $items[1];
         $this->assertSame('tarifa_fija', $privado['modo_precio']);
         $this->assertEqualsWithDelta(180.0, (float) $privado['precio_venta_snapshot'], 0.01);
