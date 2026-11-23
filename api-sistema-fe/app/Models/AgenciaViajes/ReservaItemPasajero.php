@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 // plan-modulo-cotizaciones-reservas.md §4. Tenant (sin CentralConnection).
 // Ambas FK son reales dentro de la misma DB tenant, así que llevan
 // belongsTo. El check-in NO va acá: tabla propia ReservaItemCheckin (T-041);
-// las columnas viejas checkin_realizado/checkin_hora quedan sin uso.
+// las columnas viejas checkin_realizado/checkin_hora se quitaron en T-083.
 class ReservaItemPasajero extends Model
 {
     protected $table = 'reserva_item_pasajero';
