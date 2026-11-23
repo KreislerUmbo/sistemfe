@@ -1,5 +1,5 @@
 
-// frontend/src/stores/ui.js
+// frontend/src/stores/ui.ts
 import { defineStore } from 'pinia'
 
 export const useUiStore = defineStore('ui', {
@@ -20,7 +20,7 @@ export const useUiStore = defineStore('ui', {
     closeCartDrawer() {
       this.cartDrawerOpen = false
     },
-    applyCoupon(code) {
+    applyCoupon(code: string) {
       if (code === 'TECH20' && !this.couponApplied) {
         this.couponApplied = true
         this.couponDiscount = 0.20 // 20%
@@ -33,7 +33,7 @@ export const useUiStore = defineStore('ui', {
       this.couponDiscount = 0
       this.couponCode = ''
     },
-    setPaymentMethod(method) {
+    setPaymentMethod(method: string) {
       this.selectedPaymentMethod = method
     }
   }

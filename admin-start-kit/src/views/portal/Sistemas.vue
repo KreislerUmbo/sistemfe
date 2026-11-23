@@ -117,7 +117,7 @@
                   <span v-if="sistema.plan === 'anual'" class="text-decoration-line-through text-muted small">S/ {{
                     sistema.precioMensual }}/mes</span>
                 </div>
-                <div class="small text-muted">{{ sistema.plan === 'anual' ? `Facturado S/ ${sistema.precioAnualTotal} al
+                <div class="small text-muted">{{ sistema.plan === 'anual' ? `Facturado S/ ${sistema.precioAnual * 12} al
                   año` : 'Facturado mensualmente' }}</div>
               </div>
               <!-- Features -->

@@ -220,7 +220,8 @@ const paqueteId = computed(() => Number(route.params.id));
 
 const guardando = ref<boolean>(false);
 
-const form = ref<Partial<PaquetePlantilla> & { destino_atractivo_id: number | null }>({
+// Omit: en el formulario el destino arranca vacío (null), aunque el tour guardado siempre lo tiene.
+const form = ref<Omit<Partial<PaquetePlantilla>, 'destino_atractivo_id'> & { destino_atractivo_id: number | null }>({
     codigo: null,
     categoria: 'local',
     tipo: 'tour_simple',

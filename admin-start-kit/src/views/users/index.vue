@@ -365,7 +365,7 @@ const state = ref<number>(1); // 1: Activo, 2: Inactivo
 const formato_impresion_default = ref<'a4' | 'ticket80mm'>('a4'); // formato de impresión de comprobantes por defecto
 const password = ref<string>('');
 const FILE_AVATAR = ref<File | undefined>(undefined);
-const IMAGEN_PREVIZUALIZA = ref<string | ArrayBuffer | null>(null);
+const IMAGEN_PREVIZUALIZA = ref<string | null>(null); // readAsDataURL siempre da texto (data URL)
 
 
 const search = ref<string | null>(null);
@@ -396,7 +396,7 @@ const loadFile = ($event: any) => {
     let reader = new FileReader();// crear un objeto FileReader para leer el archivo como una URL de datos
     if (FILE_AVATAR.value) {
         reader.readAsDataURL(FILE_AVATAR.value); // leer el archivo como una URL de datos
-        reader.onloadend = () => IMAGEN_PREVIZUALIZA.value = reader.result;// asignar la URL de datos a la variable reactiva IMAGEN_PREVIZUALIZA para previsualizar la imagen
+        reader.onloadend = () => IMAGEN_PREVIZUALIZA.value = reader.result as string;// asignar la URL de datos a la variable reactiva IMAGEN_PREVIZUALIZA para previsualizar la imagen
     }
 }
 

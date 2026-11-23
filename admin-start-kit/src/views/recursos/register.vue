@@ -29,7 +29,7 @@
                                 <b-form-select id="sistema_id" v-model="form.sistema_id" required>
                                     <option value="">-- Seleccionar sistema --</option>
                                     <option v-for="sistema in sistemas" :key="sistema.id" :value="sistema.id">
-                                        {{ sistema.nombre }}
+                                        {{ sistema.name }}
                                     </option>
                                 </b-form-select>
                             </b-form-group>
@@ -122,13 +122,29 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import Swal from 'sweetalert2'
 import { recursoService } from '@/services/admin/recursoService'
+import { systemService } from '@/services/portal/systemService'
+import type { System } from '@/types/systems'
 
 const router = useRouter()
 const route = useRoute()
 const cargando = ref(false)
 const isEdit = computed(() => !!route.params.id)
 
+// El backend exige sistema_id (ManualRecursoController::store). GET systems pagina de a 15: se
+// piden todas las páginas para que el selector no se quede corto.
+const sistemas = ref<Pick<System, 'id' | 'name'>[]>([])
+const cargarSistemas = async () => {
+    const lista: Pick<System, 'id' | 'name'>[] = []
+    for (let page = 1; ; page++) {
+        const { data } = await systemService.list(page)
+        lista.push(...data.systems)
+        if (!data.systems.length || lista.length >= data.total) break
+    }
+    sistemas.value = lista
+}
+
 const form = ref({
+    sistema_id: '' as number | '',
     titulo: '',
     descripcion: '',
     tipo: 'video',
@@ -156,11 +172,14 @@ const urlStorage = (path: string) => {
 
 const cargarRecurso = async (id: number) => {
     try {
-        const data = await recursoService.obtener(id)
+        // GET recursos/{id} responde { recurso: {...} } (ManualRecursoController::show).
+        const data = (await recursoService.obtener(id)).recurso
         form.value = {
+            sistema_id: data.sistema_id ?? '',
             titulo: data.titulo || '',
             descripcion: data.descripcion || '',
-            tipo: data.tipo || 'video',
+            // La columna es tipo_recurso; en el formulario se llama tipo.
+            tipo: data.tipo_recurso || 'video',
             categoria: data.categoria || '',
             url: data.url || '',
             archivo: null,
@@ -173,7 +192,7 @@ const cargarRecurso = async (id: number) => {
         }
     } catch (error) {
         Swal.fire('Error', 'No se pudo cargar el recurso.', 'error')
-        router.push('/manuales')
+        router.push({ name: 'recursos.index' })
     }
 }
 
@@ -187,6 +206,8 @@ const guardar = async () => {
                     if (val instanceof File) formData.append(key, val)
                 } else if (key === 'destacado' || key === 'estado') {
                     formData.append(key, val ? '1' : '0')
+                } else if (key === 'tipo') {
+                    formData.append('tipo_recurso', String(val)) // nombre de la columna en el backend
                 } else {
                     formData.append(key, String(val))
                 }
@@ -201,7 +222,7 @@ const guardar = async () => {
             res = await recursoService.crear(formData)
         }
         Swal.fire('¡Éxito!', res.message || 'Recurso guardado correctamente.', 'success')
-        router.push('/recursos')
+        router.push({ name: 'recursos.index' })
     } catch (error: any) {
         let msg = 'Error al guardar el recurso.'
         if (error.response?.data?.errors) {
@@ -215,10 +236,12 @@ const guardar = async () => {
 }
 
 const cancelar = () => {
-    router.push('/recursos')
+    router.push({ name: 'recursos.index' })
 }
 
 onMounted(() => {
+    // En paralelo: la lista de sistemas y (al editar) el recurso no dependen uno del otro.
+    cargarSistemas().catch(() => Swal.fire('Error', 'No se pudo cargar la lista de sistemas.', 'error'))
     if (isEdit.value) cargarRecurso(Number(route.params.id))
 })
 </script>

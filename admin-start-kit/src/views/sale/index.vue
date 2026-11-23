@@ -440,7 +440,7 @@ const filterChips = computed(() => {
     const chips: string[] = [];
     if (search_product.value) chips.push(`Producto: ${search_product.value}`);
     if (categorie_id.value) {
-        const cat = categories.value.find(c => c.id === Number(categorie_id.value));
+        const cat = categories.value.find(c => Number(c.id) === Number(categorie_id.value)); // el tipo dice string; la API manda número
         if (cat) chips.push(`Categoría: ${cat.title}`);
     }
     if (search_client.value) chips.push(`Cliente: ${search_client.value}`);

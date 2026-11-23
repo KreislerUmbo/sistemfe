@@ -241,12 +241,12 @@ const show = async () => {
         // Esperar a que se carguen provincias (por el watch)
         setTimeout(() => {
             // 2️⃣ Setear provincia
-            ubigeo_provincia.value = company_selected.value.ubigeo_provincia;
+            ubigeo_provincia.value = company_selected.value?.ubigeo_provincia ?? '';
 
             // Esperar a que se carguen los distritos (por el watch)
             setTimeout(() => {
                 // 3️⃣ Setear distrito
-                ubigeo_distrito.value = company_selected.value.ubigeo_distrito;
+                ubigeo_distrito.value = company_selected.value?.ubigeo_distrito ?? '';
             }, 25);
         }, 25);
 

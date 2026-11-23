@@ -998,7 +998,9 @@ const loadSale = async (pedido?: Promise<AxiosResponse<SaleResponse>>) => {
 
         // Cliente
         if (sale.client) {
-            selectClient(sale.client);
+            // SaleResource no manda el Client completo, pero sí todo lo que leen selectClient y los
+            // paneles del cliente (ver el Pick de Sale.client en types/sales.ts).
+            selectClient(sale.client as Client);
         }
         // T-116: el destino guardado va DESPUÉS de selectClient(), que sugiere «amazonia» si el
         // cliente es de esa zona y pisaba el de una venta nacional.

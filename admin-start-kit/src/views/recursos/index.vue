@@ -122,14 +122,14 @@ import DefaultLayout from '@/layouts/DefaultLayout.vue'
 import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import Swal from 'sweetalert2'
-import { recursoService, type RecursoManual } from '@/services/admin/recursoService'
+import { recursoService, type RecursoListado } from '@/services/admin/recursoService'
 import { useAuthStore } from '@/stores/auth'
 
 const puedeRegistrar = useAuthStore().isPermitedRoute('register_recurso')
 
 const router = useRouter()
 
-const recursos = ref<RecursoManual[]>([])
+const recursos = ref<RecursoListado[]>([])
 const search = ref('')
 const filtroTipo = ref('')
 const filtroEstado = ref('')
@@ -138,13 +138,13 @@ const currentPage = ref(1)
 const totalRows = ref(0)
 const perPage = ref(15)
 
-const urlStorage = (path: string) => {
+const urlStorage = (path?: string) => {
   if (!path) return ''
   if (path.startsWith('http')) return path
   return import.meta.env.VITE_STORAGE_URL + '/' + path
 }
 
-const truncate = (text: string, len: number) => {
+const truncate = (text: string | undefined, len: number) => {
   if (!text) return ''
   return text.length > len ? text.slice(0, len) + '…' : text
 }
@@ -203,7 +203,7 @@ const editar = (id: number) => {
   router.push(`/recursos/register/${id}`)
 }
 
-const eliminar = (recurso: RecursoManual) => {
+const eliminar = (recurso: RecursoListado) => {
   Swal.fire({
     title: 'Confirmar eliminación',
     text: `¿Estás seguro de eliminar "${recurso.titulo}"?`,
