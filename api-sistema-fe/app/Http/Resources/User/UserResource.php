@@ -25,8 +25,8 @@ class UserResource extends JsonResource
             'branch_id' => $this->resource->branch_id,
             'state' => $this->resource->state,
             'role' => [
-                'id' => $this->resource->role->id,
-                'name' => $this->resource->role->name,
+                'id' => $this->resource->role?->id,
+                'name' => $this->resource->role?->name,
             ],
             'phone' => $this->resource->phone,
             'avatar' => StorageUrl::resolve($this->resource->avatar),

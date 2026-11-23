@@ -14,6 +14,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
@@ -79,6 +80,11 @@ class UserController extends Controller
     public function store(Request $request)
     {
         $request->validate(['imagen' => ArchivoSubido::imagen()], ArchivoSubido::MENSAJES);
+        // T-120: sin rol el usuario nacía con role_id=1 (Super-Admin) en pantalla.
+        $request->validate(
+            ['role_id' => ['required', Rule::exists('roles', 'id')->where('guard_name', 'api')]],
+            ['role_id.required' => 'Debes elegir un rol.', 'role_id.exists' => 'El rol elegido no existe.']
+        );
         if ($rechazo = $this->protegerPrivilegios($request, null)) {
             return $rechazo;
         }
