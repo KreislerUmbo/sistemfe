@@ -64,6 +64,13 @@ node e2e/verif-t119-cobro-edicion.mjs   (RECORRIDO_USUARIO / RECORRIDO_CLAVE de 
   «Efectivo PEN 280.00»; quitarlo muestra «Quitaste un pago…» y el formulario pasa a EFECTIVO 280; agregarlo
   queda «Sin guardar»; el PATCH lleva `[{EFECTIVO, 280}]`, `debt` 0, `state_payment` 3; **ninguna** petición a
   `sale_payments`. `e2e/verif-t118-una-cuota.mjs` sigue igual.
+- **Ajuste (23-nov, el usuario en la venta 41):** «Guardar cambios» pedía «al menos un pago» aunque el formulario
+  mostrara Efectivo y el saldo sugeridos: ese pago no existía hasta pulsar «Agregar pago». Ahora `store()` llama a
+  `agregarPendiente()` de `CobroEdicion`: un pago escrito y completo se agrega al guardar (como en registrar, lo
+  que se ve es lo que se cobra); si no pasa las validaciones se muestra su error y no se guarda. Sin pago escrito,
+  el mensaje dice «Al contado la venta necesita un pago: elige el método y el monto, o pásala a Crédito.».
+  Navegador: quitar el pago, cambiar el método a Transferencia y guardar sin «Agregar» → el PATCH lleva
+  `[{TRANSFERENCIA, 280}]`; formulario vacío → el mensaje nuevo; ninguna petición a `sale_payments`.
 - **Desviaciones de la tarea y por qué:** el «arreglo chico» propuesto (que `destroy()` corrija la caja) no se
   hizo: el panel ya no llama a `destroy()`, y hacerlo pedía mover la sincronización de caja de `SaleController`
   a un servicio. Solo se corrigió el estado.

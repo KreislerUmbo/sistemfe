@@ -46,5 +46,25 @@ console.log('tras agregar → fila:', await txt(tablaPagos.locator('tbody tr').f
 await page.locator('button:has-text("Guardar cambios")').click(); await page.waitForTimeout(800);
 console.log('aviso al guardar:', await txt(page.locator('.swal2-popup')).catch(() => '(sin ventana)'));
 console.log('PATCH → type_payment:', payload?.type_payment, '| pagos:', JSON.stringify(payload?.payments), '| debt:', payload?.debt, '| state:', payload?.state_payment);
-console.log('peticiones a sale_payments:', aSalePayments.length ? aSalePayments : 'ninguna');
+
+// Caso de la venta 41: quitar el pago y pulsar «Guardar cambios» sin «Agregar pago»: el pago escrito en el
+// formulario (sugerido) se agrega al guardar.
+payload = null;
+await page.goto(`${URL_BASE}/sale/edit/35`);
+await page.waitForSelector('.tabla-lineas tbody tr input[aria-label="Cantidad"]'); await page.waitForTimeout(1500);
+await tablaPagos.locator('tbody tr').first().locator('button').click(); await page.waitForTimeout(500);
+await metodo.selectOption({ index: 1 });
+await page.locator('button:has-text("Guardar cambios")').click(); await page.waitForTimeout(800);
+console.log('[sin Agregar] aviso:', await txt(page.locator('.swal2-popup')).catch(() => '(sin ventana)'));
+await page.locator('.swal2-confirm').click().catch(() => {});
+console.log('[sin Agregar] PATCH pagos:', JSON.stringify(payload?.payments), '| state:', payload?.state_payment);
+
+// Formulario vacío al contado: el mensaje explica qué hacer.
+await page.goto(`${URL_BASE}/sale/edit/35`);
+await page.waitForSelector('.tabla-lineas tbody tr input[aria-label="Cantidad"]'); await page.waitForTimeout(1500);
+await tablaPagos.locator('tbody tr').first().locator('button').click(); await page.waitForTimeout(500);
+await monto.fill('0');
+await page.locator('button:has-text("Guardar cambios")').click(); await page.waitForTimeout(800);
+console.log('[vacío] aviso:', await txt(page.locator('.swal2-popup')).catch(() => '(sin ventana)'));
+console.log('peticiones a sale_payments (total):', aSalePayments.length ? aSalePayments : 'ninguna');
 await browser.close();

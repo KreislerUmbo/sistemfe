@@ -271,21 +271,21 @@ const resetAnticipo = () => {
 };
 
 // ── PAGOS (en memoria; los guarda «Guardar cambios») ───────────────────
-const addPayment = () => {
+const addPayment = (): boolean => {
     if (!methodPayment.value) {
-        (Swal as TVueSwalInstance).fire('Error', 'El método de pago es obligatorio.', 'error'); return;
+        (Swal as TVueSwalInstance).fire('Error', 'El método de pago es obligatorio.', 'error'); return false;
     }
     if (amount.value <= 0) {
-        (Swal as TVueSwalInstance).fire('Error', 'El monto debe ser mayor a 0.', 'error'); return;
+        (Swal as TVueSwalInstance).fire('Error', 'El monto debe ser mayor a 0.', 'error'); return false;
     }
     if (typePayment.value == 2 && !datePayment.value) {
-        (Swal as TVueSwalInstance).fire('Error', 'La fecha de pago es obligatoria en crédito.', 'error'); return;
+        (Swal as TVueSwalInstance).fire('Error', 'La fecha de pago es obligatoria en crédito.', 'error'); return false;
     }
     if (props.totalVenta < (amount.value + props.totalPagado)) {
-        (Swal as TVueSwalInstance).fire('Error', 'El monto no puede superar lo que queda por cobrar de la venta.', 'error'); return;
+        (Swal as TVueSwalInstance).fire('Error', 'El monto no puede superar lo que queda por cobrar de la venta.', 'error'); return false;
     }
     if (methodPayment.value === 'EFECTIVO' && pagos.value.some(p => p.method_payment === 'EFECTIVO')) {
-        (Swal as TVueSwalInstance).fire('Error', 'Ya hay un pago en efectivo registrado.', 'error'); return;
+        (Swal as TVueSwalInstance).fire('Error', 'Ya hay un pago en efectivo registrado.', 'error'); return false;
     }
 
     pagos.value.push({
@@ -296,6 +296,7 @@ const addPayment = () => {
     } as SalePayment);
     limpiarFormulario();
     emit('cambio');
+    return true;
 };
 
 const removePayment = (index: number) => {
@@ -307,6 +308,15 @@ const removePayment = (index: number) => {
     // Sin pagos al contado, se vuelve a sugerir el cobro del saldo (después de recalcular totales).
     setTimeout(sugerirCobro, 0);
 };
+
+// T-119: lo escrito en el formulario y no agregado se agrega al guardar (como en registrar: lo que se ve
+// en el cobro es lo que se cobra). Formulario incompleto (sin método o sin monto) → no hace nada.
+// Devuelve false si el pago escrito no pasa las validaciones (ya mostró el error).
+const agregarPendiente = (): boolean => {
+    if (!methodPayment.value || !(Number(amount.value) > 0)) return true;
+    return addPayment();
+};
+defineExpose({ agregarPendiente });
 </script>
 
 <style scoped>
