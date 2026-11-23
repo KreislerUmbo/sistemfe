@@ -391,6 +391,11 @@ sudo nginx -t && sudo systemctl reload nginx
 ```
 
 (También debe estar abierto el puerto 443: `sudo ufw status | grep 443`.)
+
+**Atrapa-todo para peticiones por IP:** instalar también
+`config/nginx-00-default.conf` como `sites-available/00-default` (instrucciones
+en su encabezado). Sin él, entrar por `https://<IP>/login` muestra el login del
+Super-Admin, porque nginx cae en el primer sitio alfabético (`admin-panel`).
 Para volver atrás, copiar los `.bak` de vuelta y recargar; **ese bloque es solo
 para emergencias**, no se corre junto con el de aplicar.
 
