@@ -73,11 +73,11 @@
                     :simbolo="simbolo" etiqueta-total="Monto a pagar" :puede-descuento-global="puedeCambiarPrecio" />
             </div>
             <div class="p-3 border-bottom">
-                <CobroEdicion v-model:type-payment="type_payment" v-model:pagos="sale_payments"
+                <CobroEdicion ref="cobroEdicion" v-model:type-payment="type_payment" v-model:pagos="sale_payments"
                     v-model:cronograma="cronograma" v-model:num-cuotas="num_cuotas" v-model:periodicidad="periodicidad"
                     v-model:aplica-mora="aplica_mora" v-model:tasa-mora="tasa_mora" v-model:tipo-mora="tipo_mora"
                     v-model:n-comprobante-anticipo="n_comprobante_anticipo" v-model:sale-anticipo="sale_anticipo"
-                    :sale-id="sale_id" :metodos="paymentMethods" :moneda="currency" :fecha-base="today"
+                    :metodos="paymentMethods" :moneda="currency" :fecha-base="today"
                     :total-venta="totalACobrar()" :guardada-a-credito="guardada_a_credito" :total-pagado="total_payments" :monto-a-financiar="montoAFinanciar()"
                     :tiene-cobros-formales="tiene_cobros_formales" :condicion-especial="condicion_especial"
                     @cambio="sumDetails" />
@@ -310,9 +310,10 @@ const tipo_mora = ref<string>('porcentaje_diario');
 // true si la venta ya tiene cuotas cobradas o un adelanto aplicado —
 // bloquea la edición de productos/pago inicial (SaleResource::tiene_cobros_formales).
 const tiene_cobros_formales = ref<boolean>(false);
-// T-116: condición con la que la venta está guardada (no la elegida en pantalla). Si es crédito,
-// sale_payments rechaza POST/DELETE y los pagos se guardan con «Guardar cambios».
+// T-116: condición con la que la venta está guardada (no la elegida en pantalla). CobroEdicion avisa
+// qué pasa con las cuotas si se pasa a Contado.
 const guardada_a_credito = ref<boolean>(false);
+const cobroEdicion = ref<InstanceType<typeof CobroEdicion> | null>(null);
 
 // Totales
 const igv_total = ref<number>(0);
@@ -768,9 +769,11 @@ const store = async () => {
     if (sale_details.value.length === 0) {
         (Swal as TVueSwalInstance).fire({ icon: 'error', title: 'Error', text: 'Agrega al menos un producto.' }); return;
     }
+    // T-119: un pago escrito en el formulario y no agregado se agrega ahora (lo que se ve es lo que se cobra).
+    if (cobroEdicion.value && !cobroEdicion.value.agregarPendiente()) return;
     // T-116: igual que register.vue, a crédito no hace falta pago inicial (el cronograma financia todo).
     if (sale_payments.value.length === 0 && getTotalSales() > 0 && type_payment.value != 2) {
-        (Swal as TVueSwalInstance).fire({ icon: 'error', title: 'Error', text: 'Agrega al menos un pago para la venta.' }); return;
+        (Swal as TVueSwalInstance).fire({ icon: 'error', title: 'Error', text: 'Al contado la venta necesita un pago: elige el método y el monto, o pásala a Crédito.' }); return;
     }
     // Re-validar acá (no solo en addPayment()): el total pudo bajar después
     // de agregar un pago (se quitó una línea, cambió un descuento/régimen),

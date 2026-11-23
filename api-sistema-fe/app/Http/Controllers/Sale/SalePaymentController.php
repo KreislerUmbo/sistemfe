@@ -158,11 +158,15 @@ class SalePaymentController extends Controller
             "saldo_pendiente" => round($saldoPendienteCentavos / 100, 2),
         ]);
 
-        $state_payment = 1; //1=pendiente, 2=parcial, 3=completo
-        if ($sale->paid_out <= 0) {
-            $state_payment = 2;
-        } else if ($sale->debt <= 0) {
+        // T-119: estaba invertido (sin nada pagado marcaba «parcial»). 1=pendiente, 2=parcial, 3=completo.
+        // Ojo: este endpoint (y store()) NO mueve la caja; desde T-119 el panel ya no lo usa (la edición
+        // guarda los pagos con PATCH sales/{id}, que sí sincroniza la caja).
+        if ((float) $sale->paid_out <= 0) {
+            $state_payment = 1;
+        } elseif ((float) $sale->debt <= 0) {
             $state_payment = 3;
+        } else {
+            $state_payment = 2;
         }
         $sale->update([
             "state_payment" => $state_payment,
