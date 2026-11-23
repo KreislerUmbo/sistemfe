@@ -15,6 +15,7 @@ use App\Models\User;
 use App\Services\AgenciaViajes\SalidaEngancheService;
 use App\Services\AgenciaViajes\SalidaOperacionService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -27,7 +28,16 @@ use Tests\TestCase;
 // Fixtures en Concerns\SalidasFixtures.
 class Fila13Fase2cOperacionTest extends TestCase
 {
-    use SalidasFixtures;
+    use SalidasFixtures { setUp as prepararFixtures; }
+
+    // Los tours de los fixtures salen el 15-nov-2026 y se reprograman al 18 y 20-nov: con el reloj real
+    // esas fechas caducan («anterior a hoy»). Se fija «hoy» en el 10-nov-2026 (07:00 de Lima); Laravel
+    // lo suelta al terminar cada test.
+    protected function setUp(): void
+    {
+        Carbon::setTestNow('2026-11-10 12:00:00');
+        $this->prepararFixtures();
+    }
 
     // ═══════════════════════════════════════════════════════════════
     // Órdenes de servicio (D14)
