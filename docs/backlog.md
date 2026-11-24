@@ -8,7 +8,7 @@
 
 Cada línea: ID · qué · estado · depende de · rama o commit. El detalle está en
 `docs/tareas/T-…md` (se borra al cerrar; para una tarea hecha, el commit es la referencia).
-Próximo ID libre: **T-124**.
+Próximo ID libre: **T-125**.
 
 ## Orden de construcción (27-oct-2026)
 
@@ -65,7 +65,6 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | POR | `SeccionCategorias.vue::getImageUrl()` arma la URL con `import.meta.env.APP_URL` o `localhost:8000/storage`: rompe la regla de archivos por tenant. Y en Mi cuenta el enlace `/micuenta/datos` no tiene ruta (la de direcciones es `/micuenta/direcciones`, que desde T-101 redirige al panel) | T-101, 23-nov-2026 |
 | AGE | Test intermitente `ProveedorFiltroDestinoTest::sin_filtro_devuelve_todos`: cuenta **todos** los proveedores de la base y espera 2; falló una vez en la suite completa (pasa solo, con la carpeta de Agencia y en la corrida siguiente). Algún test deja proveedores guardados mientras corre: filtrar por los que crea el propio test | T-083, 23-nov-2026 |
 | VEN | `price_company` sigue llamándose así en la base y en `useProductPricing.ts`; desde T-115 es el precio mayorista. Renombrar solo si se toca esa zona | hallazgo de T-115, 20-nov-2026 |
-| VEN | `sales` no tiene `porcentaje_retencion` y `store()` no lo guarda (sí el de detracción y el de percepción): no se sabe con qué tasa se retuvo una venta ya emitida. Migración nueva + guardarlo | hallazgo de T-114, 20-nov-2026 |
 | VEN | `tax_configs` no tiene `monto_minimo`: el mínimo de retención y percepción queda fijo en S/ 700 en la pantalla y en `TotalesVentaValidator`. Si SUNAT lo cambia, agregar la columna y leerla en los dos lados | hallazgo de T-114, 20-nov-2026 |
 | VEN | `debt`, `paid_out` y `state_payment` de la venta siguen llegando del front sin recalcular en el backend (T-114 solo validó los totales de la cabecera) | hallazgo de T-114, 20-nov-2026 |
 | POR | Revisar si los pedidos del portal e-commerce descuentan stock y, si lo hacen, que usen `StockVentaService` (lock + `controlaStock()`) | fuera de alcance de T-113, 19-nov-2026 |
@@ -235,6 +234,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Commit |
 |---|---|---|---|
+| T-124 | VEN | `sales.porcentaje_retencion`: `store()` y `update()` guardan la tasa con la que se retuvo (0 si no hubo retención) y `SaleResource` la devuelve; las ventas anteriores quedan en 0. **Al desplegar:** `tenants:migrate-verticales` (migración `2026_11_24_100000`). Asserts nuevos en `T114TotalesVentaTest` (20 pasan) | ver merge de `fix/T-124-porcentaje-retencion-en-ventas` |
 | T-123 | VEN + AGE | Dos retoques de pantalla: la casilla de precio de solo lectura de la venta (sin `cambiar_precio_venta`) se ve bloqueada (fondo gris), y el cotizador oculta el lápiz «Editar» en un tour ad-hoc (sin `paquete_plantilla_id`). Solo frontend; type-check en 0. Sin probar en navegador | ver merge de `fix/T-123-ui-precio-bloqueado-y-lapiz-tour` |
 | T-122 | VEN | Tres arreglos chicos de «Por analizar»: el descuento global de la pantalla de venta (`TotalesVenta.vue`, nueva prop `maximo`) no pasa del subtotal y avisa; `SaleController::config()` devuelve `es_default` de `tax_configs`; `copiarDatosDelCliente()` copia también `cod_tipo_doc_cliente` (catálogo 06). Sin migraciones. 1 test nuevo; type-check en 0 | 8aeb46c9 |
 | T-121 | VEN + CAJ | `POST`/`DELETE` de `sale_payments` y `sale_details` responden 410: movían deuda, total y stock sin caja. Rutas y permisos se conservan. Producción 23-nov: ~17 000 llamadas a la API en 15 días y ninguna a estas rutas. Recorrido 88 | ver merge de `fix/T-121-retirar-rutas-legadas-pagos-y-lineas` |

@@ -892,6 +892,7 @@ class SaleController extends Controller
                 // Regímenes especiales
                 "retencion_igv"        => $request->retencion_igv,   // 0,1,2,3
                 "monto_retencion"      => $request->monto_retencion ?? 0,
+                "porcentaje_retencion" => ((float) ($request->monto_retencion ?? 0)) > 0 ? ($request->porcentaje_retencion ?? 0) : 0,
                 "codigo_detraccion"    => $request->codigo_detraccion,
                 "porcentaje_detraccion" => $request->porcentaje_detraccion ?? 0,
                 "monto_detraccion"     => $request->monto_detraccion ?? 0,
@@ -1291,6 +1292,7 @@ public function update(Request $request, string $id)
             // Regímenes especiales
             "retencion_igv"          => $request->retencion_igv,
             "monto_retencion"        => $request->monto_retencion ?? 0,
+            "porcentaje_retencion"    => ((float) ($request->monto_retencion ?? 0)) > 0 ? ($request->porcentaje_retencion ?? 0) : 0,
             "codigo_detraccion"      => $request->codigo_detraccion,
             "porcentaje_detraccion"  => $request->porcentaje_detraccion ?? 0,
             "monto_detraccion"       => $request->monto_detraccion ?? 0,

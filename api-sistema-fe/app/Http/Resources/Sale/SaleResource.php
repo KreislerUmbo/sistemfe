@@ -139,6 +139,7 @@ class SaleResource extends JsonResource
             'retencion_igv'         => $this->resource->retencion_igv,
 
             // Retención
+            'porcentaje_retencion'  => (float) ($this->resource->porcentaje_retencion ?? 0),
             'monto_retencion'       => $monto_retencion,
 
             // Detracción — campos necesarios para cargar el edit correctamente

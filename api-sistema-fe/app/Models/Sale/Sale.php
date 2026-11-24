@@ -104,6 +104,7 @@ class Sale extends Model
 
         // Retención IGV 3% (Res. 037-2002/SUNAT)
         // Solo agentes de retención designados por SUNAT. Mínimo S/ 700.
+        "porcentaje_retencion", // ej: 0.0300 = 3% (T-124; 0 si no hubo retención)
         "monto_retencion",      // monto = mto_imp_venta × 0.03
 
         // Detracción SPOT (Res. 183-2004/SUNAT)
