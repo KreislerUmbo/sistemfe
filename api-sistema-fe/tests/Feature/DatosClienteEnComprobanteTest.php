@@ -182,6 +182,21 @@ class DatosClienteEnComprobanteTest extends TestCase
         $this->assertSame('20999999999', $venta->num_doc_cliente);
     }
 
+    // T-122: el código del catálogo 06 (el del XML) se copia junto con el tipo de documento.
+    public function test_la_copia_incluye_el_codigo_sunat_del_tipo_de_documento(): void
+    {
+        $cliente = $this->cliente();
+        $venta = Sale::factory()->create(['client_id' => $cliente->id]);
+        $this->assertSame('6', $venta->cod_tipo_doc_cliente);
+
+        // Corrigen el tipo de documento del cliente (RUC → DNI) antes de enviar.
+        $cliente->update(['type_document' => 'DNI', 'cod_tipo_doc_sunat' => '1', 'n_document' => '12345678']);
+        $venta->copiarDatosDelCliente();
+
+        $this->assertSame('DNI', $venta->tipo_doc_cliente);
+        $this->assertSame('1', $venta->cod_tipo_doc_cliente);
+    }
+
     public function test_un_comprobante_aceptado_no_rehace_la_copia_al_reenviar(): void
     {
         $cliente = $this->cliente();

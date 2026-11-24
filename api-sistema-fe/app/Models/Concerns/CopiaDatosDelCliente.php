@@ -38,6 +38,8 @@ trait CopiaDatosDelCliente
         }
 
         $this->tipo_doc_cliente = $cliente->type_document;
+        // Catálogo 06 (el que va al XML): se copia junto con el tipo, o PDF y XML no coinciden.
+        $this->cod_tipo_doc_cliente = $cliente->cod_tipo_doc_sunat ?? $this->cod_tipo_doc_cliente;
         $this->num_doc_cliente = $cliente->n_document;
         $this->razon_social_cliente = $cliente->full_name;
         $this->direccion_cliente = $this->direccionElegida()?->direccion ?? $cliente->address;
