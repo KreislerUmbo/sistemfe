@@ -8,7 +8,7 @@
 
 Cada línea: ID · qué · estado · depende de · rama o commit. El detalle está en
 `docs/tareas/T-…md` (se borra al cerrar; para una tarea hecha, el commit es la referencia).
-Próximo ID libre: **T-128**.
+Próximo ID libre: **T-129**.
 
 ## Orden de construcción (27-oct-2026)
 
@@ -54,7 +54,6 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 |---|---|---|
 | VEN | Cliente genérico «Clientes varios» por tenant (backend + migración) para vender sin identificar al cliente: hoy la venta exige un cliente con documento. La maqueta de T-106 lo suponía | hallazgo de T-106, 19-nov-2026 |
 | VEN | Destino por defecto (`amazonia`/`nacional`) configurable por empresa: hoy está fijo en `amazonia` en `register.vue` | hallazgo de T-106, 19-nov-2026 |
-| VEN | `SaleResource` manda cada `sale_details` con el objeto `product` completo: recortarlo a los campos que usan `edit.vue` y los PDF (queda de lo que se anotó en T-106; `GET sales/config` ya se recortó en T-127) | hallazgo de T-106, 19-nov-2026 |
 | CLI | Marcar un cliente como mayorista (precio menor en todas sus compras) queda con el permiso de editar clientes. Decisión del 20-nov: así por ahora; revisar si hace falta un permiso propio | revisión de T-115, 20-nov-2026 |
 | POR | Revisar si el portal e-commerce usa `price_company` (desde T-115 es el «precio mayorista», no el de empresa) | hallazgo de T-115, 20-nov-2026 |
 | PLA | Recursos (manual de ayuda) a medio hacer: el listado y el manual leen `recurso.tipo`, pero la columna es `tipo_recurso` (la insignia de tipo sale vacía y el filtro `tipo` no filtra); «ver» (`/recursos/{id}`) y «editar» (`/recursos/register/{id}`) van a rutas que no existen. T-101 dejó funcionando solo el alta | T-101, 23-nov-2026 |
@@ -232,6 +231,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Commit |
 |---|---|---|---|
+| T-128 | VEN | El listado de ventas (`SaleController::index()`) dejó de hacer consultas por fila: cargaba por cada venta su usuario, cliente, pagos, líneas, producto, categoría y dos `exists` (con 25 ventas eran más de 100 consultas). Ahora eager-load + `withExists` (`tiene_cobros_formales` lo lee de ahí; `show()` sigue igual). No se recortó el `product` de cada línea: `edit.vue` y `TablaLineasVenta` usan casi todos sus campos. Test nuevo (`T114TotalesVentaTest`, cuenta consultas con 1 y con 5 ventas); 725 tests de ventas/créditos pasan. Sin migraciones | ver merge de `fix/T-128-recortar-product-en-sale-details` |
 | T-127 | VEN | `GET sales/config` ya no devuelve la lista completa de clientes ni de productos (`register.vue` los guardaba sin leerlos; `edit.vue` no los usaba): quedan today, n_transaction, parámetros tributarios, códigos de detracción, T.C. y mora. Test nuevo en `T114TotalesVentaTest` (21 pasan); type-check en 0. Sin migraciones. Sin probar en navegador | ver merge de `fix/T-127-recortar-sales-config` |
 | T-126 | NOT + AGE | La NC/ND de una venta de reserva dice lo mismo que el comprobante que corrige: `note_details.descripcion_detalle` (migración nueva) se copia de la línea de venta —nota total y parcial— y `NoteDetail::descripcionParaSunat()` arma «título - detalle» (máx. 500), igual en XML y PDF (A4 y ticket). Notas ya emitidas quedan en NULL: no cambian. **Al desplegar:** `tenants:migrate-verticales` (`2026_11_24_110000`). 306 tests de notas/ventas/agencia pasan | ver merge de `fix/T-126-nc-copia-descripcion-detalle` |
 | T-125 | NOT | El texto de una línea de nota es el mismo en el XML y en los PDF (A4 y ticket): decisión del usuario, lo que va al PDF va a SUNAT. `NoteDetail::descripcionParaSunat()` = texto editado → `description` (líneas de adelanto) → título, y los dos PDF llaman a ese método. Test nuevo en `DescripcionLineaVentaTest`; 80 tests de notas/ventas pasan. Sin migraciones | ver merge de `fix/T-125-texto-linea-nota-igual-en-xml-y-pdf` |

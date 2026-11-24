@@ -651,7 +651,10 @@ class SaleController extends Controller
         )
             // Notas ya emitidas por venta (eager load: evita N+1 al armar
             // el badge de notas en el listado, ver SaleResource).
-            ->with("notes")
+            // T-128: SaleResource lee user, client, sale_details (con producto y categoría) y
+            // sale_payments de cada venta; sin cargarlos acá eran 5+ consultas por fila del listado.
+            ->with(["notes", "user", "client", "sale_payments", "sale_details.product.categorie", "sale_details.product_categorie"])
+            ->withExists(["paymentApplications as con_pagos_formales" => fn ($q) => $q->where("estado", "activo"), "advance_applications as con_adelantos"])
             // De qué reserva salió (Agencia, 24-oct-2026): marca en el listado y
             // botón Editar desactivado. Solo donde existe la tabla.
             ->when(\App\Models\AgenciaViajes\ReservaVenta::hayReservasEnEsteTenant(), fn ($q) => $q->with("reservaVenta.reserva"))

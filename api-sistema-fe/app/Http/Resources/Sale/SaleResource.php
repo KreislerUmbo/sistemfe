@@ -174,8 +174,11 @@ class SaleResource extends JsonResource
             // true si ya hay plata comprometida por fuera de esta pantalla
             // (cuota cobrada o adelanto aplicado) — el frontend usa esto
             // para bloquear la edición de productos/pago inicial.
-            'tiene_cobros_formales' => $this->resource->paymentApplications()->where('estado', 'activo')->exists()
-                || $this->resource->advance_applications()->exists(),
+            'tiene_cobros_formales' => $this->resource->getAttribute('con_pagos_formales') !== null
+                // T-128: el listado lo trae calculado (withExists); show() sigue consultando.
+                ? (bool) $this->resource->getAttribute('con_pagos_formales') || (bool) $this->resource->getAttribute('con_adelantos')
+                : ($this->resource->paymentApplications()->where('estado', 'activo')->exists()
+                    || $this->resource->advance_applications()->exists()),
 
             // ── Facturación electrónica ───────────────────────────
             // cdr y xml: retornar la ruta directamente (sin concatenar URL)

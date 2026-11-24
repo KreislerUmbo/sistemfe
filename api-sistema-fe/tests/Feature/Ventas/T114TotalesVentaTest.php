@@ -222,6 +222,29 @@ final class T114TotalesVentaTest extends CreditosTestCase
         }
     }
 
+    // T-128: el listado no hace consultas por fila (user, client, líneas, pagos).
+    public function test_el_listado_de_ventas_no_hace_consultas_por_fila(): void
+    {
+        $contar = function (): int {
+            \Illuminate\Support\Facades\DB::flushQueryLog();
+            \Illuminate\Support\Facades\DB::enableQueryLog();
+            app(SaleController::class)->index(new Request(['per_page' => 50]))->getContent();
+            $n = count(\Illuminate\Support\Facades\DB::getQueryLog());
+            \Illuminate\Support\Facades\DB::disableQueryLog();
+
+            return $n;
+        };
+
+        $this->guardar($this->venta([$this->linea($this->producto(), '10')]));
+        $con1 = $contar();
+        for ($i = 0; $i < 4; $i++) {
+            $this->guardar($this->venta([$this->linea($this->producto(), '10')]));
+        }
+        $con5 = $contar();
+
+        $this->assertSame($con1, $con5, "Con 5 ventas hizo $con5 consultas y con 1 hizo $con1: hay consultas por fila.");
+    }
+
     public function test_ca1_retencion_pasa_y_rebajarla_no(): void
     {
         // base 1180 > 700 → retención 3 % = 35,40 y total 1144,60
