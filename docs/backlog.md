@@ -8,7 +8,7 @@
 
 Cada línea: ID · qué · estado · depende de · rama o commit. El detalle está en
 `docs/tareas/T-…md` (se borra al cerrar; para una tarea hecha, el commit es la referencia).
-Próximo ID libre: **T-126**.
+Próximo ID libre: **T-127**.
 
 ## Orden de construcción (27-oct-2026)
 
@@ -52,7 +52,6 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | Módulo | Qué | Origen |
 |---|---|---|
-| AGE + NOT | La NC de una venta de reserva dice solo el título: `note_details` no copia `descripcion_detalle`, y la boleta decía «título - detalle». Ya pasaba antes de T-108 | revisión de T-108, 19-nov-2026 |
 | VEN | Cliente genérico «Clientes varios» por tenant (backend + migración) para vender sin identificar al cliente: hoy la venta exige un cliente con documento. La maqueta de T-106 lo suponía | hallazgo de T-106, 19-nov-2026 |
 | VEN | Destino por defecto (`amazonia`/`nacional`) configurable por empresa: hoy está fijo en `amazonia` en `register.vue` | hallazgo de T-106, 19-nov-2026 |
 | VEN | `GET sales/config` devuelve todos los clientes y productos activos; la pantalla nueva busca por API y ya no los necesita. Desde T-110 `edit.vue` tampoco los usa: ya se puede recortar. `sale_details` también se manda con el objeto `product` completo | hallazgo de T-106, 19-nov-2026 |
@@ -233,6 +232,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Commit |
 |---|---|---|---|
+| T-126 | NOT + AGE | La NC/ND de una venta de reserva dice lo mismo que el comprobante que corrige: `note_details.descripcion_detalle` (migración nueva) se copia de la línea de venta —nota total y parcial— y `NoteDetail::descripcionParaSunat()` arma «título - detalle» (máx. 500), igual en XML y PDF (A4 y ticket). Notas ya emitidas quedan en NULL: no cambian. **Al desplegar:** `tenants:migrate-verticales` (`2026_11_24_110000`). 306 tests de notas/ventas/agencia pasan | ver merge de `fix/T-126-nc-copia-descripcion-detalle` |
 | T-125 | NOT | El texto de una línea de nota es el mismo en el XML y en los PDF (A4 y ticket): decisión del usuario, lo que va al PDF va a SUNAT. `NoteDetail::descripcionParaSunat()` = texto editado → `description` (líneas de adelanto) → título, y los dos PDF llaman a ese método. Test nuevo en `DescripcionLineaVentaTest`; 80 tests de notas/ventas pasan. Sin migraciones | ver merge de `fix/T-125-texto-linea-nota-igual-en-xml-y-pdf` |
 | T-124 | VEN | `sales.porcentaje_retencion`: `store()` y `update()` guardan la tasa con la que se retuvo (0 si no hubo retención) y `SaleResource` la devuelve; las ventas anteriores quedan en 0. **Al desplegar:** `tenants:migrate-verticales` (migración `2026_11_24_100000`). Asserts nuevos en `T114TotalesVentaTest` (20 pasan) | ver merge de `fix/T-124-porcentaje-retencion-en-ventas` |
 | T-123 | VEN + AGE | Dos retoques de pantalla: la casilla de precio de solo lectura de la venta (sin `cambiar_precio_venta`) se ve bloqueada (fondo gris), y el cotizador oculta el lápiz «Editar» en un tour ad-hoc (sin `paquete_plantilla_id`). Solo frontend; type-check en 0. Sin probar en navegador | ver merge de `fix/T-123-ui-precio-bloqueado-y-lapiz-tour` |

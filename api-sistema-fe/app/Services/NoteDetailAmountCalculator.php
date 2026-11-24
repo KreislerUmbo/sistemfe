@@ -39,6 +39,7 @@ class NoteDetailAmountCalculator
             'unidad_medida'  => $original->unidad_medida,
             'description'    => $original->description,
             'descripcion_linea' => $original->descripcion_linea,
+            'descripcion_detalle' => $original->descripcion_detalle,
 
             // ── Montos de línea — escalados proporcionalmente por cantidad ──
             'quantity'        => $cantidadNota,
@@ -99,6 +100,7 @@ class NoteDetailAmountCalculator
             'unidad_medida'  => $original->unidad_medida,
             'description'    => $original->description,
             'descripcion_linea' => $original->descripcion_linea,
+            'descripcion_detalle' => $original->descripcion_detalle,
 
             // ── Montos de línea — el monto ingresado ES el valor de la
             // nota; la cantidad queda informativa (no hay devolución
