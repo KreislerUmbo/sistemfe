@@ -204,6 +204,24 @@ final class T114TotalesVentaTest extends CreditosTestCase
         $this->assertSame(200, $this->guardar($this->venta([$this->linea($p, '10', 2, 50, ['bolsas' => 2])]))['code']);
     }
 
+    // T-127 (y T-122): sales/config no devuelve los catálogos completos y sí `es_default` del IGV.
+    public function test_config_no_devuelve_clientes_ni_productos_y_trae_es_default(): void
+    {
+        $this->producto();
+        $json = json_decode(app(SaleController::class)->config()->getContent(), true);
+
+        $this->assertArrayNotHasKey('clients', $json);
+        $this->assertArrayNotHasKey('products', $json);
+        foreach (['today', 'n_transaction', 'parametros_tributarios', 'codigos_detraccion', 'company_mora_defaults'] as $clave) {
+            $this->assertArrayHasKey($clave, $json);
+        }
+        foreach ($json['parametros_tributarios'] as $tasas) {
+            foreach ($tasas as $tasa) {
+                $this->assertArrayHasKey('es_default', $tasa);
+            }
+        }
+    }
+
     public function test_ca1_retencion_pasa_y_rebajarla_no(): void
     {
         // base 1180 > 700 → retención 3 % = 35,40 y total 1144,60

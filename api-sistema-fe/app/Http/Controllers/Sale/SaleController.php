@@ -670,16 +670,8 @@ class SaleController extends Controller
     {
         $fecha_hoy = \App\Services\HoraPeru::hoy();
 
-        // Clientes activos ordenados por nombre para el selector
-        $clientes = Client::where("state", 1)
-            ->orderBy("full_name", "asc")
-            ->get();
-
-        // Productos activos (excluye los de nota especial)
-        $productos = Product::where("state", 1)
-            ->where("is_especial_nota", 0)
-            ->orderBy("title", "asc")
-            ->get();
+        // T-127: ya no devuelve clientes ni productos (la pantalla de venta los busca por API:
+        // clients/search y products/search); era la lista completa de cada catálogo en cada carga.
 
         // Próximo número de transacción interno — ver Sale::siguienteNumeroTransaccion()
         $siguiente_n_transaction = Sale::siguienteNumeroTransaccion();
@@ -703,8 +695,6 @@ class SaleController extends Controller
         $empresa = Company::first();
 
         return response()->json([
-            "clients"                => ClientCollection::make($clientes),
-            "products"               => ProductCollection::make($productos),
             "today"                  => $fecha_hoy->format("Y-m-d"),
             "n_transaction"          => $siguiente_n_transaction,
             // Agrupados por tipo: { "IGV": [...], "IVAP": [...], "ICBPER": [...], "ISC": [...] }

@@ -196,8 +196,6 @@ const PERMISOS_EMISION: Record<string, string> = {
 };
 
 // ── Datos maestros ─────────────────────────────────────────────────
-const clients = ref<Client[]>([]);
-const products = ref<Product[]>([]);
 const client_selected = ref<Client | undefined>(undefined);
 const client_address_id = ref<number | null>(null); // T-107: null = dirección fiscal
 
@@ -1163,7 +1161,6 @@ const openQuickClientModalWithData = (data: any | null) => {
     showQuickClientModal.value = true;
 };
 const onClientCreated = (client: Client) => {
-    clients.value.unshift(client);
     selectClient(client);
     showQuickClientModal.value = false;
 };
@@ -1173,7 +1170,6 @@ const openQuickProductModal = (nombre = '') => {
     showQuickProductModal.value = true;
 };
 const onProductCreated = (product: Product) => {
-    products.value.unshift(product);
     agregarProducto(product);
     showQuickProductModal.value = false;
 };
@@ -1184,10 +1180,6 @@ const config = async () => {
         const res: AxiosResponse<SaleConfig> = await httpClient.get('sales/config');
         n_transaction.value = res.data.n_transaction;
         today.value = res.data.today;
-        if (products.value.length === 0) {
-            clients.value = res.data.clients.data;
-            products.value = res.data.products.data;
-        }
         // Cargar parámetros tributarios desde BD — no hardcode
         parametros_tributarios.value = (res.data as any).parametros_tributarios ?? {};
         codigos_detraccion.value = (res.data as any).codigos_detraccion ?? [];
