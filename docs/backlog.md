@@ -8,7 +8,7 @@
 
 Cada línea: ID · qué · estado · depende de · rama o commit. El detalle está en
 `docs/tareas/T-…md` (se borra al cerrar; para una tarea hecha, el commit es la referencia).
-Próximo ID libre: **T-129**.
+Próximo ID libre: **T-130**.
 
 ## Orden de construcción (27-oct-2026)
 
@@ -63,7 +63,6 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | AGE | Test intermitente `ProveedorFiltroDestinoTest::sin_filtro_devuelve_todos`: cuenta **todos** los proveedores de la base y espera 2; falló una vez en la suite completa (pasa solo, con la carpeta de Agencia y en la corrida siguiente). Algún test deja proveedores guardados mientras corre: filtrar por los que crea el propio test | T-083, 23-nov-2026 |
 | VEN | `price_company` sigue llamándose así en la base y en `useProductPricing.ts`; desde T-115 es el precio mayorista. Renombrar solo si se toca esa zona | hallazgo de T-115, 20-nov-2026 |
 | VEN | `tax_configs` no tiene `monto_minimo`: el mínimo de retención y percepción queda fijo en S/ 700 en la pantalla y en `TotalesVentaValidator`. Si SUNAT lo cambia, agregar la columna y leerla en los dos lados | hallazgo de T-114, 20-nov-2026 |
-| VEN | `debt`, `paid_out` y `state_payment` de la venta siguen llegando del front sin recalcular en el backend (T-114 solo validó los totales de la cabecera) | hallazgo de T-114, 20-nov-2026 |
 | POR | Revisar si los pedidos del portal e-commerce descuentan stock y, si lo hacen, que usen `StockVentaService` (lock + `controlaStock()`) | fuera de alcance de T-113, 19-nov-2026 |
 | VEN + COM | **Presentaciones y listas de precios** (unidad / caja x12 / millar con su código de barras y precio; stock en unidad base; lista mayorista por cliente con cantidad mínima). Fase A presentaciones, fase B listas. Análisis y 6 preguntas abiertas en `docs/requerimientos/retail-presentaciones-y-precios.md`. Alinear con el diseño de Compras antes de construir | Conversación con el usuario, 18-nov-2026 |
 | AGE | PDF de cotización con comparación de hoteles (alt. 106 de agencia-demo): el título «Opciones de hoteles» queda solo al pie de la página 1 y su tabla pasa a la 2, que queda casi vacía por el salto antes de las fotos. Pasa igual con la comparación abierta y con la resuelta (T-023 no lo cambió: solo tocó el bloque Precio) | hallazgo de T-021, 13-nov |
@@ -231,6 +230,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Commit |
 |---|---|---|---|
+| T-129 | VEN | `debt`, `paid_out`, `state_payment` y `saldo_pendiente` de una venta los calcula el servidor (`SaleController::fijarEstadoDePago()`, centavos enteros) con el total ya validado (T-114), los pagos preparados y los adelantos (venta nueva) o el anticipo (edición, T-116); lo que mande el front se pisa. Mismas fórmulas que `register.vue` y `edit.vue`, que siguen mandándolos (ya no se usan). El cronograma de crédito se valida contra la deuda calculada. 3 tests nuevos en `T114TotalesVentaTest`; 820 tests de ventas/caja/créditos/adelantos pasan. Sin migraciones. Sin probar en navegador | ver merge de `fix/T-129-recalcular-deuda-y-estado-de-pago` |
 | T-128 | VEN | El listado de ventas (`SaleController::index()`) dejó de hacer consultas por fila: cargaba por cada venta su usuario, cliente, pagos, líneas, producto, categoría y dos `exists` (con 25 ventas eran más de 100 consultas). Ahora eager-load + `withExists` (`tiene_cobros_formales` lo lee de ahí; `show()` sigue igual). No se recortó el `product` de cada línea: `edit.vue` y `TablaLineasVenta` usan casi todos sus campos. Test nuevo (`T114TotalesVentaTest`, cuenta consultas con 1 y con 5 ventas); 725 tests de ventas/créditos pasan. Sin migraciones | ver merge de `fix/T-128-recortar-product-en-sale-details` |
 | T-127 | VEN | `GET sales/config` ya no devuelve la lista completa de clientes ni de productos (`register.vue` los guardaba sin leerlos; `edit.vue` no los usaba): quedan today, n_transaction, parámetros tributarios, códigos de detracción, T.C. y mora. Test nuevo en `T114TotalesVentaTest` (21 pasan); type-check en 0. Sin migraciones. Sin probar en navegador | ver merge de `fix/T-127-recortar-sales-config` |
 | T-126 | NOT + AGE | La NC/ND de una venta de reserva dice lo mismo que el comprobante que corrige: `note_details.descripcion_detalle` (migración nueva) se copia de la línea de venta —nota total y parcial— y `NoteDetail::descripcionParaSunat()` arma «título - detalle» (máx. 500), igual en XML y PDF (A4 y ticket). Notas ya emitidas quedan en NULL: no cambian. **Al desplegar:** `tenants:migrate-verticales` (`2026_11_24_110000`). 306 tests de notas/ventas/agencia pasan | ver merge de `fix/T-126-nc-copia-descripcion-detalle` |
