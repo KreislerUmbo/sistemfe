@@ -56,7 +56,7 @@
                             </td>
                             <td class="text-end">
                                 <div class="input-group input-group-sm flex-nowrap justify-content-end">
-                                    <input type="number" step="0.01" min="0" class="form-control text-end precio"
+                                    <input type="number" step="0.01" min="0" class="form-control text-end precio" :class="{ 'precio-bloqueado': !precioEditable(item) }"
                                         :value="item.price_base" aria-label="Precio sin IGV" :readonly="!precioEditable(item)"
                                         @input="marcarPrecioManual(item)" @change="cambiarPrecio(item, i, $event)" />
                                     <button v-if="precioEditable(item) && tienePreciosAlternos(item)" class="btn btn-outline-secondary" type="button"
@@ -257,6 +257,8 @@ watch(() => props.resaltado, (i) => {
 .tabla-lineas { max-height: max(300px, calc(100vh - 380px)); overflow: auto; }
 .tabla-lineas thead th { position: sticky; top: 0; z-index: 2; background: var(--bs-body-bg, #fff); }
 .precio { max-width: 92px; }
+/* Sin permiso cambiar_precio_venta: se ve bloqueada, no como una casilla editable. */
+.precio-bloqueado { background-color: var(--bs-secondary-bg, #e9ecef); color: var(--bs-secondary-color, #6c757d); cursor: not-allowed; }
 .descripcion-editada { white-space: pre-line; overflow-wrap: anywhere; }
 .afe { min-width: 140px; font-size: .8rem; }
 .afe.cambiada { border-color: var(--bs-warning); background: var(--bs-warning-bg-subtle); font-weight: 600; }

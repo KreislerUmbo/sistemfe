@@ -51,7 +51,8 @@
             <div v-for="t in op.tours" :key="t.id" class="d-flex justify-content-between align-items-center border rounded p-2 mb-1">
                 <span><span class="badge bg-light text-dark border me-1">Día {{ t.orden }}</span>{{ t.paquete_plantilla?.nombre ?? t.nombre }}</span>
                 <div v-if="!alternativaSoloLectura" class="d-flex gap-2">
-                    <i class="fas fa-pen text-muted" style="cursor:pointer;font-size:11px" title="Editar este tour" @click="abrirEdicionTour(t)"></i>
+                    <!-- Un tour ad-hoc (sin paquete_plantilla_id) no tiene ficha de catálogo que editar. -->
+                    <i v-if="t.paquete_plantilla_id" class="fas fa-pen text-muted" style="cursor:pointer;font-size:11px" title="Editar este tour" @click="abrirEdicionTour(t)"></i>
                     <i class="fas fa-times text-muted" style="cursor:pointer" title="Quitar este tour" @click="quitarTourIncluido(t, op)"></i>
                 </div>
             </div>
