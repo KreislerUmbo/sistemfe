@@ -52,6 +52,8 @@ class NoteDetail extends Model
         "description",
         // T-108: copia de sale_details.descripcion_linea (reemplaza al título).
         "descripcion_linea",
+        // T-126: copia de sale_details.descripcion_detalle (Agencia): se agrega al título.
+        "descripcion_detalle",
     ];
 
     // Lo que dice la línea en el XML de la nota **y en su PDF** (T-125: no pueden diferir).
@@ -66,8 +68,12 @@ class NoteDetail extends Model
         }
 
         $description = trim((string) $this->description);
+        $base = $description !== '' ? $description : (string) ($this->product?->title ?? '');
 
-        return $description !== '' ? $description : (string) ($this->product?->title ?? '');
+        // T-126: igual que la venta que corrige (SaleDetail): «título - detalle», máx. 500.
+        $detalle = trim((string) $this->descripcion_detalle);
+
+        return $detalle === '' ? $base : mb_substr($base.' - '.$detalle, 0, 500);
     }
 
     // ── Relaciones ───────────────────────────────────────────────────────

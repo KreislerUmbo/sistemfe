@@ -237,6 +237,40 @@ class DescripcionLineaVentaTest extends CreditosTestCase
         }
     }
 
+    // T-126 — la NC de una venta con detalle de Agencia dice «título - detalle», igual que la venta,
+    // en el XML y en los dos PDF; la nota parcial también.
+    public function test_t126_la_nota_copia_el_detalle_de_agencia_de_la_venta(): void
+    {
+        $this->emisor();
+        $venta = $this->emitir($this->payload($this->empresa(), [], ['tipo_comprobante_codigo' => '01']));
+        Sale::where('id', $venta->id)->update(['correlativo' => 1, 'n_operacion' => 'F001-00000001', 'xml' => '<x/>', 'cdr' => 'cdr']);
+        $linea = $venta->sale_details()->first();
+        $linea->update(['descripcion_detalle' => 'Servicios: tour 12/12/2026']);
+        $esperado = $venta->fresh()->sale_details()->with('product')->first()->descripcionParaSunat();
+        $this->assertSame('Antivirus ESET NOD32 1 PC 1 año - Servicios: tour 12/12/2026', $esperado);
+
+        $respuesta = app(NotaElectronicaController::class)->store(new Request([
+            'sale_id' => $venta->id, 'tipo_doc' => '07', 'tipo_afectacion' => 'total',
+            'cod_motivo' => '01', 'des_motivo' => 'Anulación de la operación',
+        ]));
+        $this->assertSame(200, $respuesta->getStatusCode(), json_encode($respuesta->getData(true)));
+        $nota = Note::with('note_details.product')->find($respuesta->getData(true)['note']['id']);
+
+        $this->assertSame('Servicios: tour 12/12/2026', $nota->note_details->first()->descripcion_detalle);
+        $this->assertSame($esperado, $nota->note_details->first()->descripcionParaSunat());
+        $xml = app(GreenterService::class)->getDetallesComprobante($nota->note_details);
+        $this->assertSame($esperado, $xml[0]->getDescripcion());
+
+        foreach (['nota_a4', 'nota_ticket80mm'] as $vista) {
+            $html = view('pdf.' . $vista, [
+                'nota' => $nota,
+                'empresa' => Company::first() ?? new Company(['razon_social' => 'Empresa Test', 'ruc' => '20000000001']),
+                'qr' => '', 'logo' => null,
+            ])->render();
+            $this->assertStringContainsString('Servicios: tour 12/12/2026', $html, $vista);
+        }
+    }
+
     // CA4 — más de 500 caracteres → 422, en store y en update, sin dejar nada a medias
     public function test_ca4_mas_de_500_caracteres_da_422_en_store_y_update(): void
     {
