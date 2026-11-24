@@ -44,7 +44,6 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Estado | Depende de | Rama / commit |
 |---|---|---|---|---|---|
-| T-121 | VEN + CAJ | Retirar `POST`/`DELETE` de `sale_payments` y `sale_details` (410): mueven dinero sin caja. Antes: confirmar en los logs de producción que nadie los usa | por hacer | — | `fix/T-121-retirar-rutas-legadas-pagos-y-lineas` |
 
 ## Por analizar
 
@@ -241,6 +240,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Commit |
 |---|---|---|---|
+| T-121 | VEN + CAJ | `POST`/`DELETE` de `sale_payments` y `sale_details` responden 410: movían deuda, total y stock sin caja. Rutas y permisos se conservan. Producción 23-nov: ~17 000 llamadas a la API en 15 días y ninguna a estas rutas. Recorrido 88 | ver merge de `fix/T-121-retirar-rutas-legadas-pagos-y-lineas` |
 | T-120 | VEN + PLA | Blindaje de ventas y usuarios: `update()` rechaza una línea de otra venta, descuento global negativo o mayor al subtotal da 422, `role_id` obligatorio al crear un usuario y sin `default(1)` (Super-Admin) — login sin rol ya no da 500. La parte D (rutas `sale_payments`/`sale_details` sin caja) pasó a T-121. Recorrido 87 | ver merge de `fix/T-120-blindaje-ventas-y-usuarios` |
 | T-083 | TRA | Inventario de columnas y tablas sin uso (comando de solo lectura `inventario:columnas-sin-uso`; producción 23-nov: todo en 0) y tanda 1 borrada con salvaguarda: ubigeo de `proveedores`, `salidas_mayorista.fecha_retorno` y el check-in viejo de `reserva_item_pasajero`. Se dejan: reembolso por cancelación (se va a construir), Compras y recordatorios. Recorrido 86 | ver merge de `chore/T-083-tanda1-columnas-sin-uso` |
 | T-101 | TRA | `npm run type-check` en 0 errores (eran 47): tipos corregidos sin cambiar comportamiento, `fake-backend.ts` borrado, `stores/ui.js` → `ui.ts`. Las pantallas que estaban rotas, arregladas con el usuario: Nuevo recurso (sistema_id, tipo_recurso), Favoritos, total anual de Sistemas, ruta de Mis direcciones (redirige al panel). Recorrido 85 | ver merge de `refactor/T-101-type-check-en-cero` (`038e0b72`) |
