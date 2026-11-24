@@ -8,7 +8,7 @@
 
 Cada línea: ID · qué · estado · depende de · rama o commit. El detalle está en
 `docs/tareas/T-…md` (se borra al cerrar; para una tarea hecha, el commit es la referencia).
-Próximo ID libre: **T-125**.
+Próximo ID libre: **T-126**.
 
 ## Orden de construcción (27-oct-2026)
 
@@ -52,7 +52,6 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | Módulo | Qué | Origen |
 |---|---|---|
-| NOT | Línea de nota sin texto editado: el XML dice el título (`NoteDetail::descripcionParaSunat()`) y el PDF `description ?? título`. Solo difiere en líneas de adelanto (`description` la escribe `AdvanceController`); decidir cuál vale e igualarlos | revisión de T-108, 19-nov-2026 |
 | AGE + NOT | La NC de una venta de reserva dice solo el título: `note_details` no copia `descripcion_detalle`, y la boleta decía «título - detalle». Ya pasaba antes de T-108 | revisión de T-108, 19-nov-2026 |
 | VEN | Cliente genérico «Clientes varios» por tenant (backend + migración) para vender sin identificar al cliente: hoy la venta exige un cliente con documento. La maqueta de T-106 lo suponía | hallazgo de T-106, 19-nov-2026 |
 | VEN | Destino por defecto (`amazonia`/`nacional`) configurable por empresa: hoy está fijo en `amazonia` en `register.vue` | hallazgo de T-106, 19-nov-2026 |
@@ -234,6 +233,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Commit |
 |---|---|---|---|
+| T-125 | NOT | El texto de una línea de nota es el mismo en el XML y en los PDF (A4 y ticket): decisión del usuario, lo que va al PDF va a SUNAT. `NoteDetail::descripcionParaSunat()` = texto editado → `description` (líneas de adelanto) → título, y los dos PDF llaman a ese método. Test nuevo en `DescripcionLineaVentaTest`; 80 tests de notas/ventas pasan. Sin migraciones | ver merge de `fix/T-125-texto-linea-nota-igual-en-xml-y-pdf` |
 | T-124 | VEN | `sales.porcentaje_retencion`: `store()` y `update()` guardan la tasa con la que se retuvo (0 si no hubo retención) y `SaleResource` la devuelve; las ventas anteriores quedan en 0. **Al desplegar:** `tenants:migrate-verticales` (migración `2026_11_24_100000`). Asserts nuevos en `T114TotalesVentaTest` (20 pasan) | ver merge de `fix/T-124-porcentaje-retencion-en-ventas` |
 | T-123 | VEN + AGE | Dos retoques de pantalla: la casilla de precio de solo lectura de la venta (sin `cambiar_precio_venta`) se ve bloqueada (fondo gris), y el cotizador oculta el lápiz «Editar» en un tour ad-hoc (sin `paquete_plantilla_id`). Solo frontend; type-check en 0. Sin probar en navegador | ver merge de `fix/T-123-ui-precio-bloqueado-y-lapiz-tour` |
 | T-122 | VEN | Tres arreglos chicos de «Por analizar»: el descuento global de la pantalla de venta (`TotalesVenta.vue`, nueva prop `maximo`) no pasa del subtotal y avisa; `SaleController::config()` devuelve `es_default` de `tax_configs`; `copiarDatosDelCliente()` copia también `cod_tipo_doc_cliente` (catálogo 06). Sin migraciones. 1 test nuevo; type-check en 0 | 8aeb46c9 |

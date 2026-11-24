@@ -327,7 +327,7 @@
                         <td>{{ rtrim(rtrim(number_format($detalle->quantity, 2), '0'), '.') }}</td>
                         <td>{{ $detalle->unidad_medida }}</td>
                         <td>{{ $detalle->product->sku ?? '-' }}</td>
-                        <td>@if ($detalle->tieneDescripcionEditada()){!! nl2br(e($detalle->descripcionLineaLimpia())) !!}@else{{ $detalle->description ?? $detalle->product->title }}@endif</td>
+                        <td>{!! nl2br(e($detalle->descripcionParaSunat())) !!}</td>
                         <td class="right">{{ number_format($detalle->price_base, 3) }}</td>
                         <td class="right">{{ number_format($detalle->price_final, 3) }}</td>
                         <td class="right">{{ number_format($detalle->subtotal, 2) }}</td>
