@@ -3,178 +3,48 @@
 namespace App\Http\Controllers\Sale;
 
 use App\Http\Controllers\Controller;
-use App\Models\Cash\CashMovement;
-use App\Models\Sale\Sale;
-use App\Models\Sale\SalePayment;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Symfony\Component\HttpKernel\Exception\HttpException;
 
+/**
+ * T-121: rutas retiradas. store()/destroy() cambiaban paid_out/debt/saldo_pendiente de la venta sin
+ * movimiento de caja (regla «ningún movimiento de dinero es silencioso»). Desde T-119 el panel guarda
+ * los pagos con PATCH sales/{id} (SaleController::update(), que sincroniza la caja) y nadie los llamaba
+ * (logs de producción revisados el 23-nov-2026). Las rutas y sus permisos se conservan para que un
+ * cliente viejo reciba un 410 claro en vez de un 404.
+ */
 class SalePaymentController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
     public function index()
     {
         //
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
-    public function store(Request $request)
+    public function store(Request $request): JsonResponse
     {
-        // ── Blindaje: no aceptar un pago que exceda la deuda pendiente ────
-        // Este endpoint se usa desde sale/edit.vue para agregar pagos uno a
-        // uno a una venta ya guardada (a diferencia de SaleController::store(),
-        // que recibe todos los pagos juntos al crear la venta). No tenía
-        // ningún candado — permitía dejar `debt` negativo sin aviso.
-        $sale = Sale::find($request->sale_id);
-
-        if (!$sale) {
-            throw new HttpException(404, 'Venta no encontrada.');
-        }
-
-        // Módulo Amortizaciones — plan-modulo-amortizaciones.md §9. Una
-        // venta condicion_pago='credito' se cobra EXCLUSIVAMENTE vía
-        // CreditPaymentController (Fase 4): si este flujo legado la
-        // tocara, movería saldo_pendiente por fuera de payment_applications,
-        // rompiendo el FIFO y dejando installments/payment_receipts sin
-        // rastro del movimiento real de dinero.
-        if ($sale->condicion_pago === 'credito') {
-            throw new HttpException(
-                422,
-                "La venta #{$sale->id} es a crédito (condicion_pago='credito') — los pagos " .
-                "se registran exclusivamente por el módulo de Amortizaciones (Cuentas por " .
-                "Cobrar), no por este flujo."
-            );
-        }
-
-        $request->validate(['nro_operacion' => 'nullable|string|max:50']);
-        $nroOperacion = trim((string) $request->nro_operacion) ?: null;
-
-        if ((float) $request->amount <= 0) {
-            throw new HttpException(422, 'El monto del pago debe ser mayor a 0.');
-        }
-
-        if (round((float) $request->amount, 2) > round((float) $sale->debt, 2)) {
-            throw new HttpException(
-                422,
-                "El pago (S/ " . number_format((float) $request->amount, 2) . ") " .
-                "supera la deuda pendiente de la venta (S/ " . number_format((float) $sale->debt, 2) . ")."
-            );
-        }
-
-        $sale_payment = SalePayment::create([
-            "sale_id" => $request->sale_id,
-            "method_payment" => $request->method_payment,
-            "amount" => $request->amount,
-            "date_payment" => $request->date_payment,
-            // T-010: este flujo cobra en la moneda de la venta.
-            "nro_operacion" => $nroOperacion,
-            "moneda_pago" => CashMovement::monedaOFalla($sale->currency),
-            "monto_pagado" => $request->amount,
-            "tipo_cambio" => 1,
-        ]);
-
-        // Módulo Amortizaciones (§9) — espejo simétrico de 'debt', mismo
-        // criterio de centavos enteros que el resto del módulo (sin floats).
-        $montoCentavos = (int) round((float) $sale_payment->amount * 100);
-        $saldoPendienteCentavos = (int) round((float) $sale->saldo_pendiente * 100) - $montoCentavos;
-
-        $sale->update([
-            "paid_out" => $sale->paid_out + $sale_payment->amount, //monto pagado + el nuevo monto
-            "debt" => $sale->debt - $sale_payment->amount, //deuda - el nuevo monto
-            "saldo_pendiente" => round($saldoPendienteCentavos / 100, 2),
-        ]);
-
-        if ($sale->debt <= 0) {
-            $sale->update([
-                "state_payment" => 3,
-            ]);
-        }
-
-        return response()->json([
-            "payment" => [
-                "id" => $sale_payment->id,
-                "sale_id" => $sale_payment->sale_id,
-                "method_payment" => $sale_payment->method_payment,
-                "amount" => $sale_payment->amount,
-                "date_payment" => $sale_payment->date_payment,
-                "nro_operacion" => $sale_payment->nro_operacion,
-            ],
-            "code" => 200,
-            "message" => "Pago registrado correctamente"
-        ]);
+        return $this->retirada();
     }
 
-    /**
-     * Display the specified resource.
-     */
     public function show(string $id)
     {
         //
     }
 
-    /**
-     * Update the specified resource in storage.
-     */
     public function update(Request $request, string $id)
     {
         //
     }
 
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(string $id)
+    public function destroy(string $id): JsonResponse
     {
-        $sale_payent = SalePayment::find($id);
-        $sale = Sale::find($sale_payent->sale_id); //buscamos el id de la venta para depues actualizar los montos de la deuda y el monto pagado
+        return $this->retirada();
+    }
 
-        // Módulo Amortizaciones (§9) — mismo resguardo que store(): en
-        // condiciones normales una venta a crédito no debería tener
-        // sale_payments (bloqueado arriba), pero si existiera una fila de
-        // antes de este fix, tampoco dejamos que destroy() mueva
-        // saldo_pendiente por fuera del módulo de pagos nuevo.
-        if ($sale && $sale->condicion_pago === 'credito') {
-            throw new HttpException(
-                422,
-                "La venta #{$sale->id} es a crédito — este pago no se puede eliminar por " .
-                "este flujo legado, usa la anulación del módulo de Amortizaciones."
-            );
-        }
-
-        $sale_payent->delete();
-
-        // Módulo Amortizaciones (§9) — espejo simétrico de 'debt', mismo
-        // criterio de centavos enteros que el resto del módulo.
-        $montoCentavos = (int) round((float) $sale_payent->amount * 100);
-        $saldoPendienteCentavos = (int) round((float) $sale->saldo_pendiente * 100) + $montoCentavos;
-
-        $sale->update([
-            "debt" => $sale->debt + $sale_payent->amount, //deuda es igual a la deuda mas el nuevo monto
-            "paid_out" => $sale->paid_out - $sale_payent->amount, //monto pagado es igual al monto pagado menos el nuevo monto
-            "saldo_pendiente" => round($saldoPendienteCentavos / 100, 2),
-        ]);
-
-        // T-119: estaba invertido (sin nada pagado marcaba «parcial»). 1=pendiente, 2=parcial, 3=completo.
-        // Ojo: este endpoint (y store()) NO mueve la caja; desde T-119 el panel ya no lo usa (la edición
-        // guarda los pagos con PATCH sales/{id}, que sí sincroniza la caja).
-        if ((float) $sale->paid_out <= 0) {
-            $state_payment = 1;
-        } elseif ((float) $sale->debt <= 0) {
-            $state_payment = 3;
-        } else {
-            $state_payment = 2;
-        }
-        $sale->update([
-            "state_payment" => $state_payment,
-        ]);
-
+    private function retirada(): JsonResponse
+    {
         return response()->json([
-            "code" => 200,
-            "message" => "Pago eliminado correctamente"
-        ]);
+            'code' => 410,
+            'message' => 'Ruta retirada: los pagos y las líneas se editan desde la venta (PATCH sales/{id}).',
+        ], 410);
     }
 }

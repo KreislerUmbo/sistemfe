@@ -605,6 +605,7 @@ Route::group([
     // caller real en el frontend hoy — permisos nuevos dedicados, mismo
     // criterio register_X/edit_X/delete_X que el resto de Bucket B (no
     // existían antes de esta fase, quedan solo en modo sombra).
+    // T-121: store()/destroy() de los dos responden 410 (movían dinero sin caja); las rutas quedan.
     Route::resource("sale_details", SaleDetailController::class)
         ->middlewareFor('store', 'permission:register_sale_detail')
         ->middlewareFor('update', 'permission:edit_sale_detail')

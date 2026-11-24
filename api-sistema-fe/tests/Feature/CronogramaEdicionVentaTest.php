@@ -160,20 +160,6 @@ class CronogramaEdicionVentaTest extends CreditosTestCase
         $this->assertSame(1, $venta->cuotasVigentes()->count());
     }
 
-    // T-119: borrar el único pago de una venta al contado la deja «pendiente» (1), no «parcial» (2).
-    public function test_borrar_el_unico_pago_de_una_venta_al_contado_la_deja_pendiente(): void
-    {
-        $venta = $this->ventaAlContadoPagada();
-
-        app(\App\Http\Controllers\Sale\SalePaymentController::class)
-            ->destroy((string) \App\Models\Sale\SalePayment::where('sale_id', $venta->id)->value('id'));
-
-        $venta->refresh();
-        $this->assertSame(1, (int) $venta->state_payment);
-        $this->assertEquals(0, (float) $venta->paid_out);
-        $this->assertEquals(118, (float) $venta->debt);
-    }
-
     // T-119: la edición ya no borra pagos con DELETE sale_payments (no mueve la caja); los quita del
     // payload del PATCH, que corrige el ingreso en caja (caso de la venta 41 de umbo).
     public function test_quitar_el_pago_al_editar_una_venta_al_contado_corrige_la_caja(): void
