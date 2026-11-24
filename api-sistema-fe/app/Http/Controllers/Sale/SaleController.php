@@ -688,7 +688,7 @@ class SaleController extends Controller
         // El frontend los usa para calcular IGV, detracción, percepción, etc.
         // No se usan valores hardcodeados en el código
         $parametros_tributarios = TaxConfig::where('es_activo', true)
-            ->get(['nombre', 'tipo', 'tasa_porcentaje', 'codigo_sunat', 'ubigeos_aplicables'])
+            ->get(['nombre', 'tipo', 'tasa_porcentaje', 'codigo_sunat', 'ubigeos_aplicables', 'es_default'])
             ->groupBy('tipo');
 
         // Códigos de detracción activos para el selector del formulario

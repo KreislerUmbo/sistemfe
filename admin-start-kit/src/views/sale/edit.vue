@@ -70,7 +70,7 @@
             </div>
             <div class="p-3 border-bottom">
                 <TotalesVenta v-model:descuento-global="discount_global" :filas="filasTotales" :total="sale_total"
-                    :simbolo="simbolo" etiqueta-total="Monto a pagar" :puede-descuento-global="puedeCambiarPrecio" />
+                    :simbolo="simbolo" etiqueta-total="Monto a pagar" :puede-descuento-global="puedeCambiarPrecio" :maximo="sale_subtotal" />
             </div>
             <div class="p-3 border-bottom">
                 <CobroEdicion ref="cobroEdicion" v-model:type-payment="type_payment" v-model:pagos="sale_payments"

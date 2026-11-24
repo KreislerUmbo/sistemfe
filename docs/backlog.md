@@ -8,7 +8,7 @@
 
 Cada línea: ID · qué · estado · depende de · rama o commit. El detalle está en
 `docs/tareas/T-…md` (se borra al cerrar; para una tarea hecha, el commit es la referencia).
-Próximo ID libre: **T-122**.
+Próximo ID libre: **T-123**.
 
 ## Orden de construcción (27-oct-2026)
 
@@ -52,9 +52,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | Módulo | Qué | Origen |
 |---|---|---|
-| VEN | Pantalla de venta: el descuento global (`TotalesVenta.vue::cambiar()`) solo se limita a ≥ 0; acepta uno mayor que el subtotal, muestra «Monto a pagar» negativo y al guardar el aviso no habla del descuento («los pagos superan…» o «el anticipo no puede ser mayor…»). El backend ya lo rechaza (T-120); limitarlo al subtotal en la pantalla con un aviso claro | prueba funcional de T-120, 23-nov-2026 |
 | VEN | Pantalla de venta: la casilla de precio de solo lectura (sin `cambiar_precio_venta`) se ve igual que una editable; darle aspecto de bloqueada (fondo gris) | prueba de T-109, 19-nov-2026 |
-| VEN | `SaleController::config()` no devuelve `es_default` de `tax_configs` (`get([...])` sin esa columna): `getIgvGeneralTasa()` de `register.vue` nunca encuentra el IGV «default» y usa 18 de respaldo. Hoy coincide con la tasa real; si el IGV general cambiara, el front calcularía mal el precio sin IGV y el backend (`PrecioVentaValidator`, que sí lee `es_default`) rechazaría la venta. Arreglo: agregar `es_default` al `get()` de `config()` | T-109 (revisión del 19-nov) |
 | NOT | Línea de nota sin texto editado: el XML dice el título (`NoteDetail::descripcionParaSunat()`) y el PDF `description ?? título`. Solo difiere en líneas de adelanto (`description` la escribe `AdvanceController`); decidir cuál vale e igualarlos | revisión de T-108, 19-nov-2026 |
 | AGE + NOT | La NC de una venta de reserva dice solo el título: `note_details` no copia `descripcion_detalle`, y la boleta decía «título - detalle». Ya pasaba antes de T-108 | revisión de T-108, 19-nov-2026 |
 | VEN | Cliente genérico «Clientes varios» por tenant (backend + migración) para vender sin identificar al cliente: hoy la venta exige un cliente con documento. La maqueta de T-106 lo suponía | hallazgo de T-106, 19-nov-2026 |
@@ -74,7 +72,6 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | VEN | `debt`, `paid_out` y `state_payment` de la venta siguen llegando del front sin recalcular en el backend (T-114 solo validó los totales de la cabecera) | hallazgo de T-114, 20-nov-2026 |
 | POR | Revisar si los pedidos del portal e-commerce descuentan stock y, si lo hacen, que usen `StockVentaService` (lock + `controlaStock()`) | fuera de alcance de T-113, 19-nov-2026 |
 | VEN + COM | **Presentaciones y listas de precios** (unidad / caja x12 / millar con su código de barras y precio; stock en unidad base; lista mayorista por cliente con cantidad mínima). Fase A presentaciones, fase B listas. Análisis y 6 preguntas abiertas en `docs/requerimientos/retail-presentaciones-y-precios.md`. Alinear con el diseño de Compras antes de construir | Conversación con el usuario, 18-nov-2026 |
-| VEN | `CopiaDatosDelCliente::copiarDatosDelCliente()` vuelve a copiar `tipo_doc_cliente` al editar o enviar sin CDR, pero no `cod_tipo_doc_cliente` (catálogo 06, el que va al XML): si se corrige el tipo de documento del cliente antes de enviar, el PDF y el XML no coinciden. Verificar y, si es así, copiar los dos juntos | revisión de T-065, 18-nov |
 | AGE | PDF de cotización con comparación de hoteles (alt. 106 de agencia-demo): el título «Opciones de hoteles» queda solo al pie de la página 1 y su tabla pasa a la 2, que queda casi vacía por el salto antes de las fotos. Pasa igual con la comparación abierta y con la resuelta (T-023 no lo cambió: solo tocó el bloque Precio) | hallazgo de T-021, 13-nov |
 | AGE | PDF de cotización con comparación de hoteles **abierta** (alt. 106 de agencia-demo): la caja de Precio, más alta por los totales por opción, deja la tabla «Datos de pago» partida entre dos páginas (encabezado en una, filas en la siguiente). Posible `page-break-inside: avoid` en esa tabla | hallazgo de T-023, 13-nov |
 | AGE | Las fotos de hotel del PDF no tienen interruptor en `configuracion_agencia_pdf` (`mostrar_fotos_tour` es solo de tours). Si la agencia quiere ocultarlas, hace falta uno nuevo | revisión de T-021, 13-nov |
@@ -240,6 +237,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Commit |
 |---|---|---|---|
+| T-122 | VEN | Tres arreglos chicos de «Por analizar»: el descuento global de la pantalla de venta (`TotalesVenta.vue`, nueva prop `maximo`) no pasa del subtotal y avisa; `SaleController::config()` devuelve `es_default` de `tax_configs`; `copiarDatosDelCliente()` copia también `cod_tipo_doc_cliente` (catálogo 06). Sin migraciones. 1 test nuevo; type-check en 0 | ver merge de `fix/T-122-arreglos-chicos-ventas` |
 | T-121 | VEN + CAJ | `POST`/`DELETE` de `sale_payments` y `sale_details` responden 410: movían deuda, total y stock sin caja. Rutas y permisos se conservan. Producción 23-nov: ~17 000 llamadas a la API en 15 días y ninguna a estas rutas. Recorrido 88 | ver merge de `fix/T-121-retirar-rutas-legadas-pagos-y-lineas` |
 | T-120 | VEN + PLA | Blindaje de ventas y usuarios: `update()` rechaza una línea de otra venta, descuento global negativo o mayor al subtotal da 422, `role_id` obligatorio al crear un usuario y sin `default(1)` (Super-Admin) — login sin rol ya no da 500. La parte D (rutas `sale_payments`/`sale_details` sin caja) pasó a T-121. Recorrido 87 | ver merge de `fix/T-120-blindaje-ventas-y-usuarios` |
 | T-083 | TRA | Inventario de columnas y tablas sin uso (comando de solo lectura `inventario:columnas-sin-uso`; producción 23-nov: todo en 0) y tanda 1 borrada con salvaguarda: ubigeo de `proveedores`, `salidas_mayorista.fecha_retorno` y el check-in viejo de `reserva_item_pasajero`. Se dejan: reembolso por cancelación (se va a construir), Compras y recordatorios. Recorrido 86 | ver merge de `chore/T-083-tanda1-columnas-sin-uso` |
