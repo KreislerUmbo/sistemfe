@@ -192,16 +192,24 @@ moviendo pasajeros de su salida a la de un tercero).
 está en la lista de próximos módulos de `CLAUDE.md`.
 
 `compras` (comprobante recibido):
-- Proveedor (de la tabla única `proveedores`, §3.7c).
-- Tipo (factura, boleta, ticket, recibo por honorarios, nota de crédito recibida).
+- Proveedor (de la tabla única `proveedores`, §3.7c), domiciliado o **no domiciliado** (hotel u operador del extranjero en un paquete internacional: sin RUC, con país y documento del exterior; va en la parte de no domiciliados del Registro de Compras).
+- **Tipo de comprobante: catálogo de la tabla 10 de SUNAT**, no una lista fija (revisión del 24-nov). Como mínimo: factura (01), recibo por honorarios (02), boleta (03), liquidación de compra (04), **boleto aéreo (05)**, nota de crédito (07), nota de débito (08), ticket (12), servicios públicos (14), comprobante del exterior (91).
 - Serie, número, fecha de emisión, moneda y tipo de cambio.
+- **Periodo de anotación** (mes en que se registra; por defecto el de la emisión, puede ser posterior) y **periodo cerrado:** un periodo marcado como declarado no admite compras nuevas ni cambios en sus compras (corregir = en el periodo abierto).
+- **Sin duplicados:** proveedor (RUC o documento) + tipo + serie + número es único; el segundo intento muestra la compra existente.
 - Base gravada, IGV, exonerado, inafecto, otros y total.
 - Adjuntos (PDF/XML).
 - Estado de validación SUNAT.
 - **Condición: contado o crédito** (pedido del usuario, 14-oct). A crédito lleva fecha de vencimiento (o cuotas).
-- **Pagos** (`compra_pagos`): uno o varios por comprobante (pagos parciales), cada uno con fecha, monto y **origen**: **Caja** (efectivo, con su egreso y sesión abierta, como hoy) o **Banco** (transferencia o depósito, **sin** sesión de caja, con cuenta bancaria de origen y número de operación; ver C2 en §5c). Estado derivado: **pendiente / parcial / pagado**, y **vencido** si pasó la fecha sin pagar.
+- **Anular una compra:** nunca se borra; queda anulada con motivo y usuario. Si tiene pagos aplicados, no se anula hasta desaplicarlos (el pago vuelve a quedar «a cuenta» del proveedor) o corregir el egreso de Caja con un `cash_movement` de corrección.
+- **Pagos (revisión del 24-nov: un solo modelo para todo Compras).** Se descartó `compra_pagos` (un pago atado a una sola compra), porque los pagos a cuenta de mayoristas (§3.7d) necesitaban otra tabla y el saldo de una factura habría salido de dos lugares. Queda:
+  - **`pagos_proveedor`** = el dinero que sale, una vez: fecha, proveedor, moneda, monto y **origen**: **Caja** (efectivo, con su egreso y sesión abierta, como hoy) o **Banco** (transferencia o depósito, **sin** sesión de caja, con cuenta bancaria de origen y número de operación; ver C2 en §5c). El origen es un catálogo abierto: **Rendiciones** (§3.7b) agrega «fondo a rendir» sin cambiar la estructura.
+  - **`aplicaciones_pago_proveedor`** = cuánto de ese pago va a qué: a una **compra**, y más adelante a una **obligación o cuota** de reserva (§3.7d). Una compra al contado es un pago con una sola aplicación; un pago sin aplicar queda «a cuenta» del proveedor.
+  - **Lo que cancela una compra sin salir dinero al proveedor** también es una aplicación, con su respaldo: la **detracción** (SPOT: depósito en la cuenta del proveedor en el Banco de la Nación, con número de constancia) y la **retención de 4ta categoría** (8 % del recibo por honorarios, que la agencia declara y paga a SUNAT). Así una factura de S/ 1,000 con 12 % de detracción queda **pagada** con S/ 880 al proveedor + S/ 120 de detracción. Porcentajes y montos mínimos: del catálogo central `detraction_codes` (ya existe para ventas) y de lo que confirme el contador (P13).
+  - Estado derivado de la compra: **pendiente / parcial / pagado**, y **vencido** si pasó la fecha sin pagar.
+- **Egresos de Caja a un proveedor hechos fuera de Compras:** para no registrar dos veces el mismo pago, al guardar en Caja un egreso con contraparte proveedor que tiene compras pendientes, Caja lo ofrece aplicar a una de ellas (o dejarlo a cuenta). Es un aviso, no un bloqueo: Caja sigue sirviendo a quien no usa Compras.
 - **Cuentas por pagar:** listado por proveedor con lo pendiente, lo vencido y lo que vence en los próximos días.
-- **Regla para la rentabilidad:** el costo cuenta en la fecha del comprobante, **esté pagado o no**. Pagar no cambia el margen, solo la deuda con el proveedor. (Si contara solo lo pagado, una salida con facturas a crédito parecería más rentable de lo que es.)
+- **Regla para la rentabilidad:** el costo cuenta en la fecha del comprobante, **esté pagado o no**. Pagar no cambia el margen, solo la deuda con el proveedor. (Si contara solo lo pagado, una salida con facturas a crédito parecería más rentable de lo que es.) **Qué monto es el costo:** la base si el IGV de la compra se recupera como crédito fiscal; base + IGV no recuperable si no (compra exonerada, sin derecho a crédito, o la parte que no entra por **prorrata** con ventas gravadas y exoneradas). Depende de P13 y de C20 (`agencia-tributario-simplificado.md`); hasta que se responda, la compra guarda base e IGV por separado para calcularlo después sin migrar.
 
 **Gasto sin comprobante** (pedido del usuario, 14-oct: paseo a caballo con una persona de la
 comunidad, propina, gasto extra en el lugar): se registra igual, marcado **"sin
@@ -219,6 +227,7 @@ a servicios como el paseo a caballo. Si aplica, se registra como compra con comp
 `compra_asignaciones` (propia de Agencia, centro de costo):
 - `compra_id`, a qué se carga (**salida**, **reserva** o **general**), el ítem del Incluye o categoría (transporte, almuerzo…), monto y pasajeros.
 - **Un comprobante puede repartirse** entre varias salidas o reservas. Por ejemplo: la factura **mensual** del transportista, o una factura del restaurante por **dos grupos**. La suma de las asignaciones tiene que dar el total del comprobante.
+- **Se construye en dos partes (revisión del 24-nov).** La **asignación manual** (a qué salida o reserva va cada monto, con la suma igual al total) entra en la **fase 3**, porque la necesitan los mayoristas (aplicar los pagos a cuenta de *esa* reserva, §3.7d) y las notas de crédito repartidas entre reservas, y para que una factura registrada ya se vea en su reserva o salida. El **reparto sugerido** (P6, abajo) y los reportes de rentabilidad quedan en la fase 4.
 
 **Reparto de un comprobante (P6, resuelta 14-oct):**
 - **Repartir por pasajeros no sirve como regla general:** el transporte se cobra por vehículo y día (una salida de 4 pax y otra de 10 cuestan una minivan cada una), el almuerzo por persona, el guía por día.
@@ -232,7 +241,7 @@ a servicios como el paseo a caballo. Si aplica, se registra como compra con comp
 | Ayuda | Factibilidad |
 |---|---|
 | Escribir el RUC → razón social | Fácil (consulta de RUC) |
-| Validar que el comprobante existe y está aceptado en SUNAT | Factible (consulta de validez de comprobantes; usa credenciales de la empresa, que el sistema ya guarda por tenant en `SunatConfig`) |
+| Validar que el comprobante existe y está aceptado en SUNAT | Factible (consulta de validez de comprobantes). **Corregido el 24-nov:** no alcanza con lo que guarda `SunatConfig` (usuario y clave SOL, certificado): la API de consulta pide un **`client_id` y `client_secret`** que la empresa genera en SUNAT Operaciones en Línea. Hay que agregarlos a `SunatConfig` (cifrados, como la clave SOL) y a su pantalla, con una prueba de conexión |
 | Traer los montos solos | **Factible pero a verificar:** vía **SIRE** (propuesta del Registro de Compras electrónico, que SUNAT arma con los comprobantes recibidos). La idea final: importar la propuesta del periodo, y el usuario solo asigna cada comprobante a su salida o reserva. **Antes de comprometerlo hay que revisar el API de SIRE** (P3). |
 | Traer el detalle (qué platos, cuántos) | Solo con el XML que manda el proveedor o que sube el usuario. SUNAT no lo da. |
 
@@ -355,6 +364,18 @@ proveedor; el gasto sin comprobante guarda nombre y DNI en el propio gasto (§3.
 **Cambios en Caja:** `CashMovementController` (buscador de contraparte y validación del
 proveedor) y la pantalla de catálogo de proveedores de Caja pasan a `proveedores`.
 
+**Mover la tabla no alcanza (revisión del 24-nov):** hoy el modelo es
+`App\Models\AgenciaViajes\Proveedor`, el controlador `AgenciaViajes\ProveedorController` y todas
+sus rutas piden el permiso `agencia.proveedores`. Una tienda tendría la tabla pero no podría
+usarla. Por eso, junto con el retiro de `suppliers`:
+- el modelo pasa al sistema base (`App\Models\Proveedor`); lo propio de Agencia (alojamiento,
+  servicios, tarifas, fotos) sigue en Agencia y apunta a él;
+- el alta, la edición básica y el buscador tienen un controlador del sistema base con un permiso
+  base (`proveedores.ver` / `proveedores.gestionar`); lo turístico (tipo, servicios, tarifas,
+  hotel) sigue con `agencia.proveedores`;
+- quien hoy tiene `agencia.proveedores` recibe los permisos base (backfill), para que nadie pierda
+  acceso ni gane de más.
+
 **Estimado:** ~1.5 días al inicio de la fase 3.
 
 ### 3.7d Mayoristas: pagos, factura posterior e incentivos (14-oct-2026)
@@ -393,14 +414,19 @@ nombres, para que haya un solo diseño:
 ObligacionProveedor        lo que se le debe a un proveedor por una reserva (nace al aceptar)
   └── CuotaProveedor        partes programadas (depósito, saldo) con vencimiento
 PagoProveedor              un pago real (Caja o Banco); PUEDE CUBRIR VARIAS RESERVAS
-  └── AplicacionPagoProveedor   cuánto de ese pago va a cada obligación o cuota
+  └── AplicacionPagoProveedor   cuánto de ese pago va a una compra, obligación o cuota
 Compra (comprobante)       la factura que llega después; se vincula a las obligaciones que cubre
 ```
+
+**Revisión del 24-nov:** `PagoProveedor` + `AplicacionPagoProveedor` **no nacen acá sino en el
+núcleo de Compras** (§3.7, «Pagos»), como el único modelo de pagos: primero aplican solo a
+compras; los mayoristas agregan la aplicación a obligaciones y cuotas, sin tabla nueva. La
+compensación con la factura de comisión (forma B, punto 4) es también una aplicación.
 
 - **Decisión pendiente de la auditoría (§17, "¿hace falta el nivel de cuota?") — resuelta:** sí. El usuario confirmó que paga en partes antes del viaje.
 - **Pago consolidado** (caso del brief §21 de la auditoría: un pago de USD 6,500 que cubre 3 reservas del mismo proveedor): un `PagoProveedor` con varias `AplicacionPagoProveedor`.
 - Esta sección reemplaza la "Fase 4 — Pagos a proveedor" de la auditoría (§19), que pasa a ejecutarse dentro de la fase 3 de este plan.
-- **Choque de nombres:** ya existe un modelo `PagoProveedor` (tabla vieja `pago_proveedor`, sin uso). Al implementar, **retirar primero** ese modelo y las dos tablas viejas, y recién después crear el `PagoProveedor` nuevo (tabla `pagos_proveedor`). El modelo viejo tiene un comentario que lo advierte.
+- **Choque de nombres:** ya existe un modelo `PagoProveedor` (tabla vieja `pago_proveedor`, sin uso). Al implementar, **retirar primero** ese modelo y las dos tablas viejas, y recién después crear el `PagoProveedor` nuevo (tabla `pagos_proveedor`). El modelo viejo tiene un comentario que lo advierte. Como el nuevo nace con los pagos de Compras (revisión del 24-nov), el retiro va **antes de los pagos de compra**, no antes de los pagos a cuenta.
 
 Lo que se agrega a Compras, en esos términos:
 1. **Cronograma de pagos por reserva y proveedor** (`ObligacionProveedor` + `CuotaProveedor`): cuotas con monto, moneda y vencimiento. El proveedor puede tener **condiciones por defecto** (por ejemplo, "30 % al reservar, saldo 30 días antes del viaje") para generarlo al aceptar la reserva; siempre editable. Alertas de vencimiento.
@@ -439,7 +465,8 @@ En ambas formas, la rentabilidad por reserva lo refleja.
 y hoteles a un **mayorista** y los vuelos a una **aerolínea**, y a los dos les paga en cuotas
 para ese viaje. Encaja en la estructura de arriba: la reserva tiene **una obligación por
 proveedor** (mayorista y aerolínea), cada una con sus cuotas.
-- **Hueco:** hoy la aerolínea es **texto libre** (`cotizacion_pasaje_aereo.aerolinea`, decidido el 28-jul) y no un proveedor, así que no hay a quién cargarle la deuda. Se agrega el tipo de proveedor **Aerolínea / Consolidador** en `proveedor_tipos` y un vínculo **opcional** del pasaje a un proveedor (el texto queda para lo existente).
+- **Hueco:** hoy la aerolínea es **texto libre** (`cotizacion_pasaje_aereo.aerolinea`, decidido el 28-jul) y no un proveedor, así que no hay a quién cargarle la deuda. Se agrega el tipo de proveedor **Aerolínea** en `proveedor_tipos` (sin «Consolidador», P8) y un vínculo **opcional** del pasaje a un proveedor (el texto queda para lo existente).
+- **Tres lugares para una aerolínea (revisión del 24-nov):** además del texto libre ya existe el **catálogo central `aerolineas`** (T-015: nombre normalizado, código IATA, común a todas las agencias; hoy solo sugiere el texto). Para no tener tres representaciones: el catálogo central sigue siendo **qué aerolínea es** (nombre, IATA); el **proveedor** es **a quién le debe esta agencia** (RUC, condiciones, obligaciones), con `proveedores.aerolinea_id` opcional hacia el catálogo central (sin FK, porque cruza a central; se valida en PHP). Al elegir la aerolínea en el pasaje, el sistema propone el proveedor vinculado a ella; si no hay, ofrece crearlo desde el catálogo.
 - La **primera cuota del pandero** (§3.7e) paga los pasajes: la vista "cobrado contra pagado" avisa si vence el pago a la aerolínea y el cliente no pagó su prepago.
 - Abierto: P8 y P9 (§7).
 
@@ -964,9 +991,9 @@ adelante la importación SIRE (los comprobantes llegan solos y solo hay que asig
 |---|---|---|
 | 1 | **Tour simple:** columnas de §3.1 (incluido `uso`, N15, con su backfill y el bloqueo de carga en el cotizador para `solo_itinerario`), Incluye estructurado (con costo e IGV por servicio), calculadora, una línea por tipo de IGV cuando hay mezcla (N14), extranjeros (residencia en cotización), cotización con línea de tour, combos (una línea por tour, descuento E3), facturación con la línea de tour, retiro de `ajuste_redondeo`, conversión de los tours existentes con confirmación del usuario.  Además (§5c): desglose de precio por pasajero para facturar por subgrupo (C1), Incluye del PDF desde la lista del tour (C5), permisos y menú. **Precio por temporada (§3.12, N16)**. | 6.5–7.5 días |
 | 2 | **Salida como centro:** agrupación por línea de tour, servicios a reservar, varios vehículos, guía, mínimo, estados, Reporte Operativo con los dos tipos.  Además (§5c): Inicio y `AsignacionOperativa` con salidas de tour (C3), `reprogramar()` mueve líneas de tour (C4), permisos y menú. **Mejoras de operación (§3.13):** órdenes de servicio a proveedores, avisos al cancelar, reprogramar salida completa. **Bandeja de pendientes (§3.14)** con los avisos de salidas. **Al terminar: pausa para evaluar con uso real antes de la fase 3.** | 8.5–9.5 días |
-| 3 | **Compras (sistema base):** registro de comprobantes, contado o crédito, pagos parciales vía Caja, cuentas por pagar, gastos sin comprobante con respaldo, RUC automático, validación SUNAT, adjuntos, tabla única de proveedores al inicio de la fase (§3.7c). Mayoristas (§3.7d): cronograma de pagos por reserva con condiciones por defecto del proveedor, pagos a cuenta sin factura y su aplicación a la factura posterior, USD con tipo de cambio, retiro de `cronograma_pago_proveedor`/`pago_proveedor`. Comisiones (§3.7d): configuración por proveedor, notas de crédito recibidas, factura de comisión al proveedor (cliente creado desde el proveedor) repartida entre reservas, compensación con el pago al proveedor.  Además (§5c): pagos con origen Caja o **Banco sin sesión de caja** y `cuentas_bancarias` al sistema base (C2), migraciones probadas en todos los giros (C8), módulo activable por tenant, permisos y menú. Avisos de pagos por vencer en la bandeja (§3.14). **Casos del 17-nov (decisión del usuario: van con esta fase, en orden, no se adelantan):** aerolínea / consolidador como proveedor y obligaciones por proveedor en el paquete armado por partes (§3.7d); **programas de pago** (§3.7e: catálogo editable —Pandero, Promoción, Luna de miel…—, plan de cobro con cuotas sobre Adelantos, estado "retenido por retiro", listado Pandero, contrato desde plantilla editable con copia por contrato emitido); opción "Opera sus propios tours" y columnas nuevas del Reporte Operativo (§3.6b). | 10–11 días + ~5 días de los casos del 17-nov (a afinar al empezar) |
+| 3 | **Compras (sistema base):** registro de comprobantes (tabla 10 de SUNAT, sin duplicados, periodo de anotación, no domiciliados), contado o crédito, pagos parciales con un solo modelo de pago + aplicación (incluye detracción y retención de 4ta), **asignación manual de la compra a una reserva o salida** (revisión del 24-nov), cuentas por pagar, gastos sin comprobante con respaldo, RUC automático, validación SUNAT, adjuntos, tabla única de proveedores al inicio de la fase (§3.7c). Mayoristas (§3.7d): cronograma de pagos por reserva con condiciones por defecto del proveedor, pagos a cuenta sin factura y su aplicación a la factura posterior, USD con tipo de cambio, retiro de `cronograma_pago_proveedor`/`pago_proveedor`. Comisiones (§3.7d): configuración por proveedor, notas de crédito recibidas, factura de comisión al proveedor (cliente creado desde el proveedor) repartida entre reservas, compensación con el pago al proveedor.  Además (§5c): pagos con origen Caja o **Banco sin sesión de caja** y `cuentas_bancarias` al sistema base (C2), migraciones probadas en todos los giros (C8), módulo activable por tenant, permisos y menú. Avisos de pagos por vencer en la bandeja (§3.14). **Casos del 17-nov (decisión del usuario: van con esta fase, en orden, no se adelantan):** aerolínea / consolidador como proveedor y obligaciones por proveedor en el paquete armado por partes (§3.7d); **programas de pago** (§3.7e: catálogo editable —Pandero, Promoción, Luna de miel…—, plan de cobro con cuotas sobre Adelantos, estado "retenido por retiro", listado Pandero, contrato desde plantilla editable con copia por contrato emitido); opción "Opera sus propios tours" y columnas nuevas del Reporte Operativo (§3.6b). | 10–11 días + ~5 días de los casos del 17-nov (a afinar al empezar) |
 | 3b | **Rendiciones (§3.7b):** entrega a rendir desde Caja, gastos contra la rendición (reusa Compras y gastos sin comprobante), liquidación con vuelto o reembolso, aprobación y cierre, listado de rendiciones abiertas. Depende de la fase 3. | 2–3 días |
-| 4 | **Centro de costo + Rentabilidad:** asignaciones (con reparto de un comprobante), reportes por salida, reserva y tour, estimado contra real. Vista "cobrado contra pagado" por reserva (§3.7d).  Además (§5c): ingreso de la salida = precio vendido neto de NC (C6, C7), aviso "faltan gastos por registrar", permisos y menú. Avisos de facturas faltantes, rendiciones abiertas y costos desactualizados en la bandeja (§3.14). | 4.5–5.5 días |
+| 4 | **Centro de costo + Rentabilidad:** reparto sugerido de un comprobante (P6; la asignación manual ya viene de la fase 3), reportes por salida, reserva y tour, estimado contra real. Vista "cobrado contra pagado" por reserva (§3.7d).  Además (§5c): ingreso de la salida = precio vendido neto de NC (C6, C7), aviso "faltan gastos por registrar", permisos y menú. Avisos de facturas faltantes, rendiciones abiertas y costos desactualizados en la bandeja (§3.14). | 4.5–5.5 días |
 | 5 | **Registros de Ventas y Compras** para el contador (Excel + formato SUNAT), con la configuración por tenant de régimen y "lleva registros electrónicos".  Permisos y menú. | 2.5–3.5 días |
 | 6 | Vista del guía | ~3 días |
 | 7 | Calificación del cliente | ~2 días |
@@ -1011,7 +1038,8 @@ Si en dakamu hay tours vinculados a mayoristas **con** precio, la regla N15 los 
 - ~~P6 — Factura mensual~~ **Resuelta (14-oct):** reparto propuesto **según el costo estimado** de cada salida para ese servicio, con las salidas sugeridas automáticamente; otros criterios y edición manual disponibles. → §3.7 ("Reparto de un comprobante").
 - ~~P7 — Comisiones e incentivos~~ **Resuelta (14-oct):** existen las dos formas según el proveedor → configuración por proveedor; el tipo de IGV de la factura de comisión y si el monto incluye IGV son **valores por defecto configurables por proveedor**, con todas las opciones siempre disponibles al emitir (§3.7d, punto 0). El contador solo indica qué valor dejar en cada proveedor; no bloquea el desarrollo.
 - ~~P8 — Vuelos~~ **Resuelta (24-nov, usuario):** hoy la agencia **no** es IATA y no usa consolidador (antes sí). Si el vuelo viene dentro del paquete del mayorista, se le paga al **mayorista** (va en su obligación, sin nada extra). Si el vuelo se compra **por separado**, se le paga directo a la **aerolínea**, que es el proveedor de esa obligación. El tipo «Consolidador» no hace falta ahora (§3.7d).
-- **P9 — Cronograma de pagos al proveedor (17-nov, abierta):** ¿las cuotas las fija el proveedor (condiciones por defecto en su ficha) o las decide la agencia en cada viaje? El diseño soporta las dos; define qué se precarga.
+- **P9 — Cronograma de pagos al proveedor (17-nov, abierta):** ¿las cuotas las fija el proveedor (condiciones por defecto en su ficha) o las decide la agencia en cada viaje? El diseño soporta las dos; define qué se precarga. Hay que responderla antes de construir las obligaciones con cuotas.
+- **P13 — Contador, Compras (24-nov, abierta):** (a) **detracciones en compras:** qué servicios que compra la agencia están afectos al SPOT (transporte de pasajeros o de carga, demás servicios gravados), desde qué monto, y si la agencia deposita la detracción o lo hace el proveedor; (b) **retención de 4ta categoría:** confirmar que la agencia retiene el 8 % de los recibos por honorarios de guías por encima del monto mínimo, y si algún guía presenta suspensión de retenciones; (c) **qué monto es el costo real** de una compra: la base o la base más el IGV que no se recupera. Va con **C20** (prorrata del crédito fiscal con ventas gravadas y exoneradas, `docs/requerimientos/agencia-tributario-simplificado.md`), que ya está preguntada ahí; (d) si la agencia **intermedia** lo de fuera de la zona (C18), esas operaciones no son compras: confirmar antes de construir las obligaciones con mayoristas. El diseño no se bloquea: la compra guarda base, IGV, detracción y retención por separado.
 - **P10 — Contador, pandero (17-nov, abierta):** puntos (a) y (b) de §3.7e. No bloquea el diseño: por defecto, boleta de anticipo por cuota.
 - **P11 — Modelo de contrato (17-nov, abierta):** el usuario entrega el modelo de contrato del pandero para armar la plantilla y sus variables (§3.7e). Cada programa de pago puede tener el suyo.
 - ~~P12 — Viaje de promoción~~ **Resuelta (18-nov):** una reserva por tanda (cada una con su precio) unidas por un **grupo de viaje**; varios planes de cobro por reserva, uno por pagador (§3.7e). Queda a confirmar con el contador si al cerrar se emite una boleta final por pagador con sus propios anticipos (es lo esperado, porque cada anticipo ya está a nombre de quien pagó).

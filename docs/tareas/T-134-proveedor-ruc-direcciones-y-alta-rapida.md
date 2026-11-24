@@ -18,18 +18,20 @@ bloquear el caso legítimo, y que Compras pueda crear un proveedor en segundos.
 - El RUC **no es único**: al crear uno con RUC existente, aviso con los existentes (nombre, ciudad, dirección) y confirmar «es otro establecimiento» o ir al existente.
 - **Ciudad visible** en listas y buscadores («Casa Andina — Tarapoto»).
 - **Alta rápida** (Compras → «Nuevo proveedor»): RUC → razón social y dirección con la consulta de RUC existente; resto opcional; marcado «datos incompletos».
-- Listado **«proveedores sin documento»** para limpiar (excluye los `es_referencial`).
+- **Proveedor no domiciliado** (revisión del 24-nov, §3.7 del plan): hotel u operador del extranjero en un paquete internacional. Marca «no domiciliado», **país** y documento del exterior (tipo y número, sin validación de RUC); no pasa por la consulta RUC. Lo necesita el Registro de Compras (parte de no domiciliados). Migración en `tenant/core/`.
+- Listado **«proveedores sin documento»** para limpiar (excluye los `es_referencial` y no cuenta como «sin documento» a un no domiciliado con su documento del exterior).
 - **Teléfono**: en el recorrido de la fase 2 los 3 proveedores de una orden no tenían teléfono (WhatsApp inútil). Mostrar el aviso «sin teléfono» al crear y permitir completarlo desde el listado.
-- Permisos de quién crea proveedores y desde dónde.
+- Permisos de quién crea proveedores y desde dónde: `proveedores.gestionar` (creado en T-133).
 
 ## Fuera de alcance
 - Modelo de sucursales por RUC (paso 2; solo si las cadenas se vuelven frecuentes).
 - La regla «al registrar la primera compra se pide completar el RUC»: va en T-135.
-- Comisiones y condiciones de pago por defecto en la ficha (T-143, T-146).
+- Condiciones de pago por defecto en la ficha (T-142) y comisiones (T-145).
+- Vínculo con el catálogo central de aerolíneas (T-146).
 
 ## Dónde tocar
-- `api-sistema-fe/app/Http/Controllers/AgenciaViajes/ProveedorController.php` → `store()`, `index()` (filtros), endpoint de aviso por RUC.
-- `api-sistema-fe/app/Models/AgenciaViajes/Proveedor.php` (columnas) y su migración nueva.
+- El controlador base de proveedores que crea T-133 → `store()`, `index()` (filtros), endpoint de aviso por RUC. Lo turístico sigue en `AgenciaViajes/ProveedorController.php`.
+- `api-sistema-fe/app/Models/Proveedor.php` (columnas, ya movido por T-133) y su migración nueva.
 - Consulta de RUC: buscar el servicio existente que usa Clientes antes de crear otro (`grep -ri "consulta.*ruc\|ruc" app/Services`).
 - `admin-start-kit/src/views/agencia-viajes/proveedores/` (formulario) y `ProveedorBuscador.vue`.
 
@@ -38,10 +40,11 @@ bloquear el caso legítimo, y que Compras pueda crear un proveedor en segundos.
 - [ ] **CA2** — Escribir un RUC válido en el alta rápida trae razón social y dirección fiscal; un RUC inválido no rompe el formulario.
 - [ ] **CA3** — El buscador muestra la ciudad al lado del nombre.
 - [ ] **CA4** — El listado «sin documento» no incluye referenciales.
-- [ ] **CA5** — Un usuario sin el permiso de crear proveedores no ve el alta rápida ni puede llamarla por API.
+- [ ] **CA5** — Un usuario sin `proveedores.gestionar` no ve el alta rápida ni puede llamarla por API.
+- [ ] **CA6** — Un proveedor no domiciliado se crea con país y documento del exterior sin pedir RUC, y no aparece en «sin documento».
 
 ## Seguridad y correctitud
-- [ ] Permisos / Policy: permiso de crear proveedor desde Compras.
+- [ ] Permisos / Policy: `proveedores.gestionar` para crear, también desde Compras.
 - [ ] Entrada: validación del RUC (11 dígitos, tipo de documento); el servicio de consulta no devuelve datos internos en errores.
 - [ ] Migraciones nuevas + `tenants:migrate-verticales`: sí.
 - [ ] Aislamiento de tenant, concurrencia, dinero, fechas, tributario, `v-html`: no aplica.

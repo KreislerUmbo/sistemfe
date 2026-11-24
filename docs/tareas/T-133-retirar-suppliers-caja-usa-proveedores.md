@@ -19,6 +19,10 @@ factura apunte a **un** proveedor.
 - Un solo punto del backend con el filtro: por defecto **turísticos** (tienen tipo turístico en `proveedor_tipos`), parámetro para pedir **todos**. Las ~9 pantallas de Agencia que cargan la lista siguen igual (turísticos); Caja, Compras y Rendiciones piden todos.
 - La pantalla `views/cash/suppliers.vue` y su ruta pasan a `proveedores`.
 - Retirar `Supplier`, `SupplierController`, la ruta `suppliers` y (al final, en migración aparte) la tabla.
+- **El proveedor pasa al sistema base, no solo su tabla** (revisión del 24-nov, §3.7c del plan): hoy el modelo es `App\Models\AgenciaViajes\Proveedor` y todas las rutas de `ProveedorController` piden `agencia.proveedores`, así que una tienda no podría usarlo.
+  - Modelo a `App\Models\Proveedor`. Para no tocar decenas de `use` en esta tarea, `App\Models\AgenciaViajes\Proveedor` puede quedar como subclase que extiende al base y conserva lo propio de Agencia (relaciones con alojamiento, servicios, tarifas, fotos); decirlo en el commit.
+  - Controlador del sistema base con listar/buscar, ver, crear y editar los datos básicos, bajo permisos nuevos **`proveedores.ver`** y **`proveedores.gestionar`** (sembrados en `PermissionsDemoSeeder`, en el menú y sincronizados al Propietario con `roles:sync-propietario`). Lo turístico (tipo, servicios, tarifas, hotel, fotos) sigue en `AgenciaViajes\ProveedorController` con `agencia.proveedores`.
+  - Backfill: todo rol con `agencia.proveedores` recibe `proveedores.ver` y `proveedores.gestionar`; el rol con el permiso de la pantalla vieja de proveedores de Caja recibe `proveedores.ver` (y `gestionar` si podía crear).
 
 ## Fuera de alcance
 - Campos nuevos del proveedor y consulta RUC (T-134). Compras.
@@ -29,6 +33,7 @@ factura apunte a **un** proveedor.
 - `api-sistema-fe/app/Http/Controllers/AgenciaViajes/ProveedorController.php` → filtro único (turístico por defecto).
 - `app/Console/Commands/BackfillPermisosGateBucketA.php` y `app/Services/AgenciaViajes/LimpiarOperacionPrueba.php` mencionan `suppliers`.
 - `admin-start-kit/src/views/cash/suppliers.vue`, `src/types/cash.ts`, `src/router/routes.ts`.
+- `api-sistema-fe/app/Models/AgenciaViajes/Proveedor.php` → `app/Models/Proveedor.php`; rutas de proveedores en `routes/api.php` (~línea 776-810, hoy todas con `permission:agencia.proveedores`); `database/seeders/PermissionsDemoSeeder.php`.
 
 ## Criterios de aceptación
 - [ ] **CA1** — El buscador de Caja encuentra a un proveedor creado en Agencia, y a uno general (sin tipo turístico).
@@ -36,6 +41,8 @@ factura apunte a **un** proveedor.
 - [ ] **CA3** — Las pantallas de Agencia no muestran proveedores generales; Caja sí.
 - [ ] **CA4** — No quedan referencias a `suppliers` en `app/`, `routes/` ni `src/` (salvo la migración de retiro).
 - [ ] **CA5** — Los permisos de la pantalla vieja de proveedores de Caja siguen funcionando con la ruta nueva (sin dejar a un rol sin acceso ni dar acceso de más).
+- [ ] **CA6** — En un tenant de tienda, un usuario con `proveedores.gestionar` crea y busca un proveedor por API; sin el permiso recibe 403. Las rutas turísticas siguen pidiendo `agencia.proveedores`.
+- [ ] **CA7** — Después del backfill, ningún rol que tenía `agencia.proveedores` pierde acceso al listado ni al alta.
 
 ## Seguridad y correctitud
 - [ ] Permisos / Policy: ruta de Caja a proveedores con permiso; revisar `BackfillPermisosGateBucketA`.
