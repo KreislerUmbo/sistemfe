@@ -8,7 +8,7 @@
 
 Cada línea: ID · qué · estado · depende de · rama o commit. El detalle está en
 `docs/tareas/T-…md` (se borra al cerrar; para una tarea hecha, el commit es la referencia).
-Próximo ID libre: **T-131**.
+Próximo ID libre: **T-152**.
 
 ## Orden de construcción (27-oct-2026)
 
@@ -35,15 +35,38 @@ Próximo ID libre: **T-131**.
 | 8 | ~~T-032~~ hecha 13-nov (recorrido 64) → ~~T-034~~ hecha 09-nov (recorrido 55) → ~~T-019~~ hecha 12-nov (recorrido 58) → ~~T-035~~ hecha 10-nov (recorrido 56) → ~~T-036~~ hecha 10-nov (recorrido 57) → ~~T-031~~ hecha 12-nov (recorrido 59) → ~~T-022~~ hecha 13-nov (recorrido 60) → ~~T-020~~ hecha 13-nov (recorrido 61) → ~~T-021~~ hecha 13-nov (recorrido 62) → ~~T-023~~ hecha 13-nov (recorrido 63) → ~~T-037~~ hecha 09-nov (recorrido 54) → ~~T-015~~ hecha 09-nov (recorrido 51) → ~~T-016~~ hecha 09-nov (recorrido 52) → ~~T-080~~ hecha 09-nov (recorrido 53) | Cotizador más rápido y claro, PDF de cotización, aerolíneas |
 | 9 | ~~T-060~~ hecha 16-nov (recorrido 66) → ~~T-062~~ hecha 16-nov (recorrido 67) → ~~T-065~~ hecha 18-nov (recorrido 71) → ~~T-107~~ hecha 19-nov (recorrido 71) → ~~T-104~~ hecha 18-nov (recorrido 66 actualizado) | Completar CRM y clientes |
 | — | ~~T-029~~ hecha 23-nov (recorrido 84) | Desbloqueada el 07-nov (D-AGE-035); se puede hacer junto con P2 del tributario o antes |
+| 10 | T-131 → T-132 → T-133 → T-134 → T-151 → T-135 → T-136 → T-137 → T-138 → T-139 → T-140 → T-141 → T-142 → T-143 → T-144 → T-145 | **Compras (fase 3 de `plan-tours-venta-simple-costo-real.md`), desglose del 24-nov-2026.** Bloques: A proveedor único (T-132 a T-134), B núcleo de Compras (T-135 a T-140), C mayoristas (T-141 a T-145). T-131 va primero: Compras compara costo real contra salidas terminadas |
+| 10b | T-146 → T-147 → T-148 → T-149 → T-150 | **Casos del 17-nov** (van con la fase 3 pero **después** de la ola 10, en este orden). T-147 a T-149 esperan una pregunta abierta (P10 y P11, §7 del plan) |
 
-Después de estas olas (sin tareas todavía): **Compras** (fila 13, fase 3 de
-`plan-tours-venta-simple-costo-real.md`, con la tabla única de proveedores) junto con el motor de
-pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
+Después de la ola 10 (sin tareas todavía): **Rendiciones** (fase 3b), **Centro de costo y
+Rentabilidad** (fase 4: asignaciones, ganancia real junto a la estimada), **Registros de Ventas y
+Compras** (fase 5) y el motor de pendientes automáticos (11f). Se desglosan cuando se llegue.
 
 ## Activas
 
 | ID | Módulo | Qué | Estado | Depende de | Rama / commit |
 |---|---|---|---|---|---|
+| T-131 | AGE | Salidas vencidas: marcarlas en el tablero y poder pasarlas a «Realizada» (hallazgo del recorrido de la fase 2, 23-nov). Detalle: `docs/tareas/T-131-…` | por hacer | — | — |
+| T-132 | COM | Tabla `proveedores` al sistema base (migración «si no existe», migraciones de Agencia con guardas, test que provisiona un tenant de cada giro). Antes: diagnóstico de solo lectura en producción. `docs/tareas/T-132-…` | por hacer | — | — |
+| T-133 | COM + CAJ | Retirar `suppliers`: el buscador y la validación de Caja usan `proveedores`; migración que remapea `counterparty_id`; filtro único turístico/todos en el backend. `docs/tareas/T-133-…` | por hacer | T-132 | — |
+| T-134 | COM | Proveedor: RUC no único con aviso, dirección fiscal y de local, ciudad visible, alta rápida con consulta RUC, listado «sin documento», aviso «sin teléfono». `docs/tareas/T-134-…` | por hacer | T-133 | — |
+| T-135 | COM | **Comprobante de compra:** tabla `compras` (tipo, serie, número, fecha, moneda y tipo de cambio, base/IGV/exonerado/inafecto/otros/total, adjuntos PDF/XML, condición contado o crédito con vencimiento) con CRUD; pide completar el RUC en la primera compra de un proveedor sin documento; permisos, menú y módulo activable por tenant. Sin pagos todavía | por hacer | T-134, T-151 | — |
+| T-136 | COM + CAJ | **Pagos de compra** (`compra_pagos`): parciales, con origen **Caja** (egreso con sesión abierta, vía el servicio de caja existente) o **Banco** (sin sesión; `cuentas_bancarias` pasa al sistema base, C2/C8; número de operación). Estado derivado pendiente/parcial/pagado/vencido. Corregir = `cash_movement` de corrección, nunca borrar | por hacer | T-135 | — |
+| T-137 | COM | **Cuentas por pagar:** listado por proveedor con lo pendiente, lo vencido y lo que vence en N días; el costo cuenta en la fecha del comprobante, pagado o no | por hacer | T-136 | — |
+| T-138 | COM | **Gasto sin comprobante:** quién recibió el pago (nombre, DNI opcional), descripción, monto, fecha, foto opcional del vale (con `StorageUrl`); no entra al Registro de Compras ni da crédito fiscal. Duda para el contador abierta (deducibilidad y liquidación de compra) | por hacer | T-135 | — |
+| T-139 | COM | **Ayudas de registro:** validar que el comprobante existe y está aceptado en SUNAT (credenciales de `SunatConfig`). La consulta RUC ya entra en T-134; SIRE queda para la fase 8 | por hacer | T-135 | — |
+| T-140 | COM | **Nota de crédito recibida y dólares:** NC recibida como compra con signo contrario (reembolso a Caja o banco), compras y pagos en USD con el módulo de tipo de cambio, diferencia de cambio visible sin contabilizarla | por hacer | T-136 | — |
+| T-141 | AGE + COM | **Retirar lo viejo de pagos a proveedor:** modelo `PagoProveedor`, `CronogramaPagoProveedor` y las tablas `pago_proveedor`/`cronograma_pago_proveedor` (sin uso; verificar producción primero). Debe ir antes de T-143 por el choque de nombres | por hacer | T-136 | — |
+| T-142 | AGE + COM | **Obligación y cuotas por proveedor y reserva** (`ObligacionProveedor`, `CuotaProveedor`): nacen al aceptar la reserva, con condiciones por defecto en la ficha del proveedor (P9, decidir antes), editables; alertas de vencimiento | por hacer | T-141 | — |
+| T-143 | AGE + COM | **Pagos a cuenta y consolidados** (`PagoProveedor` nuevo + `AplicacionPagoProveedor`): un pago puede cubrir varias reservas del mismo proveedor; al llegar la factura (T-135) se le aplican los pagos a cuenta de esa reserva | por hacer | T-142 | — |
+| T-144 | AGE + COM | **Vista «cobrado contra pagado» por reserva:** lo cobrado al cliente junto a lo pagado y lo pendiente con el mayorista, con aviso si un pago vence antes de que el cliente termine de pagar | por hacer | T-143 | — |
+| T-145 | AGE + COM | **Comisiones de mayoristas y aerolíneas:** configuración por proveedor («me emite NC» / «yo le facturo»), tipo de IGV por defecto, NC recibida repartida entre reservas, factura de comisión con la facturación existente (cliente creado desde el proveedor), cobro en cuentas por cobrar y compensación con el pago al proveedor | por hacer | T-143, T-140 | — |
+| T-146 | AGE | **Aerolínea como proveedor:** tipo «Aerolínea» en `proveedor_tipos` y vínculo opcional del pasaje aéreo suelto (`cotizacion_pasaje_aereo`) a un proveedor (el texto libre queda para lo existente); su obligación con cuotas como cualquier proveedor. Vuelo dentro del paquete del mayorista: sin cambios, va en la obligación del mayorista. Sin consolidador (P8 resuelta 24-nov) | por hacer | T-142 | — |
+| T-147 | AGE | **Programas de pago:** catálogo editable (`programas_pago`), la primera cuota (prepago de los tickets aéreos) se paga al firmar el contrato, así que vence ese día (24-nov, usuario), `PlanCobro` + `CuotaCobro` sobre Adelantos, estado de cuotas y del plan, listado de Pandero, reserva con varios planes y `grupos_viaje` | bloqueada: falta **P10** (contador) | T-143 | — |
+| T-148 | ADE | **«Retenido por retiro»:** estado del adelanto que se cierra sin aplicarse ni devolverse; reserva cancelada por retiro y plan retirado | bloqueada: falta **P10** (a) | T-147 | — |
+| T-149 | AGE | **Contrato desde plantilla editable:** variables del paquete y tabla de cuotas, PDF con DomPDF, copia del texto por contrato emitido y versión nueva si cambia el cronograma | bloqueada: falta el modelo de contrato (**P11**) | T-147 | — |
+| T-150 | AGE | **«Opera sus propios tours»** y columnas nuevas del Reporte Operativo (§3.6b del plan) | por hacer | T-143 | — |
+| T-151 | COM + VEN | **Revisión de Compras para retail:** el diseño nació en Agencia; antes de construir T-135 falta decidir si las compras de mercadería mueven inventario y costo del producto, y alinear con «Presentaciones y listas de precios» (Por analizar). Entregable: decisión escrita, no código | por hacer | — | — |
 
 ## Por analizar
 
