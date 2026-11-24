@@ -66,9 +66,14 @@ php artisan test   # suite completa al final
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
-- **Desviaciones de la tarea y por qué:**
+- **Commits:** `c493b3c2`
+- **Tests:** nuevo `Ventas/T121RutasLegadasTest` (2: la venta, sus pagos, sus líneas y el stock no
+  cambian). `GateBucketBRoutesTest` en verde. Suite completa: 2450 en verde.
+- **Producción:** el `zgrep` de los logs de nginx no devolvió nada (23-nov). Control: el mismo log
+  tiene ~17 000 llamadas a `/api/` en 15 días, así que el vacío es real.
+- **Desviaciones de la tarea y por qué:** se quitó
+  `CronogramaEdicionVentaTest::test_borrar_el_unico_pago_de_una_venta_al_contado_la_deja_pendiente`
+  (T-119): probaba el recálculo de `state_payment` del `DELETE` viejo, que ya no existe.
 
 ## Hallazgos fuera de alcance
-- 
+- Ninguno.
