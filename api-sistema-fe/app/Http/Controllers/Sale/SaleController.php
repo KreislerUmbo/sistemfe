@@ -355,6 +355,43 @@ class SaleController extends Controller
         return $preparados;
     }
 
+    // ── T-129 ─────────────────────────────────────────────────────────
+    // `debt`, `paid_out` y `state_payment` ya no se confían del front: se calculan acá con lo que
+    // el servidor ya validó (total de la venta —T-114—, pagos preparados y adelantos/anticipo) y
+    // pisan lo que llegue en el payload. Mismas fórmulas que usaban register.vue y edit.vue.
+    //
+    //  - Venta nueva: lo adelantado (advance_applications) ya está pagado; paid_out lo incluye.
+    //  - Edición: lo ya pagado por un comprobante de anticipo (T-116) rebaja lo que se cobra,
+    //    pero no cuenta como paid_out de esta venta.
+    // Estado: 1 = pendiente, 2 = parcial, 3 = pagado. Todo en centavos enteros.
+    private function fijarEstadoDePago(Request $request, array $pagosPreparados, bool $esEdicion, float $anticipo = 0): void
+    {
+        $cent = fn ($monto) => (int) round(((float) $monto) * 100);
+
+        $total = $cent($request->total);
+        $cobrado = $cent(array_sum(array_column($pagosPreparados, 'amount')));
+        $adelantos = $esEdicion ? 0 : $cent(collect($request->advance_applications ?? [])
+            ->sum(fn ($a) => (float) ($a['amount'] ?? 0)));
+        $yaPagadoAparte = $esEdicion ? $cent($anticipo) : $adelantos;
+
+        $porCobrar = max(0, $total - $yaPagadoAparte);
+        $deuda = max(0, $porCobrar - $cobrado);
+
+        if ($esEdicion) {
+            $estado = abs($cobrado - $porCobrar) < 1 ? 3 : ($cobrado > 0 ? 2 : 1);
+            $pagado = $cobrado;
+        } else {
+            $estado = $cobrado >= $porCobrar ? 3 : (($cobrado > 0 || $adelantos > 0) ? 2 : 1);
+            $pagado = $cobrado + $adelantos;
+        }
+
+        $request->merge([
+            'debt' => $deuda / 100,
+            'paid_out' => $pagado / 100,
+            'state_payment' => $estado,
+        ]);
+    }
+
     // ── Blindaje venta a crédito (Módulo Amortizaciones — Fase 8) ────
     // Reutiliza el selector type_payment existente (plan-modulo-amortizaciones.md
     // §6 punto 8, §9): type_payment==2 es el único hecho de origen — acá se
@@ -363,11 +400,8 @@ class SaleController extends Controller
     // alcance de esta fase (decisión explícita, no un olvido): el
     // formulario solo ofrece 'cuotas_fijas'.
     //
-    // $request->debt ya viene neto de adelantos y pagos iniciales, calculado
-    // en el frontend (register.vue, Math.max(0, totalConAdelanto - total_payments))
-    // — mismo criterio que el resto de este controlador: los totales
-    // financieros se confían del frontend, no se recalculan acá. El
-    // cronograma se valida contra ESE monto, no contra el total bruto.
+    // $request->debt es la deuda neta de adelantos y pagos iniciales, calculada por el servidor
+    // (fijarEstadoDePago(), T-129). El cronograma se valida contra ESE monto, no contra el total bruto.
     // ── T-109 ─────────────────────────────────────────────────────────
 
     /** Documento real: ni vacío ni solo ceros (los «Clientes varios» llevan 00000000). */
@@ -793,6 +827,7 @@ class SaleController extends Controller
         $this->validarDescripcionesLinea((array) $request->sale_details);
         $this->validarAdelantosPayload($request);
         $pagosPreparados = $this->prepararPagosVenta($request);
+        $this->fijarEstadoDePago($request, $pagosPreparados, esEdicion: false);
         $sesionCaja = $pagosPreparados ? $this->cobro->sesionAbierta(auth('api')->user()) : null;
         $this->validarConfiguracionCredito($request);
         $serieResuelta = $this->resolverSerieComprobante($request);
@@ -913,10 +948,8 @@ class SaleController extends Controller
                 "aplica_mora"     => $condicion_pago === 'credito' && $request->boolean('aplica_mora'),
                 "tasa_mora"       => $condicion_pago === 'credito' && $request->boolean('aplica_mora') ? $request->tasa_mora : null,
                 "tipo_mora"       => $condicion_pago === 'credito' && $request->boolean('aplica_mora') ? $request->tipo_mora : null,
-                // saldo_pendiente = $request->debt tal cual: ya viene neto de
-                // adelantos y pagos iniciales (register.vue, Math.max(0,
-                // totalConAdelanto - total_payments)) — mismo criterio que el
-                // resto de store(), no se recalcula acá.
+                // saldo_pendiente = $request->debt: lo calculó fijarEstadoDePago() (T-129),
+                // neto de adelantos y pagos iniciales.
                 //
                 // Sin condicionar a condicion_pago==='credito': Cuentas por
                 // Cobrar (CreditSummaryCalculator) filtra por
@@ -1183,8 +1216,8 @@ public function update(Request $request, string $id)
         // pago inicial) invalida el cronograma por igual — ambos alimentan
         // la misma fórmula de "monto a financiar" — así que se exige un
         // cronograma nuevo y válido en cada guardado, sin importar qué
-        // cambió puntualmente.
-        $this->validarConfiguracionCredito($request);
+        // cambió puntualmente. (La validación corre más abajo, T-129: necesita la deuda
+        // calculada con los pagos ya preparados.)
     }
 
     // condicion_pago se DERIVA de type_payment, mismo criterio que store()
@@ -1206,6 +1239,13 @@ public function update(Request $request, string $id)
         $request,
         (float) ($anticipo['amount_anticipo'] ?? $venta->amount_anticipo ?? 0)
     );
+    $this->fijarEstadoDePago(
+        $request,
+        $pagosPreparados,
+        esEdicion: true,
+        anticipo: (float) ($anticipo['amount_anticipo'] ?? $venta->amount_anticipo ?? 0)
+    );
+    $this->validarConfiguracionCredito($request);
     $serieResuelta = $this->resolverSerieComprobanteUpdate($venta, $request);
     $this->validarBoletaSinDocumento($request, $serieResuelta['tipo']?->codigo);
     $this->validarPrecioDeVenta($request, $venta);

@@ -245,6 +245,63 @@ final class T114TotalesVentaTest extends CreditosTestCase
         $this->assertSame($con1, $con5, "Con 5 ventas hizo $con5 consultas y con 1 hizo $con1: hay consultas por fila.");
     }
 
+    // T-129: deuda, pagado y estado los calcula el servidor; lo que mande el front se pisa.
+    public function test_t129_sin_pagos_la_deuda_es_el_total_aunque_el_front_mande_otra_cosa(): void
+    {
+        $payload = $this->venta([$this->linea($this->producto(), '10', 2, 50)]);
+        $payload['debt'] = 0;
+        $payload['paid_out'] = 999;
+        $payload['state_payment'] = 3;
+
+        $this->assertSame(200, $this->guardar($payload)['code']);
+        $venta = Sale::latest('id')->first();
+        $this->assertEquals($payload['total'], (float) $venta->debt);
+        $this->assertEquals(0, (float) $venta->paid_out);
+        $this->assertSame(1, (int) $venta->state_payment);
+        $this->assertEquals($payload['total'], (float) $venta->saldo_pendiente);
+    }
+
+    public function test_t129_pago_parcial_y_pago_completo(): void
+    {
+        $this->abrirCaja(Auth::guard('api')->user());
+
+        $payload = $this->venta([$this->linea($this->producto(), '10', 2, 50)]);
+        $total = (float) $payload['total'];
+        $payload['payments'] = [['method_payment' => 'EFECTIVO', 'amount' => 50.0]];
+        $payload['debt'] = 0; $payload['paid_out'] = $total; $payload['state_payment'] = 3; // mentira del front
+        $this->assertSame(200, $this->guardar($payload)['code']);
+        $parcial = Sale::latest('id')->first();
+        $this->assertEquals(round($total - 50, 2), (float) $parcial->debt);
+        $this->assertEquals(50, (float) $parcial->paid_out);
+        $this->assertSame(2, (int) $parcial->state_payment);
+
+        $payload['payments'] = [['method_payment' => 'EFECTIVO', 'amount' => $total]];
+        $payload['debt'] = $total; $payload['paid_out'] = 0; $payload['state_payment'] = 1;
+        $this->assertSame(200, $this->guardar($payload)['code']);
+        $pagada = Sale::latest('id')->first();
+        $this->assertEquals(0, (float) $pagada->debt);
+        $this->assertEquals($total, (float) $pagada->paid_out);
+        $this->assertSame(3, (int) $pagada->state_payment);
+    }
+
+    public function test_t129_update_recalcula_con_los_pagos_nuevos(): void
+    {
+        $this->abrirCaja(Auth::guard('api')->user());
+        $payload = $this->venta([$this->linea($this->producto(), '10', 2, 50)]);
+        $this->guardar($payload);
+        $venta = Sale::latest('id')->first();
+
+        $payload['payments'] = [['method_payment' => 'EFECTIVO', 'amount' => 30.0]];
+        $payload['debt'] = 0; $payload['paid_out'] = 0; $payload['state_payment'] = 3;
+        $this->assertSame(200, $this->actualizar($venta->id, $payload)['code']);
+
+        $venta->refresh();
+        $this->assertEquals(round((float) $payload['total'] - 30, 2), (float) $venta->debt);
+        $this->assertEquals(30, (float) $venta->paid_out);
+        $this->assertSame(2, (int) $venta->state_payment);
+        $this->assertEquals((float) $venta->debt, (float) $venta->saldo_pendiente);
+    }
+
     public function test_ca1_retencion_pasa_y_rebajarla_no(): void
     {
         // base 1180 > 700 → retención 3 % = 35,40 y total 1144,60
