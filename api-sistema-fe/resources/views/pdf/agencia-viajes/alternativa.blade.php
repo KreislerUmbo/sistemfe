@@ -76,6 +76,10 @@
             margin-top: 16px;
         }
 
+        .seccion-junta {
+            page-break-inside: avoid;
+        }
+
         .seccion-titulo {
             font-family: 'Poppins-SemiBold', 'Poppins', sans-serif;
             font-weight: bold;
@@ -635,7 +639,8 @@
              elegida (mejora sobre el formato original, esos documentos nunca
              se reenviaban después de la decisión). --}}
         @foreach ($opcionesHoteles as $grupoHotel)
-            <div class="seccion">
+            {{-- T-130: título y tabla juntos (sin título huérfano al pie de una página). --}}
+            <div class="seccion seccion-junta">
                 <div class="seccion-titulo">
                     Opciones de hoteles
                     @if ($grupoHotel['rotulo'])
@@ -685,15 +690,15 @@
                 {{-- Bug real (07-sep-2026): al pasar a Poppins (ocupa un poco más
                      de alto por línea que Arial), esta sección terminaba pisando
                      la última fila de la tabla de precios cuando ambas no entraban
-                     juntas en lo que quedaba de página — page-break-inside:avoid
-                     no alcanzó (dompdf calculando mal cuánto espacio quedaba).
-                     page-break-before:always es más tosco (puede dejar un resto de
-                     página en blanco) pero garantiza que nunca más se solape con
-                     la tabla. Solo hace falta si hay tabla de opciones arriba; con
-                     hoteles sueltos no hay nada que pisar y se evita la página
-                     en blanco. --}}
-                <div class="seccion-titulo" style="margin-top:10px;{{ count($opcionesHoteles) > 0 ? ' page-break-before: always;' : '' }}">Fotos referenciales de los hoteles</div>
+                     juntas en lo que quedaba de página. Se resolvió entonces con
+                     page-break-before:always, que dejaba media página en blanco.
+                     T-130: se quitó el salto forzado (revisado con la alt. 106 de
+                     agencia-demo y la tabla empujada hasta el fondo de la página:
+                     no se solapa) y el título va dentro del mismo bloque que la
+                     primera tira de fotos, para que no quede solo al pie. --}}
                 @foreach ($hotelesParaPdf as $hotelPdf)
+                    @if ($loop->first)<div class="seccion-junta">
+                        <div class="seccion-titulo" style="margin-top:10px;">Fotos referenciales de los hoteles</div>@endif
                     <div class="hotel-fotos-bloque">
                         <div class="hotel-fotos-nombre">{{ $hotelPdf['nombre'] }}</div>
                         <div class="hotel-fotos-tira">
@@ -709,6 +714,7 @@
                             </div>
                         @endif
                     </div>
+                    @if ($loop->first)</div>@endif
                 @endforeach
             </div>
         @endif
@@ -982,7 +988,8 @@
 
         {{-- ══════════════════ DATOS DE PAGO ══════════════════ --}}
         @if ($cuentasBancarias->isNotEmpty())
-            <div class="seccion">
+            {{-- T-130: la tabla de pagos no se parte entre páginas. --}}
+            <div class="seccion seccion-junta">
                 <div class="seccion-titulo">Datos de pago</div>
                 <table class="pagos-table">
                     <tr>
