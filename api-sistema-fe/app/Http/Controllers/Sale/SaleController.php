@@ -412,6 +412,21 @@ class SaleController extends Controller
         app(TotalesVentaValidator::class)->validar($request->all(), (array) $request->sale_details);
     }
 
+    // T-120: toda línea existente del payload (con `id`) tiene que ser de esta venta; si no, un id
+    // ajeno modificaría la línea de otra venta. Corre ANTES de DB::beginTransaction().
+    private function validarLineasDeLaVenta(Request $request, Sale $venta): void
+    {
+        $ids = collect((array) $request->sale_details)
+            ->pluck('id')->filter()->unique()->values();
+        if ($ids->isEmpty()) {
+            return;
+        }
+        $propios = SaleDetail::where('sale_id', $venta->id)->whereIn('id', $ids)->count();
+        if ($propios !== $ids->count()) {
+            throw new HttpException(422, 'Una de las líneas enviadas no pertenece a esta venta.');
+        }
+    }
+
     // SUNAT exige identificar al comprador en boletas de más de S/ 700. En dólares se convierte con
     // el último tipo de cambio SUNAT a la fecha de hoy; si no hay ninguno cargado no se bloquea
     // (mismo criterio que TipoCambioSunatResolver: nunca frena la emisión por falta de T.C.).
@@ -1201,6 +1216,7 @@ public function update(Request $request, string $id)
     $this->validarBoletaSinDocumento($request, $serieResuelta['tipo']?->codigo);
     $this->validarPrecioDeVenta($request, $venta);
     $this->validarTotalesDeVenta($request);
+    $this->validarLineasDeLaVenta($request, $venta);
 
     $detalles_nuevos = $request->sale_details ?? [];
     $this->validarDescripcionesLinea($detalles_nuevos);
@@ -1385,7 +1401,7 @@ public function update(Request $request, string $id)
 
             if (!empty($detalle['id'])) {
                 // Ítem existente → actualizar
-                $detalle_bd = SaleDetail::find($detalle['id']);
+                $detalle_bd = SaleDetail::where('sale_id', $venta->id)->find($detalle['id']);
                 if ($detalle_bd) {
                     $detalle_bd->update($campos_detalle);
                 }

@@ -97,8 +97,8 @@ class AuthController extends Controller
                 "email" => auth('api')->user()->email,
                 "avatar" => StorageUrl::resolve(auth('api')->user()->avatar),
                 "role" => [
-                    "id" => auth('api')->user()->role->id,
-                    "name" => auth('api')->user()->role->name,
+                    "id" => auth('api')->user()->role?->id,
+                    "name" => auth('api')->user()->role?->name,
                 ],
                 "permissions" => $permissions,
                 "formato_impresion_default" => auth('api')->user()->formato_impresion_default,

@@ -132,6 +132,14 @@ class TotalesVentaValidator
         $cobro = array_filter($lineas, fn ($l) => $l['afectacion'] !== '11');
         $bruto = $this->sumar($cobro, fn ($l) => $l['subtotal']);
 
+        // T-120: el descuento global no puede ser negativo ni dejar la venta con total negativo.
+        if ($descuentoGlobal->isNegative()) {
+            throw $this->rechazo('discount_global no puede ser negativo.');
+        }
+        if ($descuentoGlobal->isGreaterThan($bruto)) {
+            throw $this->rechazo('discount_global no puede ser mayor que el subtotal de las líneas.');
+        }
+
         // Subtotal de línea neto del descuento global, prorrateado por su peso en el bruto.
         $neto = fn (array $l): BigDecimal => $bruto->isPositive()
             ? $l['subtotal']->minus($descuentoGlobal->multipliedBy($l['subtotal'])->dividedBy($bruto, 10, RoundingMode::HALF_UP))

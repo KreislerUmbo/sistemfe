@@ -8,7 +8,7 @@
 
 Cada línea: ID · qué · estado · depende de · rama o commit. El detalle está en
 `docs/tareas/T-…md` (se borra al cerrar; para una tarea hecha, el commit es la referencia).
-Próximo ID libre: **T-120**.
+Próximo ID libre: **T-122**.
 
 ## Orden de construcción (27-oct-2026)
 
@@ -44,6 +44,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Estado | Depende de | Rama / commit |
 |---|---|---|---|---|---|
+| T-121 | VEN + CAJ | Retirar `POST`/`DELETE` de `sale_payments` y `sale_details` (410): mueven dinero sin caja. Antes: confirmar en los logs de producción que nadie los usa | por hacer | — | `fix/T-121-retirar-rutas-legadas-pagos-y-lineas` |
 
 ## Por analizar
 
@@ -52,7 +53,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | Módulo | Qué | Origen |
 |---|---|---|
-| PLA | `users.role_id` tiene `default(1)` (migración `2026_07_13_090100_fix_users_add_missing_columns`) y el rol 1 es Super-Admin: un usuario creado sin `role_id` (seeder, tinker, otro flujo) sale del login como Super-Admin y la pantalla se salta todos los permisos (`isPermitedRoute`). El backend no, valida con Spatie. Visto al probar T-109 con un usuario creado por tinker. Revisar quién crea usuarios sin `role_id` y quitar el default (migración nueva) | prueba de T-109, 19-nov-2026 |
+| VEN | Pantalla de venta: el descuento global (`TotalesVenta.vue::cambiar()`) solo se limita a ≥ 0; acepta uno mayor que el subtotal, muestra «Monto a pagar» negativo y al guardar el aviso no habla del descuento («los pagos superan…» o «el anticipo no puede ser mayor…»). El backend ya lo rechaza (T-120); limitarlo al subtotal en la pantalla con un aviso claro | prueba funcional de T-120, 23-nov-2026 |
 | VEN | Pantalla de venta: la casilla de precio de solo lectura (sin `cambiar_precio_venta`) se ve igual que una editable; darle aspecto de bloqueada (fondo gris) | prueba de T-109, 19-nov-2026 |
 | VEN | `SaleController::config()` no devuelve `es_default` de `tax_configs` (`get([...])` sin esa columna): `getIgvGeneralTasa()` de `register.vue` nunca encuentra el IGV «default» y usa 18 de respaldo. Hoy coincide con la tasa real; si el IGV general cambiara, el front calcularía mal el precio sin IGV y el backend (`PrecioVentaValidator`, que sí lee `es_default`) rechazaría la venta. Arreglo: agregar `es_default` al `get()` de `config()` | T-109 (revisión del 19-nov) |
 | NOT | Línea de nota sin texto editado: el XML dice el título (`NoteDetail::descripcionParaSunat()`) y el PDF `description ?? título`. Solo difiere en líneas de adelanto (`description` la escribe `AdvanceController`); decidir cuál vale e igualarlos | revisión de T-108, 19-nov-2026 |
@@ -61,7 +62,6 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | VEN | Destino por defecto (`amazonia`/`nacional`) configurable por empresa: hoy está fijo en `amazonia` en `register.vue` | hallazgo de T-106, 19-nov-2026 |
 | VEN | `GET sales/config` devuelve todos los clientes y productos activos; la pantalla nueva busca por API y ya no los necesita. Desde T-110 `edit.vue` tampoco los usa: ya se puede recortar. `sale_details` también se manda con el objeto `product` completo | hallazgo de T-106, 19-nov-2026 |
 | CLI | Marcar un cliente como mayorista (precio menor en todas sus compras) queda con el permiso de editar clientes. Decisión del 20-nov: así por ahora; revisar si hace falta un permiso propio | revisión de T-115, 20-nov-2026 |
-| VEN | `POST`/`DELETE sale_payments` (`SalePaymentController::store()`/`destroy()`) no mueven la caja: el ingreso queda sin registrar o sin corregir hasta un `PATCH sales/{id}`. Desde T-119 el panel no los usa; confirmar que el portal e-commerce tampoco y retirarlos (o 410) | T-119, venta 41 de umbo, 21-nov-2026 |
 | POR | Revisar si el portal e-commerce usa `price_company` (desde T-115 es el «precio mayorista», no el de empresa) | hallazgo de T-115, 20-nov-2026 |
 | PLA | Recursos (manual de ayuda) a medio hacer: el listado y el manual leen `recurso.tipo`, pero la columna es `tipo_recurso` (la insignia de tipo sale vacía y el filtro `tipo` no filtra); «ver» (`/recursos/{id}`) y «editar» (`/recursos/register/{id}`) van a rutas que no existen. T-101 dejó funcionando solo el alta | T-101, 23-nov-2026 |
 | POR | Favoritos: la página carga desde T-101, pero ninguna pantalla llama a `toggleFavorito()` y viven en memoria: la lista siempre sale vacía | T-101, 23-nov-2026 |
@@ -73,8 +73,6 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | VEN | `sales` no tiene `porcentaje_retencion` y `store()` no lo guarda (sí el de detracción y el de percepción): no se sabe con qué tasa se retuvo una venta ya emitida. Migración nueva + guardarlo | hallazgo de T-114, 20-nov-2026 |
 | VEN | `tax_configs` no tiene `monto_minimo`: el mínimo de retención y percepción queda fijo en S/ 700 en la pantalla y en `TotalesVentaValidator`. Si SUNAT lo cambia, agregar la columna y leerla en los dos lados | hallazgo de T-114, 20-nov-2026 |
 | VEN | `debt`, `paid_out` y `state_payment` de la venta siguen llegando del front sin recalcular en el backend (T-114 solo validó los totales de la cabecera) | hallazgo de T-114, 20-nov-2026 |
-| VEN | Con el permiso `cambiar_precio_venta` nada impide un `discount_global` mayor que el subtotal: la venta queda con total negativo pero coherente y pasa `TotalesVentaValidator`. Validar 0 ≤ descuento ≤ subtotal | hallazgo de T-114, 20-nov-2026 |
-| VEN | `SaleController::update()` toma la línea existente con `SaleDetail::find($detalle['id'])` sin comprobar que sea de esa venta: un `id` de otra venta modificaría esa línea ajena. Validar `sale_id` | hallazgo de T-113, 19-nov-2026 |
 | POR | Revisar si los pedidos del portal e-commerce descuentan stock y, si lo hacen, que usen `StockVentaService` (lock + `controlaStock()`) | fuera de alcance de T-113, 19-nov-2026 |
 | VEN + COM | **Presentaciones y listas de precios** (unidad / caja x12 / millar con su código de barras y precio; stock en unidad base; lista mayorista por cliente con cantidad mínima). Fase A presentaciones, fase B listas. Análisis y 6 preguntas abiertas en `docs/requerimientos/retail-presentaciones-y-precios.md`. Alinear con el diseño de Compras antes de construir | Conversación con el usuario, 18-nov-2026 |
 | VEN | `CopiaDatosDelCliente::copiarDatosDelCliente()` vuelve a copiar `tipo_doc_cliente` al editar o enviar sin CDR, pero no `cod_tipo_doc_cliente` (catálogo 06, el que va al XML): si se corrige el tipo de documento del cliente antes de enviar, el PDF y el XML no coinciden. Verificar y, si es así, copiar los dos juntos | revisión de T-065, 18-nov |
@@ -111,7 +109,6 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 | AGE | Venta directa con `modo_tours='clasico'`: la línea de tour no muestra el desglose «× precio» ni la temporada (la vista previa suma con `totalTourClasico()`) | hallazgo de T-047, 05-nov-2026 |
 | AGE | Detalle de reserva: la pestaña «Servicios» cuenta 0 cuando la reserva solo tiene líneas de tour en modo nuevo, mientras la cabecera dice «N pendiente(s)». Pasa igual con reservas del cotizador (p. ej. la 30 de agencia-demo) | revisión de T-047, 05-nov-2026 |
 | PLA | Unificar el rol «Administrador» por giro (hoy «Administrador de agencia», «Administrador de créditos» y ninguno en retail; dakamu usa «Admin Empresario», hecho a mano y sin permisos de Agencia). Va después de T-081: el Propietario crea al Administrador y los demás roles | Conversación con el usuario, 03-nov-2026 |
-| PLA | `users.role_id` tiene `default(1)` (`2026_07_13_090100_fix_users_add_missing_columns.php`): un usuario creado sin `role_id` aparece como Super-Admin (id 1) en la pantalla Usuarios y en el login aunque su rol de Spatie sea otro. T-081 ya lo fija en el alta del dueño y de soporte; cualquier otro `User::create` sin `role_id` repite el problema | T-081, 03-nov-2026 |
 | PLA | Manual (`/recursos/manual`): pide `GET api/recursos/publicos`, que no existe; cae en `recursos/{id}` y responde 500 («sintaxis no válida para tipo bigint: publicos») | T-081, 03-nov-2026 |
 | PLA | agencia-demo (local): sobra el Super-Admin `test.perfil.agencia@sandbox.local` de pruebas viejas; borrarlo o pasarlo a otro rol | T-081, 03-nov-2026 |
 | PLA | **Para después de las olas (cuando se cierre el proyecto actual):** archivos fuera del disco del sistema. Hoy `public` (fotos, logos, PDF, XML) y `private` (certificados) son discos locales en `storage/tenant{id}/` (03-nov: 74 MB, 29 GB libres). **Camino de fondo:** almacenamiento S3 (preferido OVH Object Storage, misma región; o Backblaze B2, ya en uso para respaldos): instalar `league/flysystem-aws-s3-v3` (no con `composer install` local, ver memoria de Composer con PHP 8.2), disco `public` como S3 y activar `'s3'` en `config/tenancy.php` → `filesystem.disks`, adaptar `StorageUrl::resolve()` (URL del bucket o firmada), revisar los 11 usos de ruta local (`->path()`/`storage_path()`: DomPDF vía `resolveParaPdf()`, `MembreteAgenciaPdfService`, `PdfFontService`, `ImagenRecorteService`, `TenantBackupService`/`TenantRestoreService`), dejar `private` (certificados SUNAT, Greenter) en disco local y copiar lo existente con `rclone`. Videos: subida directa al bucket con URL firmada, sin pasar por PHP. **Salida de emergencia** si el disco se llena antes: disco adicional OVH montado y `storage/` movido con enlace simbólico (sin cambiar código) | Conversación con el usuario, 03-nov-2026 |
@@ -244,6 +241,7 @@ pendientes automáticos (11f), tras la pausa de prueba de la fase 2.
 
 | ID | Módulo | Qué | Commit |
 |---|---|---|---|
+| T-120 | VEN + PLA | Blindaje de ventas y usuarios: `update()` rechaza una línea de otra venta, descuento global negativo o mayor al subtotal da 422, `role_id` obligatorio al crear un usuario y sin `default(1)` (Super-Admin) — login sin rol ya no da 500. La parte D (rutas `sale_payments`/`sale_details` sin caja) pasó a T-121. Recorrido 87 | ver merge de `fix/T-120-blindaje-ventas-y-usuarios` |
 | T-083 | TRA | Inventario de columnas y tablas sin uso (comando de solo lectura `inventario:columnas-sin-uso`; producción 23-nov: todo en 0) y tanda 1 borrada con salvaguarda: ubigeo de `proveedores`, `salidas_mayorista.fecha_retorno` y el check-in viejo de `reserva_item_pasajero`. Se dejan: reembolso por cancelación (se va a construir), Compras y recordatorios. Recorrido 86 | ver merge de `chore/T-083-tanda1-columnas-sin-uso` |
 | T-101 | TRA | `npm run type-check` en 0 errores (eran 47): tipos corregidos sin cambiar comportamiento, `fake-backend.ts` borrado, `stores/ui.js` → `ui.ts`. Las pantallas que estaban rotas, arregladas con el usuario: Nuevo recurso (sistema_id, tipo_recurso), Favoritos, total anual de Sistemas, ruta de Mis direcciones (redirige al panel). Recorrido 85 | ver merge de `refactor/T-101-type-check-en-cero` (`038e0b72`) |
 | T-029 | AGE | Tour clásico desde plantilla: el guía, los servicios con tarifa y el ajuste de redondeo nacen con `tip_afe_igv`/`destino_tributario` (default de la agencia para el guía; el de los servicios, si coinciden, para el ajuste), y el costo del compartido no cuenta infantes (E2). Comando de solo lectura `agencia-viajes:diagnosticar-items-sin-igv` (agencia-demo: 0 ítems). Recorrido 84 | ver merge de `fix/T-029-tributario-tour-clasico` (`cccc3266`) |
