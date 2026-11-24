@@ -6,12 +6,7 @@ export type SaleConfig = {
     today: string,
     n_transaction: string,
     correlativo: string,
-    clients: {
-        data: Client[],
-    }
-    products: {
-        data: Product[]
-    }
+    // T-127: sales/config ya no devuelve clientes ni productos (se buscan por API).
     product_notes?: {
         data: Product[]
     }
