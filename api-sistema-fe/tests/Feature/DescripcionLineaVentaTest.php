@@ -208,6 +208,35 @@ class DescripcionLineaVentaTest extends CreditosTestCase
         $this->assertSame('Antivirus ESET NOD32 1 PC 1 año', $nota->note_details->first()->descripcionParaSunat());
     }
 
+    // T-125 — línea de adelanto (con `description`, sin texto editado): XML y PDF dicen lo mismo
+    public function test_t125_linea_con_description_dice_lo_mismo_en_xml_y_pdf(): void
+    {
+        $this->emisor();
+        $venta = $this->emitir($this->payload($this->empresa(), [], ['tipo_comprobante_codigo' => '01']));
+        Sale::where('id', $venta->id)->update(['correlativo' => 1, 'n_operacion' => 'F001-00000001', 'xml' => '<x/>', 'cdr' => 'cdr']);
+
+        $respuesta = app(NotaElectronicaController::class)->store(new Request([
+            'sale_id' => $venta->id, 'tipo_doc' => '07', 'tipo_afectacion' => 'total',
+            'cod_motivo' => '01', 'des_motivo' => 'Anulación de la operación',
+        ]));
+        $nota = Note::with('note_details.product')->find($respuesta->getData(true)['note']['id']);
+        $nota->note_details->first()->update(['description' => 'Adelanto T-125 según F001-9']);
+        $nota = Note::with('note_details.product')->find($nota->id);
+
+        $xml = app(GreenterService::class)->getDetallesComprobante($nota->note_details);
+        $this->assertSame('Adelanto T-125 según F001-9', $xml[0]->getDescripcion());
+
+        foreach (['nota_a4', 'nota_ticket80mm'] as $vista) {
+            $html = view('pdf.' . $vista, [
+                'nota' => $nota,
+                'empresa' => Company::first() ?? new Company(['razon_social' => 'Empresa Test', 'ruc' => '20000000001']),
+                'qr' => '', 'logo' => null,
+            ])->render();
+            $this->assertStringContainsString('Adelanto T-125 según F001-9', $html, $vista);
+            $this->assertStringNotContainsString('Antivirus ESET NOD32', $html, $vista);
+        }
+    }
+
     // CA4 — más de 500 caracteres → 422, en store y en update, sin dejar nada a medias
     public function test_ca4_mas_de_500_caracteres_da_422_en_store_y_update(): void
     {

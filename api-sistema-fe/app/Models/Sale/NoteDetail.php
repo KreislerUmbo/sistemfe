@@ -54,11 +54,20 @@ class NoteDetail extends Model
         "descripcion_linea",
     ];
 
-    // Lo que dice la línea en el XML de la nota. GreenterService::getDetallesComprobante()
-    // llama a este método igual que en SaleDetail (note_details expone los mismos nombres).
+    // Lo que dice la línea en el XML de la nota **y en su PDF** (T-125: no pueden diferir).
+    // GreenterService::getDetallesComprobante() llama a este método igual que en SaleDetail.
+    // Orden: texto editado → description (la escribe AdvanceController en líneas de adelanto)
+    // → título del producto.
     public function descripcionParaSunat(): string
     {
-        return $this->descripcionLineaLimpia() ?? (string) ($this->product?->title ?? '');
+        $propia = $this->descripcionLineaLimpia();
+        if ($propia !== null) {
+            return $propia;
+        }
+
+        $description = trim((string) $this->description);
+
+        return $description !== '' ? $description : (string) ($this->product?->title ?? '');
     }
 
     // ── Relaciones ───────────────────────────────────────────────────────

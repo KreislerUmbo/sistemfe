@@ -131,7 +131,7 @@
     <table class="items">
         @foreach ($nota->note_details as $detalle)
             <tr>
-                <td class="desc" colspan="2">@if ($detalle->tieneDescripcionEditada()){!! nl2br(e($detalle->descripcionLineaLimpia())) !!}@else{{ $detalle->description ?? $detalle->product->title }}@endif</td>
+                <td class="desc" colspan="2">{!! nl2br(e($detalle->descripcionParaSunat())) !!}</td>
             </tr>
             <tr>
                 <td>
