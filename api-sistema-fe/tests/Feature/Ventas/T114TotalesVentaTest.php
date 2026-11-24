@@ -209,7 +209,10 @@ final class T114TotalesVentaTest extends CreditosTestCase
         // base 1180 > 700 → retención 3 % = 35,40 y total 1144,60
         $payload = $this->venta([$this->linea($this->producto(), '10', 10, 100)], ['retencion_igv' => 1]);
         $this->assertEquals(35.4, $payload['monto_retencion']);
-        $this->assertSame(200, $this->guardar($payload)['code']);
+        $r = $this->guardar($payload);
+        $this->assertSame(200, $r['code']);
+        // T-124: la venta guarda la tasa con la que se retuvo.
+        $this->assertEquals(0.03, Sale::latest('id')->first()->porcentaje_retencion);
 
         $payload['monto_retencion'] = 50.0;
         $payload['total'] = 1130.0;
@@ -221,6 +224,8 @@ final class T114TotalesVentaTest extends CreditosTestCase
         $payload = $this->venta([$this->linea($this->producto(), '10')], ['retencion_igv' => 1]); // base 118 < 700
         $this->assertEquals(0.0, $payload['monto_retencion']);
         $this->assertSame(200, $this->guardar($payload)['code']);
+        // Sin retención no se guarda tasa (T-124).
+        $this->assertEquals(0, Sale::latest('id')->first()->porcentaje_retencion);
     }
 
     public function test_ca1_detraccion_pasa_con_el_porcentaje_y_el_minimo_del_codigo(): void
