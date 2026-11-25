@@ -499,17 +499,9 @@ class TenantProvisioningService
      *   chequeado — cualquiera de las dos rutas alcanza).
      * - reserva_anticipos (Sesión 8b) tampoco necesita chequeo propio: reserva_id es NOT
      *   NULL, misma cadena que reserva de arriba.
-     * - cronograma_pago_proveedor (Sesión 8b) tampoco necesita chequeo propio pese a tener
-     *   AMBAS FK nullable (proveedor_id/opcion_mayorista_id) — a diferencia de
-     *   opciones_hotel (que sí lo necesitó), acá la regla de negocio "uno de los dos, no
-     *   ambos" (documentada, no CHECK constraint — mismo criterio que opciones_hotel/
-     *   paquete_plantilla_items) garantiza que toda fila real tiene al menos una de las
-     *   dos poblada, y ambos caminos llegan a algo ya cubierto: proveedor_id → Proveedor
-     *   directo; opcion_mayorista_id → OpcionMayorista, cuyo propio proveedor_id es NOT
-     *   NULL → Proveedor igual. Límite conocido y aceptado (no corregido): una fila
-     *   malformada con AMBAS columnas null (viola la regla de negocio, la BD no lo
-     *   impide) evadiría este chequeo — mismo tipo de riesgo residual que el proyecto ya
-     *   acepta en otras reglas "uno de los dos" no modeladas como CHECK constraint.
+     * - Las tablas viejas de pagos y cronograma a proveedor (sesiones 8b y 9b): retiradas en T-141
+     *   (nunca se usaron; Compras las reemplaza). Cuando existan las tablas nuevas de
+     *   pagos a proveedor, decidir acá si necesitan chequeo propio.
      * - reglas_cancelacion (Sesión 8b) SÍ necesita chequeo propio: proveedor_id es
      *   nullable (la regla general de la agencia, carga inicial vía
      *   ReglaCancelacionSeeder, siempre tiene proveedor_id=null) y no hay ninguna otra FK
@@ -521,10 +513,6 @@ class TenantProvisioningService
      *   NULL, misma cadena que reserva (arriba) → Client::count() > 0 — alcanza sin
      *   importar sale_detail_id (que además apunta a `sale_details`, tabla CORE ya fuera
      *   del alcance de este método).
-     * - pago_proveedor (Sesión 9b) tampoco necesita chequeo propio, mismo razonamiento
-     *   exacto que cronograma_pago_proveedor (arriba): ambas FK nullable, pero la regla
-     *   "uno de los dos" garantiza un camino real hasta Proveedor (directo o vía
-     *   OpcionMayorista.proveedor_id, NOT NULL). Mismo límite residual aceptado.
      * - pasajeros_catalogo (Sesión 9c) SÍ necesita chequeo propio: cliente_id es su única
      *   FK y es nullable (un perfil de pasajero reutilizable no siempre corresponde a un
      *   Client con cuenta propia) — sin ningún otro ancestro, es una raíz real igual que

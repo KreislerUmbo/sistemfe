@@ -33,9 +33,6 @@ class InventarioColumnasSinUso extends Command
         // No es para borrar: es la tabla nueva del check-in (T-041). Se cuenta para comparar con las
         // columnas viejas de arriba antes de quitarlas.
         ['reserva_item_checkins', null],
-        ['pago_proveedor', 'referencia_documento'],
-        ['pago_proveedor', null],
-        ['cronograma_pago_proveedor', null],
         ['reglas_cancelacion', null],
         ['recordatorios', null],
         ['tipos_recordatorio', null],
