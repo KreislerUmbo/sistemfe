@@ -1166,6 +1166,8 @@ export type SalidaVehiculo = {
 export type SalidasOperativasResponse = {
   total: number;
   salidas: SalidaOperativa[];
+  /** T-131: salidas en curso con la fecha ya pasada, sin importar el filtro. */
+  vencidas: number;
 };
 
 export type ReservaItemPasajero = {

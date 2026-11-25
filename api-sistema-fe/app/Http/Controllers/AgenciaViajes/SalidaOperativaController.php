@@ -64,6 +64,12 @@ class SalidaOperativaController extends Controller
     {
         $query = SalidaOperativa::with(self::RELACIONES);
 
+        // T-131: «Ver vencidas» lista solo las que siguen en curso con la fecha ya pasada;
+        // reemplaza los filtros de fecha y estado.
+        if ($request->boolean('vencidas')) {
+            $query->vencidas();
+        }
+
         if ($request->filled('fecha_desde')) {
             $query->where('fecha', '>=', $request->get('fecha_desde'));
         }
@@ -81,6 +87,8 @@ class SalidaOperativaController extends Controller
         return response()->json([
             'total' => $salidas->total(),
             'salidas' => $salidas->items(),
+            // T-131: cuántas hay sin cerrar en total, sin importar el filtro (para el aviso).
+            'vencidas' => SalidaOperativa::vencidas()->count(),
         ]);
     }
 
@@ -169,7 +177,9 @@ class SalidaOperativaController extends Controller
 
         $nuevo = $request->get('estado');
         $permitidos = [
-            SalidaOperativa::ESTADO_PROGRAMADA => [SalidaOperativa::ESTADO_CONFIRMADA],
+            // T-131: una salida vencida que nunca se confirmó también se cierra
+            // directo (la fecha futura se rechaza más abajo).
+            SalidaOperativa::ESTADO_PROGRAMADA => [SalidaOperativa::ESTADO_CONFIRMADA, SalidaOperativa::ESTADO_REALIZADA],
             SalidaOperativa::ESTADO_CONFIRMADA => [SalidaOperativa::ESTADO_PROGRAMADA, SalidaOperativa::ESTADO_REALIZADA],
             SalidaOperativa::ESTADO_REALIZADA => [SalidaOperativa::ESTADO_CONFIRMADA],
             // T-042 (H35): "Reactivar salida". Solo a mano, nunca sola.

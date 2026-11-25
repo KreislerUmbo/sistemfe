@@ -45,8 +45,25 @@ Pantalla: `/agencia-viajes/salidas` en agencia-demo (las 7 salidas de noviembre)
 
 ## Resultado
 - **Commits:**
-- **Tests:**
+- **Qué se hizo:**
+  - Backend: `cambiarEstado()` permite programada → realizada (la fecha futura sigue dando 422);
+    scope `SalidaOperativa::vencidas()` (en curso y `fecha < HoraPeru::hoyTexto()`); `index()`
+    acepta `vencidas=1` (lista solo esas) y devuelve siempre `vencidas` (el total, sin importar el filtro).
+  - Tablero: fila en rojo y marca «Vencida» (también en el detalle), botón «Marcar realizada»;
+    aviso de una línea «Hay N salidas con la fecha pasada…» con «Ver vencidas», que bloquea fechas
+    y estado hasta «Volver al tablero». `recargarDetalle()` usa los mismos filtros que el listado.
+- **Tests:** `php artisan test --filter="Fila13Fase2aSalidasTest|SalidaOperativa"` → 30 pasan
+  (nuevos: vencida programada → realizada directo y cancelada no; el listado cuenta y filtra las
+  vencidas sin incluir las de hoy ni las realizadas). `type-check` y `build` en verde.
+  Suite completa (25-nov): 2463 pasan y 1 falla, `T044AvisoGuiaChoferTest::el_listado_lee_cada_fecha_una_sola_vez`,
+  que contaba también el `count(*)` de vencidas (una consulta por pedido, no por fila). Se ajustó su
+  filtro para no contar `count(*)`; los 44 tests de salidas y T-044 pasan.
+- **Prueba en pantalla (25-nov, Playwright, agencia-demo):** el tablero arranca en «hoy» con 0 salidas
+  y el aviso «Hay 7 salidas con la fecha pasada…»; «Ver vencidas» lista las 7 (05/11 a 16/11) en rojo con
+  «Vencida» y bloquea fechas y estado; «Marcar realizada» en la del 16/11 (id 54) la pasa a Realizada,
+  quedan 6 y no hay movimientos de caja; «Volver al tablero» restablece el filtro. La salida 54 se
+  devolvió a Programada con tinker.
 - **Desviaciones de la tarea y por qué:**
-
-## Hallazgos fuera de alcance
--
+  - Se tomó la opción (c) recomendada sin consultar. Sin cambios de BD.
+  - El aviso «Ver vencidas» se agregó en la revisión (25-nov, decisión del usuario): el filtro
+    del tablero arranca en «hoy» y sin él las vencidas no se veían (CA1).

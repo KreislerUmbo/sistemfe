@@ -2,6 +2,7 @@
 
 namespace App\Models\AgenciaViajes;
 
+use App\Services\HoraPeru;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 
@@ -91,6 +92,12 @@ class SalidaOperativa extends Model
     public function scopeEnCurso($query)
     {
         return $query->whereIn('estado', self::ESTADOS_EN_CURSO);
+    }
+
+    // T-131: en curso y con la fecha ya pasada (hoy en Perú todavía no vence).
+    public function scopeVencidas($query)
+    {
+        return $query->enCurso()->where('fecha', '<', HoraPeru::hoyTexto());
     }
 
     // Bug real (auditoría 2026-09-22): los 3 puntos donde un reserva_item
