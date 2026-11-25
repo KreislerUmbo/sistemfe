@@ -29,9 +29,12 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('proveedores', function (Blueprint $table) {
-            $table->boolean('es_referencial')->default(false)->after('estado');
-        });
+        // T-132: en una agencia nueva core/ ya creó proveedores con esta columna.
+        if (! Schema::hasColumn('proveedores', 'es_referencial')) {
+            Schema::table('proveedores', function (Blueprint $table) {
+                $table->boolean('es_referencial')->default(false)->after('estado');
+            });
+        }
 
         Schema::table('guias', function (Blueprint $table) {
             $table->boolean('es_referencial')->default(false)->after('activo');

@@ -49,10 +49,41 @@ Respaldo de producción antes de desplegar (ya hubo un error real con migracione
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
-- **Diagnóstico de producción:**
+- **Commits:** `feat(compras): tabla proveedores al sistema base (T-132)` en la rama. Sin unir a `main` ni desplegar.
+- **Qué se hizo:** migración `tenant/core/2026_11_24_200000_create_proveedores_table_core.php`
+  (crea la tabla solo si no existe, con el esquema vigente: sin ubigeo, con `es_referencial`,
+  `descripcion` y `fotos`; su `down()` no hace nada si existe `proveedor_servicios`) y guardas
+  `hasTable`/`hasColumn` en cuatro migraciones de Agencia.
+- **Otras tablas al base:** ninguna. `proveedores` no tiene claves foráneas; `proveedor_tipos` es
+  central; `proveedor_tipos_config`, servicios, tarifas y hotel se quedan en Agencia.
+- **Tests:** `tests/Feature/ProveedoresTablaBaseTest.php`, un test por criterio.
+  - CA1: tienda y créditos recién provisionados tienen la tabla.
+  - CA2: agencia nueva provisiona sin error; columnas e índices iguales a los de una agencia
+    anterior (tabla creada y alterada por el vertical, con ubigeo y T-083 después).
+  - CA3: `tenants:migrate-verticales` dos veces, en el test y en los 7 tenants locales
+    (`agencia-demo` conserva sus 41 proveedores; la segunda corrida: «Nothing to migrate»).
+  - CA4: `down()` conserva la tabla en agencia y la borra en tienda.
+  - Suite completa: 2462 tests en verde (9791 aserciones) contra PostgreSQL, el 24-nov-2026.
+  - El provisioning se reproduce con sus dos pasos de esquema (`Tenant::create()` +
+    `migrarVertical()`), sin los seeders de roles y menú.
+- **Diagnóstico de producción (24-nov-2026, solo lectura):**
+
+  | Tenant | `proveedores` | sin documento | `suppliers` | Caja a proveedor |
+  |---|---|---|---|---|
+  | dakamu (agencia) | 9 | 3 (1 referencial) | 0 | 0 |
+  | credishirley (créditos) | no existe la tabla | — | 0 | 0 |
+  | market (retail) | no existe la tabla | — | 0 | 0 |
+
+  dakamu: 0 documentos repetidos, 0 sin tipo. Para T-133 no hay datos que remapear.
 - **Desviaciones de la tarea y por qué:**
+  - Se tocó una cuarta migración que la tarea no nombraba, `2026_11_23_100000_quitar_columnas_sin_uso_tanda1`
+    (T-083): consulta y borra las columnas de ubigeo, que una agencia nueva ya no tiene.
+  - El diagnóstico incluyó también `market`.
+- **Para el despliegue:** respaldo antes. En dakamu la migración de T-083 **todavía no está
+  desplegada** (aún tiene ubigeo), así que correrá en el mismo deploy: primero `core/` (en dakamu
+  no hace nada) y después T-083. Revisar la salida de `tenants:migrate-verticales`.
 
 ## Hallazgos fuera de alcance
--
+- `ProveedorFiltroDestinoTest::test_sin_filtro_devuelve_todos` falló una vez en la primera corrida
+  completa (contó 3 proveedores en vez de 2) y pasó aislado y en la segunda corrida. Cuenta todas
+  las filas de la base de tests compartida; no se encontró cuál sobraba. Posible intermitente.

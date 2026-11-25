@@ -27,6 +27,11 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // T-132: desde que la tabla es del sistema base, core/ ya pudo haberla creado.
+        if (Schema::hasTable('proveedores')) {
+            return;
+        }
+
         Schema::create('proveedores', function (Blueprint $table) {
             $table->id();
             $table->string('codigo', 20)->unique()->nullable();
