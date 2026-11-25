@@ -91,8 +91,9 @@ transacción (crear/actualizar/eliminar): no romper la atomicidad.
   `ReservaVenta::itemIdsFacturados()`/`pasajeroIdsFacturados()`/`itemIdsDe()`/`pasajeroIdsDe()`/
   `liberarPorNotaDeCredito()` — no reescribirlo a mano. Quitar pasajero: `QuitarPasajeroReservaService`.
 - Listados comerciales: `Cotizacion::delCotizador()` (excluye `origen='venta_directa'`).
-- Compras: **no** construir sobre `cronograma_pago_proveedor`/`pago_proveedor` ni ampliar
-  `suppliers`: se reemplazan.
+- Proveedores: un solo catálogo, `proveedores`, del sistema base (`App\Models\Proveedor`;
+  `AgenciaViajes\Proveedor` lo extiende con lo turístico). Turístico/todos solo con
+  `Proveedor::scopeDeAlcance()`. `suppliers` y los pagos a proveedor viejos ya no existen (T-133, T-141).
 
 **Créditos.** No fijar `tasa_maxima` en credishirley hasta corregir la validación por unidades
 (TEA), ver `00-reglas-y-modelo.md` §5.
