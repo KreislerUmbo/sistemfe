@@ -37,7 +37,7 @@ class LimpiarOperacionPrueba
         // Cotizador
         'cotizacion_envios', 'cotizacion_pasaje_aereo', 'alternativa_items',
         'opciones_hotel_tarifas', 'opciones_hotel', 'opcion_mayorista_opcionales',
-        'opcion_mayorista_tours', 'pago_proveedor', 'cronograma_pago_proveedor',
+        'opcion_mayorista_tours',
         'opcion_mayorista', 'alternativa_destinos', 'alternativas', 'cotizacion_pasajeros',
         'cotizaciones',
         // Otros
