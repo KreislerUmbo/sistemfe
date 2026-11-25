@@ -103,7 +103,10 @@ lista Empresa nace de `price_company`. Un negocio que no usa presentaciones no v
 - **Cotizaciones comerciales** (convertir en venta).
 - **Portal e-commerce**: hoy lee `price_general`; debe seguir funcionando.
 - **Compras** (diseñado, sin construir; `plan-tours-venta-simple-costo-real.md` §3.7-§3.8): debe
-  comprar por presentación («10 cajas») y sumar en unidades. Alinear antes de construir A.
+  comprar por presentación («10 cajas») y sumar en unidades. **Alineado el 25-nov (T-151,
+  §3.7f del plan):** las líneas de compra (T-154) nacen con `presentacion_id` y copia del `factor`,
+  y el stock pasa por un solo servicio con kárdex (T-153). La fase A debe usar ese servicio y su
+  kárdex en vez de crear otro.
 - **Importación de productos** desde Excel.
 
 ## 6. Respuestas del usuario (18-nov-2026)

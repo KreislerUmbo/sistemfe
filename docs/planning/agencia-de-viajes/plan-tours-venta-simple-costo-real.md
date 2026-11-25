@@ -525,6 +525,54 @@ Advance (existente)  cada pago real, con su boleta de anticipo
 - **(a)** Cliente que se retira; sus pagos no son reembolsables y cada uno ya tiene su boleta de anticipo. ¿Basta con esas boletas, o hay que convertir lo retenido en una **penalidad** (NC de los anticipos + comprobante nuevo, posiblemente con otro tratamiento de IGV)? El estado "retenido por retiro" hace falta en los dos casos.
 - **(b)** Alternativa de **recibo digital interno y boleta al cerrar el file**: un anticipo cobrado normalmente obliga a emitir el comprobante al cobrar. **Por defecto, boleta de anticipo por cuota** (lo que indicó el contador); el recibo interno solo se construye si él lo confirma por escrito.
 
+### 3.7f Compras en retail: stock, costo y kárdex (T-151, decidido 25-nov-2026)
+
+El diseño de Compras nació en Agencia (servicios: transporte, almuerzo, guía). Una tienda
+compra **mercadería**, y hoy el stock solo sube editando la ficha del producto, sin historial, y
+`products` no tiene costo. Decisiones del usuario (25-nov):
+
+1. **Líneas de producto opcionales en la compra.** Una compra puede llevar líneas (producto,
+   cantidad, costo); **si las lleva, suman stock**. Sin líneas es solo montos (luz, alquiler,
+   flete, y todo lo de Agencia). Las líneas no reemplazan los totales del comprobante (base, IGV,
+   total): la suma de las líneas tiene que cuadrar con la base del comprobante, o se avisa.
+2. **Costo promedio ponderado** en el producto. Tenía 10 a S/ 5 y entran 10 a S/ 6 → queda en
+   S/ 5.50. El costo de una línea es el **valor sin IGV** cuando el IGV va a crédito fiscal; si
+   no se recupera (empresa sin crédito fiscal, compra exonerada), con IGV. Es la misma regla de
+   «qué monto es el costo» de §3.7 (pendiente de P13 en los casos mixtos). Si el stock era cero o
+   negativo antes de la compra, el costo nuevo es el de la compra.
+3. **Kárdex desde el inicio** (`stock_movimientos`): cada entrada y salida de stock queda
+   registrada con tipo (compra, venta, edición de venta, eliminación de venta, NC de venta,
+   anulación de compra, ajuste manual), producto, cantidad, costo unitario, saldo después,
+   documento de origen, usuario y fecha (UTC). **Ningún movimiento de stock es silencioso**, igual
+   que la caja. El servicio de stock de ventas (`StockVentaService`, T-113) pasa a ser **el único
+   servicio de stock** y es quien escribe el kárdex; nadie más hace `increment`/`decrement`.
+   Cambiar el stock desde la ficha del producto deja de ser una edición libre: es un **ajuste**
+   con motivo, que pasa por el mismo servicio.
+4. **Orden de construcción:** T-135 sale como está (solo montos), para que Agencia no espere.
+   Después: **T-153** (kárdex y servicio único de stock, no depende de Compras) y **T-154**
+   (líneas de producto en la compra, con stock y costo promedio).
+
+**Reglas de las líneas (T-154):**
+- **Presentaciones** (`docs/requerimientos/retail-presentaciones-y-precios.md`): la línea nace con
+  `presentacion_id` (vacío hasta que existan) y **una copia del factor** (1 por defecto). Suma al
+  stock `cantidad × factor` en la unidad base, y el costo unitario de la unidad base es
+  `costo de la línea ÷ (cantidad × factor)`. Así, cuando lleguen las presentaciones, comprar
+  «10 cajas x12» no pide migrar nada.
+- **Anular una compra con líneas** resta lo que sumó y recalcula el promedio quitando esa
+  entrada. Si ya no alcanza el stock (se vendió parte), **no se anula**: se corrige con una nota
+  de crédito del proveedor (devolución) o con un ajuste; el sistema lo explica en el mensaje.
+- **Nota de crédito de compra (07) con líneas** = devolución al proveedor: resta stock al costo
+  promedio vigente. Sin líneas, solo montos.
+- **Producto que no controla stock** (`Product::controlaStock()` en falso: servicios, «venta sin
+  stock») puede ir en una línea, pero no mueve stock ni costo.
+- **Concurrencia:** las líneas usan el mismo bloqueo por producto que las ventas
+  (`lockForUpdate`, orden por id), dentro de la transacción de la compra.
+
+**Fuera de esta decisión** (anotado en «Por analizar»): guardar el costo en cada línea de venta
+para la ganancia por venta en retail; la valorización del inventario como reporte para el
+contador; y si el kárdex debe tener el formato del Registro de Inventario Permanente Valorizado
+de SUNAT (solo obligatorio por nivel de ingresos).
+
 ### 3.8 Registros para el contador (N10)
 
 Por periodo (mes), con exportación a Excel y al formato que pide SUNAT:
