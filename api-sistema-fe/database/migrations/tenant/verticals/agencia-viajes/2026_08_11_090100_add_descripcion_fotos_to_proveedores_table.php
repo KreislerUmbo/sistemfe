@@ -14,6 +14,11 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // T-132: en una agencia nueva core/ ya creó proveedores con estas columnas.
+        if (Schema::hasColumn('proveedores', 'descripcion')) {
+            return;
+        }
+
         Schema::table('proveedores', function (Blueprint $table) {
             $table->text('descripcion')->nullable()->after('nombre_comercial');
             $table->json('fotos')->nullable()->after('logo');

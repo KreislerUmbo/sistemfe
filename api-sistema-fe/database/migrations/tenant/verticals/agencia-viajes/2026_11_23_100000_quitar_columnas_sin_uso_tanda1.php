@@ -24,9 +24,13 @@ return new class extends Migration
     {
         $this->verificarSinDatos();
 
-        Schema::table('proveedores', function (Blueprint $table) {
-            $table->dropColumn(self::UBIGEO);
-        });
+        // T-132: en una agencia nueva core/ creó proveedores ya sin las columnas de ubigeo.
+        $ubigeo = $this->ubigeoPresente();
+        if ($ubigeo !== []) {
+            Schema::table('proveedores', function (Blueprint $table) use ($ubigeo) {
+                $table->dropColumn($ubigeo);
+            });
+        }
         Schema::table('salidas_mayorista', function (Blueprint $table) {
             $table->dropColumn('fecha_retorno');
         });
@@ -37,8 +41,9 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::table('proveedores', function (Blueprint $table) {
-            foreach (self::UBIGEO as $columna) {
+        $faltantes = array_values(array_diff(self::UBIGEO, $this->ubigeoPresente()));
+        Schema::table('proveedores', function (Blueprint $table) use ($faltantes) {
+            foreach ($faltantes as $columna) {
                 $table->unsignedBigInteger($columna)->nullable();
             }
         });
@@ -51,11 +56,16 @@ return new class extends Migration
         });
     }
 
+    private function ubigeoPresente(): array
+    {
+        return array_values(array_filter(self::UBIGEO, fn ($columna) => Schema::hasColumn('proveedores', $columna)));
+    }
+
     private function verificarSinDatos(): void
     {
         $conDatos = [];
 
-        foreach (self::UBIGEO as $columna) {
+        foreach ($this->ubigeoPresente() as $columna) {
             if (DB::table('proveedores')->whereNotNull($columna)->where($columna, '!=', 0)->exists()) {
                 $conDatos[] = "proveedores.$columna";
             }

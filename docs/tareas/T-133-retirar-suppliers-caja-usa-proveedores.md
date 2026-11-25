@@ -13,6 +13,11 @@ Hay dos catálogos que no se conocen: `suppliers` (Caja) y `proveedores` (Agenci
 de contraparte de Caja no encuentra a los proveedores de Agencia. Compras necesita que una
 factura apunte a **un** proveedor.
 
+Desde T-132 la tabla `proveedores` existe en todos los giros (`tenant/core/`). Diagnóstico de
+producción del 24-nov-2026 (solo lectura): 0 `suppliers` y 0 movimientos de Caja con
+`counterparty_type='proveedor'` en dakamu, credishirley y market. No hay datos que remapear hoy,
+pero la migración igual debe ser segura si aparecen.
+
 ## Alcance
 - `CashMovementController`: el buscador de contraparte y la validación `counterparty_type='proveedor'` pasan a leer `proveedores` (todos, turísticos y generales).
 - Migración que **remapea** `cash_movements.counterparty_id` de `suppliers` a `proveedores` (unión por documento; si no hay coincidencia, crear el proveedor desde `suppliers`). Los movimientos ya guardan copia del nombre y documento: no se pierde nada.
