@@ -66,6 +66,7 @@ php artisan tenants:migrate-verticales
   nada; CA3 sin referencias en `app/` salvo `Recordatorio`). 20 tests relacionados pasan
   (limpieza de operación, migrate-verticales, provisioning, T-132). Migración aplicada a
   `sistemafe_test_migrations` (por archivo) y a agencia-demo con `tenants:migrate-verticales`.
+  Suite completa (25-nov): 2467 pasan (9816 aserciones).
 - **Desviaciones de la tarea y por qué:** ninguna.
 
 ## Hallazgos fuera de alcance
