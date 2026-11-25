@@ -15,15 +15,15 @@
                 <div class="row g-2 align-items-end">
                     <div class="col-6 col-md-3">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Desde</label>
-                        <CampoFecha v-model="fechaDesde" @update:model-value="buscar" />
+                        <CampoFecha v-model="fechaDesde" :disabled="soloVencidas" @update:model-value="buscar" />
                     </div>
                     <div class="col-6 col-md-3">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Hasta</label>
-                        <CampoFecha v-model="fechaHasta" @update:model-value="buscar" />
+                        <CampoFecha v-model="fechaHasta" :disabled="soloVencidas" @update:model-value="buscar" />
                     </div>
                     <div class="col-6 col-md-3">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Estado</label>
-                        <select class="form-select form-select-sm" v-model="estado" @change="buscar">
+                        <select class="form-select form-select-sm" v-model="estado" :disabled="soloVencidas" @change="buscar">
                             <option value="">Todos</option>
                             <option v-for="(etiqueta, valor) in ETIQUETA_ESTADO" :key="valor" :value="valor">{{ etiqueta }}</option>
                         </select>
@@ -35,6 +35,20 @@
                     </div>
                 </div>
             </div>
+        </div>
+
+        <!-- T-131: las vencidas quedan antes de «hoy», fuera del filtro por defecto. -->
+        <div v-if="vencidas > 0 || soloVencidas" class="alert alert-warning d-flex align-items-center justify-content-between flex-wrap gap-2 py-2 small mb-3">
+            <span v-if="soloVencidas">
+                <i class="fas fa-clock me-1"></i>Mostrando solo las salidas vencidas sin cerrar.
+            </span>
+            <span v-else>
+                <i class="fas fa-clock me-1"></i>
+                {{ vencidas === 1 ? 'Hay 1 salida' : `Hay ${vencidas} salidas` }} con la fecha pasada que
+                {{ vencidas === 1 ? 'sigue' : 'siguen' }} Programada o Confirmada: confirma si se realizaron.
+            </span>
+            <button v-if="soloVencidas" class="btn btn-sm btn-outline-secondary" @click="reset">Volver al tablero</button>
+            <button v-else class="btn btn-sm btn-warning" @click="verVencidas">Ver vencidas</button>
         </div>
 
         <div class="card border-0 shadow-sm">
@@ -65,7 +79,7 @@
                                     Sin salidas registradas en este rango.
                                 </td>
                             </tr>
-                            <tr v-for="s in salidas" :key="s.id" :class="{ 'table-warning': faltaGuia(s) }">
+                            <tr v-for="s in salidas" :key="s.id" :class="{ 'table-warning': faltaGuia(s) && !vencida(s), 'table-danger': vencida(s) }">
                                 <td class="ps-3">
                                     <div class="fw-semibold">{{ formatFecha(s.fecha) }}</div>
                                     <small class="text-muted" v-if="s.hora">{{ s.hora }}</small>
@@ -114,6 +128,9 @@
                                 <td class="text-center">{{ s.total_reservas ?? 0 }}</td>
                                 <td class="text-center">
                                     <span class="badge" :class="CLASE_ESTADO[s.estado]">{{ ETIQUETA_ESTADO[s.estado] }}</span>
+                                    <div v-if="vencida(s)" class="small text-danger fw-semibold mt-1" title="La fecha ya pasó: confirma si se realizó">
+                                        <i class="fas fa-clock me-1"></i>Vencida
+                                    </div>
                                 </td>
                                 <td class="text-center pe-3 text-nowrap">
                                     <button class="btn btn-sm btn-outline-primary me-1" title="Ver detalle" @click="abrirDetalle(s.id)">
@@ -172,7 +189,7 @@
                                     @change="guardarDatosSalida(detalle, { lugar_recojo: ($event.target as HTMLInputElement).value.trim() || null })">
                             </div>
                             <div class="col-6"><strong>Guía:</strong> {{ detalle.guia?.nombre ?? 'Sin asignar' }}</div>
-                            <div class="col-6"><strong>Estado:</strong> {{ ETIQUETA_ESTADO[detalle.estado] }}<span v-if="detalle.privada"> · privada</span></div>
+                            <div class="col-6"><strong>Estado:</strong> {{ ETIQUETA_ESTADO[detalle.estado] }}<span v-if="vencida(detalle)" class="text-danger fw-semibold"> · vencida</span><span v-if="detalle.privada"> · privada</span></div>
                             <div class="col-6">
                                 <strong>Vehículos:</strong> {{ detalle.vehiculos_total ?? 0 }}{{ detalle.capacidad_total ? ` (${detalle.capacidad_total} asientos)` : '' }}
                             </div>
@@ -320,7 +337,10 @@ const CLASE_ESTADO: Record<EstadoSalidaOperativa, string> = {
 const ETIQUETA_TIPO_PAX: Record<string, string> = { adulto: 'Adulto', nino: 'Niño', infante: 'Infante' };
 
 const enCurso = (s: SalidaOperativa) => s.estado === 'programada' || s.estado === 'confirmada';
+// T-131: pasó la fecha y nadie la cerró. Solo se avisa; el estado lo cambia una persona.
+const vencida = (s: SalidaOperativa) => enCurso(s) && s.fecha.slice(0, 10) < hoyPeru();
 const siguienteEstado = (s: SalidaOperativa): { estado: 'confirmada' | 'realizada'; texto: string; icono: string } | null => {
+    if (vencida(s)) return { estado: 'realizada', texto: 'Marcar realizada', icono: 'fas fa-flag-checkered' };
     if (s.estado === 'programada') return { estado: 'confirmada', texto: 'Confirmar salida', icono: 'fas fa-check' };
     // Realizada solo cuando ya llegó la fecha (el backend también lo exige).
     if (s.estado === 'confirmada' && s.fecha.slice(0, 10) <= hoyPeru()) return { estado: 'realizada', texto: 'Marcar realizada', icono: 'fas fa-flag-checkered' };
@@ -341,6 +361,9 @@ const loading = ref<boolean>(false);
 const fechaDesde = ref<string>(hoyPeru());
 const fechaHasta = ref<string>(sumarDiasISO(hoyPeru(), 7));
 const estado = ref<'' | EstadoSalidaOperativa>('');
+// T-131: cuántas vencidas hay en total (lo manda el listado) y si se están viendo solo esas.
+const vencidas = ref<number>(0);
+const soloVencidas = ref<boolean>(false);
 
 const detalle = ref<SalidaOperativa | null>(null);
 // T-089: markup y margen con el helper de T-087 (costo total = fijo + por persona).
@@ -369,18 +392,24 @@ const volverEstado = (s: SalidaOperativa) => {
     if (anterior) cambiarEstado(s, anterior);
 };
 
+// «Ver vencidas» reemplaza las fechas y el estado (T-131).
+const filtros = () => soloVencidas.value
+    ? { vencidas: 1 as const, page: currentPage.value }
+    : {
+        fecha_desde: fechaDesde.value || undefined,
+        fecha_hasta: fechaHasta.value || undefined,
+        estado: estado.value || undefined,
+        page: currentPage.value,
+    };
+
 const list = async () => {
     loading.value = true;
     try {
         // T-043: antes no se mandaba la página y "Siguiente" repetía las mismas 20.
-        const res = await salidaOperativaService.listar({
-            fecha_desde: fechaDesde.value || undefined,
-            fecha_hasta: fechaHasta.value || undefined,
-            estado: estado.value || undefined,
-            page: currentPage.value,
-        });
+        const res = await salidaOperativaService.listar(filtros());
         salidas.value = res.salidas;
         total.value = res.total;
+        vencidas.value = res.vencidas ?? 0;
     } catch (error: any) {
         toast.error(error.response?.data?.message ?? 'No se pudieron cargar las salidas');
     } finally {
@@ -397,7 +426,14 @@ const buscar = () => {
     list();
 };
 
+const verVencidas = () => {
+    soloVencidas.value = true;
+    currentPage.value = 1;
+    list();
+};
+
 const reset = () => {
+    soloVencidas.value = false;
     fechaDesde.value = hoyPeru();
     fechaHasta.value = sumarDiasISO(hoyPeru(), 7);
     estado.value = '';
@@ -454,12 +490,9 @@ const recargarDetalle = async () => {
     if (!detalle.value) return;
     const id = detalle.value.id;
     await abrirDetalle(id);
-    const res = await salidaOperativaService.listar({
-        fecha_desde: fechaDesde.value || undefined,
-        fecha_hasta: fechaHasta.value || undefined,
-        estado: estado.value || undefined,
-    });
+    const res = await salidaOperativaService.listar(filtros());
     salidas.value = res.salidas;
+    vencidas.value = res.vencidas ?? 0;
 };
 
 const abrirDetalle = async (id: number) => {

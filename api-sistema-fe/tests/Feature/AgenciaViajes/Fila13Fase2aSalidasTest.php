@@ -92,7 +92,7 @@ class Fila13Fase2aSalidasTest extends TestCase
         $controller = app(SalidaOperativaController::class);
         $cambiar = fn (string $estado) => $controller->cambiarEstado(new Request(['estado' => $estado]), (string) $salida->id);
 
-        // De programada no se salta a realizada.
+        // Futura: no puede estar realizada, ni siquiera desde programada.
         $this->assertSame(422, $cambiar('realizada')->getStatusCode());
         $this->assertSame(200, $cambiar('confirmada')->getStatusCode());
         // La salida es dentro de una semana: todavía no puede estar realizada.
@@ -102,6 +102,54 @@ class Fila13Fase2aSalidasTest extends TestCase
         $this->assertSame(200, $cambiar('realizada')->getStatusCode());
         $this->assertSame(422, $controller->cancelar((string) $salida->id)->getStatusCode()); // realizada no se cancela
         $this->assertSame(200, $cambiar('confirmada')->getStatusCode()); // deshacer un paso
+    }
+
+    // T-131: una salida vencida se cierra aunque nunca se confirmó; no mueve dinero.
+    public function test_salida_vencida_programada_pasa_directo_a_realizada_y_cancelada_no(): void
+    {
+        $salida = $this->salidaDe($this->reservaConTour($this->crearTour(), [['adulto', 40]]));
+        $salida->update(['fecha' => \Carbon\Carbon::parse(HoraPeru::hoyTexto())->subDays(2)->toDateString()]);
+        $cajaAntes = \Illuminate\Support\Facades\DB::table('cash_movements')->count();
+        $cambiar = fn (string $estado) => app(SalidaOperativaController::class)->cambiarEstado(new Request(['estado' => $estado]), (string) $salida->id);
+
+        $this->assertSame(200, $cambiar('realizada')->getStatusCode());
+        $this->assertSame(SalidaOperativa::ESTADO_REALIZADA, $salida->fresh()->estado);
+        $this->assertSame($cajaAntes, \Illuminate\Support\Facades\DB::table('cash_movements')->count());
+
+        $otra = $this->salidaDe($this->reservaConTour($this->crearTour(), [['adulto', 40]]));
+        $otra->update(['fecha' => \Carbon\Carbon::parse(HoraPeru::hoyTexto())->subDay()->toDateString(), 'estado' => 'cancelada']);
+        $this->assertSame(422, app(SalidaOperativaController::class)->cambiarEstado(new Request(['estado' => 'realizada']), (string) $otra->id)->getStatusCode());
+    }
+
+    // T-131 (CA1): el tablero sabe cuántas vencidas hay aunque el filtro de fechas
+    // arranque hoy, y «Ver vencidas» lista solo esas (no las de hoy, ni las cerradas).
+    public function test_el_listado_cuenta_las_vencidas_y_las_filtra(): void
+    {
+        $hoy = HoraPeru::hoyTexto();
+        $fecha = fn (int $dias) => \Carbon\Carbon::parse($hoy)->addDays($dias)->toDateString();
+
+        $vencida = $this->salidaDe($this->reservaConTour($this->crearTour(), [['adulto', 40]]));
+        $vencida->update(['fecha' => $fecha(-3)]);
+        $confirmadaVencida = $this->salidaDe($this->reservaConTour($this->crearTour(), [['adulto', 40]]));
+        $confirmadaVencida->update(['fecha' => $fecha(-1), 'estado' => 'confirmada']);
+        $realizada = $this->salidaDe($this->reservaConTour($this->crearTour(), [['adulto', 40]]));
+        $realizada->update(['fecha' => $fecha(-2), 'estado' => 'realizada']);
+        $deHoy = $this->salidaDe($this->reservaConTour($this->crearTour(), [['adulto', 40]]));
+        $deHoy->update(['fecha' => $hoy]);
+
+        $listar = fn (array $params) => app(SalidaOperativaController::class)->index(new Request($params))->getData(true);
+
+        $esperadas = SalidaOperativa::whereIn('estado', ['programada', 'confirmada'])->where('fecha', '<', $hoy)->count();
+        $porDefecto = $listar(['fecha_desde' => $hoy, 'fecha_hasta' => $fecha(7)]);
+        $this->assertSame($esperadas, $porDefecto['vencidas']);
+        $this->assertGreaterThanOrEqual(2, $porDefecto['vencidas']);
+        $this->assertNotContains($vencida->id, array_column($porDefecto['salidas'], 'id'));
+
+        $ids = array_column($listar(['vencidas' => 1])['salidas'], 'id');
+        $this->assertContains($vencida->id, $ids);
+        $this->assertContains($confirmadaVencida->id, $ids);
+        $this->assertNotContains($realizada->id, $ids);
+        $this->assertNotContains($deHoy->id, $ids);
     }
 
     // T-042 (H35): antes una salida cancelada no volvía nunca, y como hay una

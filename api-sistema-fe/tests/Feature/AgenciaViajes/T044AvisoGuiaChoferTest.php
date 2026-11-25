@@ -83,7 +83,8 @@ class T044AvisoGuiaChoferTest extends TestCase
         $datos = app(SalidaOperativaController::class)
             ->index(new Request(['fecha_desde' => '2026-11-10', 'fecha_hasta' => '2026-11-10']))->getData(true);
         $lecturasDelDia = collect(DB::getQueryLog())
-            ->filter(fn (array $q) => str_contains($q['query'], 'from "salidas_operativas"') && str_contains($q['query'], '"estado" in'))
+            // T-131: el conteo de vencidas (count(*), una vez por pedido) no es una lectura del día.
+            ->filter(fn (array $q) => str_contains($q['query'], 'from "salidas_operativas"') && str_contains($q['query'], '"estado" in') && ! str_contains($q['query'], 'count(*)'))
             ->count();
         DB::disableQueryLog();
 
