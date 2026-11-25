@@ -100,6 +100,13 @@ class ProveedorBaseTest extends TestCase
             ->json($metodo, "http://{$this->tenant->id}.sistemafe.test/api/{$ruta}", $datos);
     }
 
+    public function test_ca4_un_tenant_nuevo_queda_sin_la_tabla_vieja(): void
+    {
+        $this->assertSame([true, false], $this->tenant->run(
+            fn () => [Schema::hasTable('proveedores'), Schema::hasTable('suppliers')]
+        ));
+    }
+
     public function test_ca6_con_gestionar_se_crea_edita_y_busca_en_una_tienda(): void
     {
         $token = $this->token(['proveedores.gestionar']);

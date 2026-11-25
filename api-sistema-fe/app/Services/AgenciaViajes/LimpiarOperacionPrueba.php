@@ -55,7 +55,7 @@ class LimpiarOperacionPrueba
         'proveedores', 'proveedor_tarifas', 'proveedor_servicios', 'proveedor_amenidad',
         'proveedor_alojamiento_detalle', 'proveedor_tipos_config', 'reglas_cancelacion',
         'salidas_mayorista', 'guias', 'guia_tarifas', 'destinos_atractivos',
-        'destino_servicio', 'servicios', 'suppliers',
+        'destino_servicio', 'servicios',
         // Clientes (su saldo a favor vuelve a 0)
         'clients', 'client_addresses', 'pasajeros_catalogo', 'pasajero_documentos',
         // Configuración del negocio
