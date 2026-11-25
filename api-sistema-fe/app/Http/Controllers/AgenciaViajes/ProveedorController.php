@@ -12,6 +12,7 @@ use App\Models\AgenciaViajes\ProveedorAlojamientoDetalle;
 use App\Models\AgenciaViajes\ProveedorTarifa;
 use App\Models\AgenciaViajes\ProveedorTipo;
 use App\Models\AgenciaViajes\ProveedorTipoConfig;
+use App\Models\Cash\CashMovement;
 use App\Services\AgenciaViajes\FotoUploadService;
 use App\Services\StorageUrl;
 use App\Services\TextoFormatoService;
@@ -30,7 +31,8 @@ class ProveedorController extends Controller
 
     public function index(Request $request)
     {
-        $query = Proveedor::query();
+        // T-133: solo turísticos; ?alcance=todos incluye los generales (ver scopeDeAlcance).
+        $query = Proveedor::query()->deAlcance($request->get('alcance'));
 
         if ($request->filled('tipo_id')) {
             $query->where('tipo_id', $request->get('tipo_id'));
@@ -297,6 +299,14 @@ class ProveedorController extends Controller
             return response()->json([
                 'code' => 422,
                 'message' => 'No se puede eliminar: el proveedor tiene servicios/tarifas asociadas. Desactívalo en su lugar (campo Estado).',
+            ], 422);
+        }
+
+        // T-133: Caja guarda este id como contraparte (sin FK).
+        if (CashMovement::where('counterparty_type', 'proveedor')->where('counterparty_id', $proveedor->id)->exists()) {
+            return response()->json([
+                'code' => 422,
+                'message' => 'No se puede eliminar: el proveedor tiene movimientos de Caja. Desactívalo en su lugar (campo Estado).',
             ], 422);
         }
 

@@ -19,7 +19,7 @@ class ProveedorController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Proveedor::query();
+        $query = Proveedor::query()->deAlcance(Proveedor::ALCANCE_TODOS);
 
         if ($request->filled('estado')) {
             $query->where('estado', $request->boolean('estado'));
