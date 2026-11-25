@@ -75,7 +75,7 @@ Lo mismo con el anticipo: la edición usa sus campos propios (`n_comprobante_ant
 ## 6. Cómo se probó
 
 - Payload idéntico a `main` en los 5 casos y los 5 pasos (scripts en `admin-start-kit/e2e/`,
-  sin commitear: `payload-edicion-venta*.mjs`, `comparar.sh`).
+  `payload-edicion-venta*.mjs`, `comparar.sh`).
 - En la revisión (`e2e/verif-pendientes-t110.mjs`, agencia-demo, sin guardar nada):
   agregar un producto suma una línea; cambiar a un cliente mayorista (simulado en la búsqueda) avisa
   «Se actualizó el precio de 1 producto» y la línea nueva pasa de 50 a 45 de base, mientras las
