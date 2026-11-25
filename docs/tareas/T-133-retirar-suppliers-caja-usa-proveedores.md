@@ -41,20 +41,20 @@ pero la migración igual debe ser segura si aparecen.
 - `api-sistema-fe/app/Models/AgenciaViajes/Proveedor.php` → `app/Models/Proveedor.php`; rutas de proveedores en `routes/api.php` (~línea 776-810, hoy todas con `permission:agencia.proveedores`); `database/seeders/PermissionsDemoSeeder.php`.
 
 ## Criterios de aceptación
-- [ ] **CA1** — El buscador de Caja encuentra a un proveedor creado en Agencia, y a uno general (sin tipo turístico).
-- [ ] **CA2** — Un proveedor de `suppliers` con documento coincidente con uno de `proveedores` se une; uno sin coincidencia se crea. Los `counterparty_id` de movimientos viejos apuntan a un proveedor existente; el nombre guardado no cambia.
-- [ ] **CA3** — Las pantallas de Agencia no muestran proveedores generales; Caja sí.
-- [ ] **CA4** — No quedan referencias a `suppliers` en `app/`, `routes/` ni `src/` (salvo la migración de retiro).
-- [ ] **CA5** — Los permisos de la pantalla vieja de proveedores de Caja siguen funcionando con la ruta nueva (sin dejar a un rol sin acceso ni dar acceso de más).
-- [ ] **CA6** — En un tenant de tienda, un usuario con `proveedores.gestionar` crea y busca un proveedor por API; sin el permiso recibe 403. Las rutas turísticas siguen pidiendo `agencia.proveedores`.
-- [ ] **CA7** — Después del backfill, ningún rol que tenía `agencia.proveedores` pierde acceso al listado ni al alta.
+- [x] **CA1** — El buscador de Caja encuentra a un proveedor creado en Agencia, y a uno general (sin tipo turístico).
+- [x] **CA2** — Un proveedor de `suppliers` con documento coincidente con uno de `proveedores` se une; uno sin coincidencia se crea. Los `counterparty_id` de movimientos viejos apuntan a un proveedor existente; el nombre guardado no cambia.
+- [x] **CA3** — Las pantallas de Agencia no muestran proveedores generales; Caja sí.
+- [x] **CA4** — No quedan referencias a `suppliers` en `app/`, `routes/` ni `src/` (salvo la migración de retiro).
+- [x] **CA5** — Los permisos de la pantalla vieja de proveedores de Caja siguen funcionando con la ruta nueva (sin dejar a un rol sin acceso ni dar acceso de más).
+- [x] **CA6** — En un tenant de tienda, un usuario con `proveedores.gestionar` crea y busca un proveedor por API; sin el permiso recibe 403. Las rutas turísticas siguen pidiendo `agencia.proveedores`.
+- [x] **CA7** — Después del backfill, ningún rol que tenía `agencia.proveedores` pierde acceso al listado ni al alta.
 
 ## Seguridad y correctitud
-- [ ] Permisos / Policy: ruta de Caja a proveedores con permiso; revisar `BackfillPermisosGateBucketA`.
-- [ ] Aislamiento de tenant: sí, la migración de datos corre por tenant.
-- [ ] Dinero: no cambia ningún monto; solo el vínculo del contraparte.
-- [ ] Migraciones nuevas + `tenants:migrate-verticales`: sí; **respaldo y revisar producción primero** (en local `suppliers` está vacía).
-- [ ] Entrada, concurrencia, fechas, tributario, `v-html`: no aplica.
+- [x] Permisos / Policy: ruta de Caja a proveedores con permiso; revisar `BackfillPermisosGateBucketA`.
+- [x] Aislamiento de tenant: sí, la migración de datos corre por tenant.
+- [x] Dinero: no cambia ningún monto; solo el vínculo del contraparte.
+- [ ] Migraciones nuevas + `tenants:migrate-verticales`: aplicadas en local; **respaldo y revisar producción antes de desplegar**.
+- [x] Entrada, concurrencia, fechas, tributario, `v-html`: no aplica (la entrada del controlador base se valida).
 
 ## Cómo verificar
 ```
@@ -66,9 +66,51 @@ Pantalla: crear un egreso en Caja a un proveedor de Agencia (agencia-demo).
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
+- **Commits** (rama `feat/T-133-retirar-suppliers`):
+  1. `67b0f143` proveedor al sistema base (modelo, `proveedores-base`, permisos, backfill).
+  2. `e3bad0c1` filtro turístico/todos y Caja leyendo `proveedores`.
+  3. `e139fa66` migración que remapea `counterparty_id`.
+  4. `8be3388d` retiro de `Supplier` y pantalla `/proveedores`.
+  5. `7a08a33c` migración que borra `suppliers`.
+- **Tests:** suite completa del backend 2477 de 2478. El que falla,
+  `VentaDirectaLineasTest::test_ca1_dos_lineas_en_dias_distintos…`, es intermitente (pasa 3 de 3
+  solo) y la rama no toca ese código. Frontend: `type-check` y `build` en verde.
+  - CA1: `ProveedorFiltroYCajaTest` · CA2: `RemapearContraparteProveedorTest` ·
+    CA3: `ProveedorFiltroYCajaTest` · CA4: `grep` de `suppliers` en `app/`, `routes/` y `src/` sin
+    resultados, y `ProveedorBaseTest` (tenant nuevo sin la tabla) ·
+    CA5: `ProveedoresPermisosBackfillTest` y `GateBucketARoutesTest` ·
+    CA6: `ProveedorBaseTest` (HTTP real en un tenant de tienda) · CA7: `ProveedoresPermisosBackfillTest`.
+- **Prueba en pantalla** (agencia-demo, servidores del worktree): alta de un proveedor general en
+  `/proveedores`; no aparece en Agencia → Proveedores; egreso de S/ 1 en Caja a un proveedor de
+  Agencia, guardado con su id, nombre y RUC. El proveedor de prueba se borró; el egreso quedó
+  (movimiento 48, «Prueba T-133»).
 - **Desviaciones de la tarea y por qué:**
+  - Las rutas del sistema base son `proveedores-base`: `proveedores` sigue siendo la de Agencia.
+  - No se puede eliminar desde Agencia un proveedor con movimientos de Caja (no hay FK y el id
+    quedaría colgado; antes `suppliers` solo se desactivaba).
+  - Backfill: `edit_supplier`/`delete_supplier` sin `register_supplier` reciben solo
+    `proveedores.ver` (regla «gestionar si podía crear»). Ningún rol sembrado está en ese caso.
+  - La migración deja en `NULL` un `counterparty_id` que no existía en `suppliers`.
+  - Los permisos `*_supplier` dejaron de sembrarse en roles y de verse en la pantalla de Roles.
+  - El ítem de menú de Agencia pasa a llamarse «Proveedores (todos)», para distinguirlo de
+    CATÁLOGOS → Proveedores.
+- **Al desplegar:** respaldo antes; `deploy.sh` migra, siembra el menú y corre
+  `roles:sync-propietario`. Revisar la salida de `tenants:migrate-verticales`.
+- **Entorno local:** los tenants locales ya están migrados (sin `suppliers`), así que en `main` la
+  pantalla vieja de proveedores y el buscador de proveedor de Caja fallan hasta unir la rama. Al
+  unir: `php artisan db:seed --class=MenuItemsSeeder --force` y `php artisan cache:clear` (sin eso
+  el menú apunta a `suppliers.index`, que ya no existe).
+- **Pendiente del cierre:** revisión, recorrido y borrado de esta tarea.
 
 ## Hallazgos fuera de alcance
--
+- Agencia → Proveedores no tiene el «ver todos» que dice la tabla de §3.7c: el backend ya acepta
+  `?alcance=todos`, falta el control en pantalla. Sin él, para ponerle tipo turístico a un
+  proveedor general hay que entrar a su ficha por la URL.
+- Los tipos generales («Insumos», «Mercadería») no se pueden crear como generales: el CRUD
+  del superadmin guarda todo tipo con `giro='agencia_viajes'`, que es lo que define «turístico».
+- Las filas de permisos `*_supplier` siguen en las bases (las crea una migración vieja); ya no
+  gobiernan ninguna ruta.
+- `TenantProvisioningService::eliminarSiVacio()` no cuenta `proveedores` en tiendas ni créditos
+  (tampoco contaba `suppliers`).
+- `VentaDirectaLineasTest` CA1 intermitente: las dos fechas llegaron invertidas en una corrida de
+  la suite completa.
