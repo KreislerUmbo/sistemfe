@@ -57,6 +57,8 @@ class PermissionsDemoSeeder extends Seeder
         'register_supplier', 'list_supplier', 'edit_supplier', 'delete_supplier',
         'register_cash_concept', 'list_cash_concept', 'edit_cash_concept', 'delete_cash_concept',
         'register_serie_comprobante', 'list_serie_comprobante', 'edit_serie_comprobante',
+        // T-133: proveedores del sistema base. Sin rol operativo; el Propietario los recibe al sincronizar.
+        'proveedores.ver', 'proveedores.gestionar',
         'can_switch_branch', 'emitir_factura', 'emitir_boleta', 'emitir_nota_venta',
         // T-109: ningún rol operativo lo recibe solo; el Propietario, con roles:sync-propietario.
         'cambiar_precio_venta',

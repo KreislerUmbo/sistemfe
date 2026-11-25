@@ -3,18 +3,19 @@
 namespace App\Models\AgenciaViajes;
 
 use App\Models\AgenciaViajes\Concerns\FotosConTipo;
-use Illuminate\Database\Eloquent\Model;
+use App\Models\Proveedor as ProveedorBase;
 use Illuminate\Support\Facades\DB;
 
 // plan-modulo-proveedores.md §2.6 — schema validado por el negocio.
 // Tenant (sin CentralConnection). tipo_id no lleva belongsTo (cross-boundary
 // a proveedor_tipos central, sin FK real de Postgres) — mismo criterio que
 // Servicio::tipo_proveedor_id.
-class Proveedor extends Model
+//
+// T-133: la tabla y los datos básicos son del sistema base (App\Models\Proveedor); acá queda
+// lo turístico.
+class Proveedor extends ProveedorBase
 {
     use FotosConTipo;
-
-    protected $table = 'proveedores';
 
     protected $fillable = [
         'codigo',

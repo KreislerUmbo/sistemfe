@@ -63,6 +63,8 @@ class AgenciaViajesRolesSeeder extends Seeder implements RolesCatalogProvider
         'nota_electronica', 'list_nota_electronica',
         'cash.open_session', 'cash.view_all',
         'list_sale',
+        // T-133 — proveedores del sistema base: los recibe quien tiene agencia.proveedores.
+        'proveedores.ver', 'proveedores.gestionar',
         // T-109 — cambiar el precio de una línea en la venta (solo el Administrador de agencia).
         'cambiar_precio_venta',
         // T-078 — Clientes, Anticipos y Manuales y videos (el menú de T-063 los gatea con estos).
@@ -88,6 +90,7 @@ class AgenciaViajesRolesSeeder extends Seeder implements RolesCatalogProvider
             'reportes_comerciales.ver',
             'reservas.ver', 'reservas.ver_todas', 'reservas.crear', 'reservas.editar', 'reservas.modificar', 'agencia.reservas',
             'agencia.proveedores', 'agencia.destinos', 'agencia.temporadas', 'agencia.guias', 'agencia.paquetes', 'agencia.configuracion',
+            'proveedores.ver', 'proveedores.gestionar',
             'nota_electronica', 'list_nota_electronica',
             'cash.open_session', 'cash.view_all',
             'list_sale', 'cambiar_precio_venta',
@@ -112,6 +115,7 @@ class AgenciaViajesRolesSeeder extends Seeder implements RolesCatalogProvider
             'cotizaciones.ver', 'cotizaciones.ver_todas', 'cotizaciones.crear', 'cotizaciones.editar', 'cotizaciones.enviar_correo', 'agencia.cotizaciones',
             'reservas.ver', 'reservas.ver_todas', 'reservas.crear', 'reservas.editar', 'reservas.modificar', 'agencia.reservas',
             'agencia.proveedores', 'agencia.destinos', 'agencia.temporadas', 'agencia.guias', 'agencia.paquetes',
+            'proveedores.ver', 'proveedores.gestionar',
             'nota_electronica', 'list_nota_electronica',
             'cash.open_session', 'cash.view_all',
             'list_sale',
