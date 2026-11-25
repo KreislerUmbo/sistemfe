@@ -262,14 +262,14 @@ const comercialRoutes = [
     component: () => import("@/views/cash/payment-methods.vue"),
   },
   {
-    path: "/suppliers",
-    name: "suppliers.index",
+    path: "/proveedores",
+    name: "proveedores.index",
     meta: {
-      title: setTitle("Proveedores de gastos"),
+      title: setTitle("Proveedores"),
       authRequired: true,
-      permission: 'list_supplier',
+      permission: 'proveedores.ver|proveedores.gestionar',
     },
-    component: () => import("@/views/cash/suppliers.vue"),
+    component: () => import("@/views/cash/proveedores.vue"),
   },
   {
     path: "/cash-concepts",

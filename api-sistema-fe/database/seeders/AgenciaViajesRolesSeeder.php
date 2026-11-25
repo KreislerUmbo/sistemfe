@@ -77,7 +77,6 @@ class AgenciaViajesRolesSeeder extends Seeder implements RolesCatalogProvider
         'register_branch', 'edit_branch', 'delete_branch', 'list_branch',
         'register_cash_register', 'edit_cash_register', 'delete_cash_register', 'list_cash_register',
         'register_payment_method', 'edit_payment_method', 'delete_payment_method', 'list_payment_method',
-        'register_supplier', 'edit_supplier', 'delete_supplier', 'list_supplier',
         'register_cash_concept', 'edit_cash_concept', 'delete_cash_concept', 'list_cash_concept',
         'register_serie_comprobante', 'edit_serie_comprobante', 'delete_serie_comprobante', 'list_serie_comprobante',
     ];
@@ -104,7 +103,6 @@ class AgenciaViajesRolesSeeder extends Seeder implements RolesCatalogProvider
             'register_branch', 'edit_branch', 'delete_branch', 'list_branch',
             'register_cash_register', 'edit_cash_register', 'delete_cash_register', 'list_cash_register',
             'register_payment_method', 'edit_payment_method', 'delete_payment_method', 'list_payment_method',
-            'register_supplier', 'edit_supplier', 'delete_supplier', 'list_supplier',
             'register_cash_concept', 'edit_cash_concept', 'delete_cash_concept', 'list_cash_concept',
             'register_serie_comprobante', 'edit_serie_comprobante', 'delete_serie_comprobante', 'list_serie_comprobante',
         ],

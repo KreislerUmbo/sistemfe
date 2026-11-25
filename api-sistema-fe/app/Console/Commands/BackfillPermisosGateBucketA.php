@@ -10,7 +10,7 @@ use Spatie\Permission\PermissionRegistrar;
 
 // Fase 0b (plan-modulo-menus-y-roles.md §9.1, Bucket A) — crea SOLO las filas
 // de permisos nuevos que hacían falta para gatear las 38 rutas administrativas
-// de Bucket A (roles/users/branches/cash-registers/payment-methods/suppliers/
+// de Bucket A (roles/users/branches/cash-registers/payment-methods/proveedores/
 // cash-concepts/series-comprobante ya tenían sus permisos register_X/edit_X/
 // delete_X sembrados desde antes — esto solo cubre los que faltaban:
 // delete_serie_comprobante, company, y los 3 de systems/system_categories/
@@ -47,12 +47,12 @@ class BackfillPermisosGateBucketA extends Command
     // agencia-demo SÍ tiene un rol real en uso — 'Admin-General' (usuario real
     // admin@gmail.com) — con 14 de los permisos de Bucket A asignados, pero le faltan estos
     // 6. Son permisos que YA EXISTÍAN antes de Fase 0b (no están en PERMISOS_NUEVOS) — sin
-    // este otorgamiento, gatear branches/suppliers le rompería a admin@gmail.com una
+    // este otorgamiento, gatear branches/proveedores le rompería a admin@gmail.com una
     // capacidad que hoy usa sin gate (crear/editar/eliminar sucursales y proveedores).
     // Exclusivo de agencia-demo: NO se otorga en ningún otro tenant.
     private const PERMISOS_FALTANTES_ADMIN_GENERAL_AGENCIA_DEMO = [
         'register_branch', 'edit_branch', 'delete_branch',
-        'register_supplier', 'edit_supplier', 'delete_supplier',
+        'proveedores.ver', 'proveedores.gestionar', // T-133: antes los tres de la pantalla vieja de Caja.
     ];
 
     public function handle(): int

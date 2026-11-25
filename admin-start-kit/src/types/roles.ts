@@ -289,20 +289,12 @@ export const PERMISOS = [
         'name': 'Proveedores',
         'permisos': [
             {
-                name: 'Registrar',
-                permiso: 'register_supplier',
+                name: 'Ver',
+                permiso: 'proveedores.ver',
             },
             {
-                name: 'Listado',
-                permiso: 'list_supplier',
-            },
-            {
-                name: 'Editar',
-                permiso: 'edit_supplier',
-            },
-            {
-                name: 'Eliminar',
-                permiso: 'delete_supplier',
+                name: 'Registrar y editar',
+                permiso: 'proveedores.gestionar',
             },
         ]
     },

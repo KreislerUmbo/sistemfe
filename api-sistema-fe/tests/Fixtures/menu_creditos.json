@@ -158,9 +158,9 @@
             },
             {
                 "codigo": "configuraciones.proveedores",
-                "label": "Proveedores de gastos",
+                "label": "Proveedores",
                 "icono": null,
-                "ruta": "suppliers.index",
+                "ruta": "proveedores.index",
                 "hijos": []
             },
             {

@@ -22,25 +22,26 @@ export type PaymentMethodResponse = {
     payment_method?: PaymentMethod;
 };
 
-export type Supplier = {
+// Proveedor del sistema base (proveedores-base). Lo turístico está en types/agencia-viajes.ts.
+export type ProveedorBase = {
     id: number;
-    name: string;
-    document: string | null;
-    phone: string | null;
-    is_active: boolean;
+    razon_social: string;
+    numero_documento: string | null;
+    telefono: string | null;
+    estado: boolean;
     created_at: string;
 };
 
-export type Suppliers = {
+export type ProveedoresBase = {
     total: number;
     paginate: number;
-    suppliers: Supplier[];
+    proveedores: ProveedorBase[];
 };
 
-export type SupplierResponse = {
+export type ProveedorBaseResponse = {
     code: number;
     message: string;
-    supplier?: Supplier;
+    proveedor?: ProveedorBase;
 };
 
 export type CashConcept = {

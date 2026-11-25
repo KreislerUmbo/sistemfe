@@ -64,7 +64,6 @@ use App\Http\Controllers\Cash\CashMovementController;
 use App\Http\Controllers\Cash\CashRegisterController;
 use App\Http\Controllers\Cash\CashSessionController;
 use App\Http\Controllers\Cash\PaymentMethodController;
-use App\Http\Controllers\Cash\SupplierController;
 use App\Http\Controllers\Central\CentralAuditLogController;
 use App\Http\Controllers\Central\CentralAuthController;
 use App\Http\Controllers\Central\AerolineaController as CentralAerolineaController;
@@ -407,10 +406,6 @@ Route::group([
         ->middleware('permission:proveedores.gestionar');
     Route::put("proveedores-base/{id}", [ProveedorBaseController::class, 'update'])
         ->whereNumber('id')->middleware('permission:proveedores.gestionar');
-    Route::resource("suppliers", SupplierController::class)
-        ->middlewareFor('store', 'permission:register_supplier')
-        ->middlewareFor('update', 'permission:edit_supplier')
-        ->middlewareFor('destroy', 'permission:delete_supplier');
     Route::resource("cash-concepts", CashConceptController::class)
         ->middlewareFor('store', 'permission:register_cash_concept')
         ->middlewareFor('update', 'permission:edit_cash_concept')

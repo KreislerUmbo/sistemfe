@@ -118,7 +118,7 @@ class MenuGirosTest extends TestCase
             ['ADMINISTRACIÓN' => [
                 'Configuración de agencia',
                 ['Empresa y sucursales' => ['Datos de la empresa', 'Sucursales']],
-                ['Configuración de caja' => ['Cajas', 'Métodos de pago', 'Conceptos de caja', 'Proveedores de gastos']],
+                ['Configuración de caja' => ['Cajas', 'Métodos de pago', 'Conceptos de caja', 'Proveedores (todos)']],
                 ['Series y numeración' => ['Series de comprobantes', 'Códigos de agencia']],
                 ['Usuarios y permisos' => ['Usuarios', 'Roles y permisos']],
             ]],
