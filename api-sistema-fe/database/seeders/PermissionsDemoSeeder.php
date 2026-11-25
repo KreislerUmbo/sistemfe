@@ -54,9 +54,10 @@ class PermissionsDemoSeeder extends Seeder
         'register_branch', 'list_branch', 'edit_branch', 'delete_branch',
         'register_cash_register', 'list_cash_register', 'edit_cash_register', 'delete_cash_register',
         'register_payment_method', 'list_payment_method', 'edit_payment_method', 'delete_payment_method',
-        'register_supplier', 'list_supplier', 'edit_supplier', 'delete_supplier',
         'register_cash_concept', 'list_cash_concept', 'edit_cash_concept', 'delete_cash_concept',
         'register_serie_comprobante', 'list_serie_comprobante', 'edit_serie_comprobante',
+        // T-133: proveedores del sistema base. Sin rol operativo; el Propietario los recibe al sincronizar.
+        'proveedores.ver', 'proveedores.gestionar',
         'can_switch_branch', 'emitir_factura', 'emitir_boleta', 'emitir_nota_venta',
         // T-109: ningún rol operativo lo recibe solo; el Propietario, con roles:sync-propietario.
         'cambiar_precio_venta',
@@ -85,7 +86,7 @@ class PermissionsDemoSeeder extends Seeder
      * Almacen/Cliente/Super-Admin sin cambios: ningún permiso nuevo de la
      * lista de arriba está asignado a esos roles en `umbo` tampoco — no se
      * inventa una asignación que no existe hoy. `list_branch`/
-     * `list_cash_register`/`list_payment_method`/`list_supplier`/
+     * `list_cash_register`/`list_payment_method`/
      * `list_cash_concept`/`cash.view_all` (grupo "Configuraciones" +
      * "Historial y Reportes" del menú) quedan sin asignar a ningún rol de
      * negocio a propósito — en `umbo` tampoco los tiene nadie fuera de

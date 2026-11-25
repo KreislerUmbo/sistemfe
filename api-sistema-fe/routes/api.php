@@ -32,6 +32,7 @@ use App\Http\Controllers\AgenciaViajes\ConversionToursController;
 use App\Http\Controllers\AgenciaViajes\PaquetePlantillaController;
 use App\Http\Controllers\AgenciaViajes\PaquetePlantillaItemController;
 use App\Http\Controllers\AgenciaViajes\ProveedorController;
+use App\Http\Controllers\ProveedorController as ProveedorBaseController;
 use App\Http\Controllers\AgenciaViajes\ProveedorServicioController;
 use App\Http\Controllers\AgenciaViajes\ProveedorTarifaController;
 use App\Http\Controllers\AgenciaViajes\AerolineaController;
@@ -63,7 +64,6 @@ use App\Http\Controllers\Cash\CashMovementController;
 use App\Http\Controllers\Cash\CashRegisterController;
 use App\Http\Controllers\Cash\CashSessionController;
 use App\Http\Controllers\Cash\PaymentMethodController;
-use App\Http\Controllers\Cash\SupplierController;
 use App\Http\Controllers\Central\CentralAuditLogController;
 use App\Http\Controllers\Central\CentralAuthController;
 use App\Http\Controllers\Central\AerolineaController as CentralAerolineaController;
@@ -396,10 +396,16 @@ Route::group([
         ->middlewareFor('store', 'permission:register_payment_method')
         ->middlewareFor('update', 'permission:edit_payment_method')
         ->middlewareFor('destroy', 'permission:delete_payment_method');
-    Route::resource("suppliers", SupplierController::class)
-        ->middlewareFor('store', 'permission:register_supplier')
-        ->middlewareFor('update', 'permission:edit_supplier')
-        ->middlewareFor('destroy', 'permission:delete_supplier');
+    // T-133 — proveedores del sistema base (todos los giros). Lo turístico sigue en las rutas
+    // `proveedores` del vertical Agencia, con agencia.proveedores.
+    Route::get("proveedores-base", [ProveedorBaseController::class, 'index'])
+        ->middleware('permission:proveedores.ver|proveedores.gestionar');
+    Route::get("proveedores-base/{id}", [ProveedorBaseController::class, 'show'])
+        ->whereNumber('id')->middleware('permission:proveedores.ver|proveedores.gestionar');
+    Route::post("proveedores-base", [ProveedorBaseController::class, 'store'])
+        ->middleware('permission:proveedores.gestionar');
+    Route::put("proveedores-base/{id}", [ProveedorBaseController::class, 'update'])
+        ->whereNumber('id')->middleware('permission:proveedores.gestionar');
     Route::resource("cash-concepts", CashConceptController::class)
         ->middlewareFor('store', 'permission:register_cash_concept')
         ->middlewareFor('update', 'permission:edit_cash_concept')

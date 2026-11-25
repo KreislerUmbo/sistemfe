@@ -122,7 +122,7 @@ class MenuItemsSeeder extends Seeder
         $this->item('configuraciones.cajas', $config, null, 'enlace', 'Cajas', null, 'cash-registers.index', 'list_cash_register', 3);
         $this->item('configuraciones.metodos_pago', $config, null, 'enlace', 'Métodos de pago', null, 'payment-methods.index', 'list_payment_method', 4);
         $this->item('configuraciones.series', $config, null, 'enlace', 'Series de comprobantes', null, 'series-comprobante.index', 'list_serie_comprobante', 5, self::SIN_CREDITOS);
-        $this->item('configuraciones.proveedores', $config, null, 'enlace', 'Proveedores de gastos', null, 'suppliers.index', 'list_supplier', 6);
+        $this->item('configuraciones.proveedores', $config, null, 'enlace', 'Proveedores', null, 'proveedores.index', 'proveedores.ver', 6);
         $this->item('configuraciones.conceptos_caja', $config, null, 'enlace', 'Conceptos de caja', null, 'cash-concepts.index', 'list_cash_concept', 7);
 
         $recursos = $this->item('recursos_cliente', null, null, 'grupo', 'Capacitación', 'iconoir-book-stack', null, null, 8, self::SIN_AGENCIA);
@@ -200,8 +200,9 @@ class MenuItemsSeeder extends Seeder
         $this->item('ag_admin.cajas', $cajaConfig, $g, 'enlace', 'Cajas', null, 'cash-registers.index', 'list_cash_register', 1);
         $this->item('ag_admin.metodos_pago', $cajaConfig, $g, 'enlace', 'Métodos de pago', null, 'payment-methods.index', 'list_payment_method', 2);
         $this->item('ag_admin.conceptos_caja', $cajaConfig, $g, 'enlace', 'Conceptos de caja', null, 'cash-concepts.index', 'list_cash_concept', 3);
-        // Caja busca aquí la contraparte de los egresos; sale con la tabla única de proveedores (Compras).
-        $this->item('ag_admin.proveedores_gastos', $cajaConfig, $g, 'enlace', 'Proveedores de gastos', null, 'suppliers.index', 'list_supplier', 4);
+        // T-133: el catálogo completo (turísticos y generales), donde Caja busca la contraparte.
+        // CATÁLOGOS → Proveedores muestra solo los turísticos. El codigo se conserva.
+        $this->item('ag_admin.proveedores_gastos', $cajaConfig, $g, 'enlace', 'Proveedores (todos)', null, 'proveedores.index', 'proveedores.ver', 4);
         $series = $this->item('ag_admin.series', $admin, $g, 'grupo', 'Series y numeración', null, null, null, 4);
         $this->item('ag_admin.series_comprobantes', $series, $g, 'enlace', 'Series de comprobantes', null, 'series-comprobante.index', 'list_serie_comprobante', 1);
         $this->item('agencia.configuracion_codigos', $series, $g, 'enlace', 'Códigos de agencia', null, 'agencia.configuracion.codigos', 'agencia.configuracion', 2);

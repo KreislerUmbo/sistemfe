@@ -63,6 +63,8 @@ class AgenciaViajesRolesSeeder extends Seeder implements RolesCatalogProvider
         'nota_electronica', 'list_nota_electronica',
         'cash.open_session', 'cash.view_all',
         'list_sale',
+        // T-133 — proveedores del sistema base: los recibe quien tiene agencia.proveedores.
+        'proveedores.ver', 'proveedores.gestionar',
         // T-109 — cambiar el precio de una línea en la venta (solo el Administrador de agencia).
         'cambiar_precio_venta',
         // T-078 — Clientes, Anticipos y Manuales y videos (el menú de T-063 los gatea con estos).
@@ -75,7 +77,6 @@ class AgenciaViajesRolesSeeder extends Seeder implements RolesCatalogProvider
         'register_branch', 'edit_branch', 'delete_branch', 'list_branch',
         'register_cash_register', 'edit_cash_register', 'delete_cash_register', 'list_cash_register',
         'register_payment_method', 'edit_payment_method', 'delete_payment_method', 'list_payment_method',
-        'register_supplier', 'edit_supplier', 'delete_supplier', 'list_supplier',
         'register_cash_concept', 'edit_cash_concept', 'delete_cash_concept', 'list_cash_concept',
         'register_serie_comprobante', 'edit_serie_comprobante', 'delete_serie_comprobante', 'list_serie_comprobante',
     ];
@@ -88,6 +89,7 @@ class AgenciaViajesRolesSeeder extends Seeder implements RolesCatalogProvider
             'reportes_comerciales.ver',
             'reservas.ver', 'reservas.ver_todas', 'reservas.crear', 'reservas.editar', 'reservas.modificar', 'agencia.reservas',
             'agencia.proveedores', 'agencia.destinos', 'agencia.temporadas', 'agencia.guias', 'agencia.paquetes', 'agencia.configuracion',
+            'proveedores.ver', 'proveedores.gestionar',
             'nota_electronica', 'list_nota_electronica',
             'cash.open_session', 'cash.view_all',
             'list_sale', 'cambiar_precio_venta',
@@ -101,7 +103,6 @@ class AgenciaViajesRolesSeeder extends Seeder implements RolesCatalogProvider
             'register_branch', 'edit_branch', 'delete_branch', 'list_branch',
             'register_cash_register', 'edit_cash_register', 'delete_cash_register', 'list_cash_register',
             'register_payment_method', 'edit_payment_method', 'delete_payment_method', 'list_payment_method',
-            'register_supplier', 'edit_supplier', 'delete_supplier', 'list_supplier',
             'register_cash_concept', 'edit_cash_concept', 'delete_cash_concept', 'list_cash_concept',
             'register_serie_comprobante', 'edit_serie_comprobante', 'delete_serie_comprobante', 'list_serie_comprobante',
         ],
@@ -112,6 +113,7 @@ class AgenciaViajesRolesSeeder extends Seeder implements RolesCatalogProvider
             'cotizaciones.ver', 'cotizaciones.ver_todas', 'cotizaciones.crear', 'cotizaciones.editar', 'cotizaciones.enviar_correo', 'agencia.cotizaciones',
             'reservas.ver', 'reservas.ver_todas', 'reservas.crear', 'reservas.editar', 'reservas.modificar', 'agencia.reservas',
             'agencia.proveedores', 'agencia.destinos', 'agencia.temporadas', 'agencia.guias', 'agencia.paquetes',
+            'proveedores.ver', 'proveedores.gestionar',
             'nota_electronica', 'list_nota_electronica',
             'cash.open_session', 'cash.view_all',
             'list_sale',

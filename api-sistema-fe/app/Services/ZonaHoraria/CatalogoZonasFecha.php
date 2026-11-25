@@ -41,7 +41,6 @@ final class CatalogoZonasFecha
         'branches' => [],
         'cash_concepts' => [],
         'payment_methods' => [],
-        'suppliers' => [],
         'advances' => ['corrected_at'],
         'advance_applications' => [],
         'advance_refunds' => [],

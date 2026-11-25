@@ -9,9 +9,9 @@ use App\Models\Cash\CashConcept;
 use App\Models\Cash\CashMovement;
 use App\Models\Cash\CashSession;
 use App\Models\Cash\PaymentMethod;
-use App\Models\Cash\Supplier;
 use App\Models\Client\Client;
 use App\Models\Company;
+use App\Models\Proveedor;
 use App\Services\CashCorrectionService;
 use App\Services\CashVisibilityResolver;
 use App\Services\ExpectedCashCalculator;
@@ -336,11 +336,13 @@ class CashMovementController extends Controller
                 ->limit(15)
                 ->get(['id', 'full_name as name', 'n_document as document']);
         } else {
-            $resultados = Supplier::where('is_active', true)
-                ->whereRaw("(COALESCE(name, '') || ' ' || COALESCE(document, '')) ILIKE ?", ["%{$q}%"])
-                ->orderBy('name')
+            // T-133: todos los proveedores, turísticos y generales.
+            $resultados = Proveedor::query()->deAlcance(Proveedor::ALCANCE_TODOS)
+                ->where('estado', true)
+                ->whereRaw("(COALESCE(razon_social, '') || ' ' || COALESCE(nombre_comercial, '') || ' ' || COALESCE(numero_documento, '')) ILIKE ?", ["%{$q}%"])
+                ->orderBy('razon_social')
                 ->limit(15)
-                ->get(['id', 'name', 'document']);
+                ->get(['id', 'razon_social as name', 'numero_documento as document']);
         }
 
         return response()->json(['results' => $resultados]);
@@ -474,7 +476,7 @@ class CashMovementController extends Controller
         }
 
         if ($tipo === 'proveedor') {
-            $registro = Supplier::find($id);
+            $registro = Proveedor::find($id);
             if (!$registro) {
                 throw new HttpException(422, 'counterparty_id no corresponde a un proveedor real.');
             }
@@ -482,8 +484,8 @@ class CashMovementController extends Controller
             return [
                 'counterparty_type'     => 'proveedor',
                 'counterparty_id'       => $registro->id,
-                'counterparty_name'     => $registro->name,
-                'counterparty_document' => $registro->document,
+                'counterparty_name'     => $registro->razon_social,
+                'counterparty_document' => $registro->numero_documento,
             ];
         }
 

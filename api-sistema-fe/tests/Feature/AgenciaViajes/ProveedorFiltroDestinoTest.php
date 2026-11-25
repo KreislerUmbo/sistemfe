@@ -7,6 +7,7 @@ use App\Models\AgenciaViajes\DestinoAtractivo;
 use App\Models\AgenciaViajes\DestinoServicio;
 use App\Models\AgenciaViajes\Proveedor;
 use App\Models\AgenciaViajes\ProveedorServicio;
+use App\Models\AgenciaViajes\ProveedorTipo;
 use App\Models\AgenciaViajes\Servicio;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -22,6 +23,8 @@ use Tests\TestCase;
 // revertida.
 class ProveedorFiltroDestinoTest extends TestCase
 {
+    private int $tipoId;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -33,13 +36,21 @@ class ProveedorFiltroDestinoTest extends TestCase
             'database.connections.pgsql.database' => 'sistemafe_test_migrations',
             'database.connections.pgsql.username' => env('DB_USERNAME', 'root'),
             'database.connections.pgsql.password' => env('DB_PASSWORD', ''),
+            'database.connections.central.database' => 'sistemafe_test_migrations',
         ]);
         DB::purge('pgsql');
+        DB::purge('central');
         DB::beginTransaction();
+        DB::connection('central')->beginTransaction();
+
+        $this->tipoId = ProveedorTipo::create([
+            'nombre' => 'Transporte prueba', 'slug' => 'transporte-prueba', 'giro' => 'agencia_viajes', 'activo' => true,
+        ])->id;
     }
 
     protected function tearDown(): void
     {
+        DB::connection('central')->rollBack();
         DB::rollBack();
         parent::tearDown();
     }
@@ -51,7 +62,7 @@ class ProveedorFiltroDestinoTest extends TestCase
             'destino_atractivo_id' => $destino->id,
             'servicio_id' => $servicio->id,
         ]);
-        $proveedor = Proveedor::create(['razon_social' => $razonSocial, 'estado' => true]);
+        $proveedor = Proveedor::create(['razon_social' => $razonSocial, 'estado' => true, 'tipo_id' => $this->tipoId]);
         ProveedorServicio::create([
             'proveedor_id' => $proveedor->id,
             'destino_servicio_id' => $destinoServicio->id,
@@ -110,7 +121,7 @@ class ProveedorFiltroDestinoTest extends TestCase
     {
         $ica = DestinoAtractivo::create(['nombre' => 'Ica', 'tipo' => 'zona']);
         $this->crearProveedorEnDestino('Operador Ica SAC', $ica);
-        Proveedor::create(['razon_social' => 'Sin servicios SAC', 'estado' => true]);
+        Proveedor::create(['razon_social' => 'Sin servicios SAC', 'estado' => true, 'tipo_id' => $this->tipoId]);
 
         $respuesta = app(ProveedorController::class)
             ->index(new Request());
