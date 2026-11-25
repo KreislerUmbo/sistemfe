@@ -1,0 +1,1073 @@
+<title>Paquete de mayorista</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap">
+<style>
+/* Maqueta de T-155 / T-156: entrada propia al paquete de mayorista, panel en dos columnas,
+   comparación lado a lado y vista del cliente. Datos de ejemplo, sin conexión al sistema. */
+:root {
+  --bg: #f7f9fb; --card: #ffffff; --fg: #1e293b; --muted: #64748b; --line: #e5e9ef; --soft: #f1f5f9;
+  --accent: #2563eb; --accent-fg: #ffffff; --accent-soft: #e8efff;
+  --ok: #15803d; --ok-soft: #e7f6ec; --warn: #b45309; --warn-soft: #fef3c7;
+  --danger: #dc2626; --danger-soft: #fde8e8; --info: #0369a1; --info-soft: #e0f2fe;
+  --font: "Be Vietnam Pro", system-ui, -apple-system, "Segoe UI", sans-serif; --r: 8px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f1419; --card: #171d24; --fg: #e5ebf1; --muted: #94a3b8; --line: #2a333d; --soft: #1e262f;
+  --accent: #60a5fa; --accent-fg: #0b1b33; --accent-soft: #15243a;
+  --ok: #4ade80; --ok-soft: #12301d; --warn: #fbbf24; --warn-soft: #3a2a0a;
+  --danger: #f87171; --danger-soft: #3a1414; --info: #7dd3fc; --info-soft: #0c2a3a; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0f1419; --card: #171d24; --fg: #e5ebf1; --muted: #94a3b8; --line: #2a333d; --soft: #1e262f;
+  --accent: #60a5fa; --accent-fg: #0b1b33; --accent-soft: #15243a;
+  --ok: #4ade80; --ok-soft: #12301d; --warn: #fbbf24; --warn-soft: #3a2a0a;
+  --danger: #f87171; --danger-soft: #3a1414; --info: #7dd3fc; --info-soft: #0c2a3a; color-scheme: dark }
+* { box-sizing: border-box }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 14px; }
+button, input, select, textarea { font: inherit; color: inherit }
+.wrap { max-width: 1240px; margin: 0 auto; padding-block: 16px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.muted { color: var(--muted) } .small { font-size: 12px } .num { font-variant-numeric: tabular-nums }
+.aviso { background: var(--info-soft); color: var(--info); border-radius: var(--r); padding: 8px 12px; font-size: 12.5px; margin-bottom: 14px; }
+
+.head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-bottom: 12px; }
+.head h1 { font-size: 18px; margin: 0; }
+.chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--card);
+  border-radius: 999px; padding: 3px 10px; font-size: 12px; }
+.chip.activo { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); font-weight: 600 }
+.chip.apagado { opacity: .6 }
+
+.grid { display: grid; grid-template-columns: 1fr 300px; gap: 14px; align-items: start; }
+@media (max-width: 900px) { .grid { grid-template-columns: 1fr } }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); }
+.card-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;
+  padding: 10px 14px; border-bottom: 1px solid var(--line); font-weight: 600; }
+.card-body { padding: 14px; }
+
+.btn { border: 1px solid var(--line); background: var(--card); border-radius: 6px; padding: 5px 11px; font-size: 13px; cursor: pointer; }
+.btn:hover { background: var(--soft) }
+.btn.primario { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+.btn.primario:hover { filter: brightness(1.05) }
+.btn.exito { border-color: var(--ok); color: var(--ok); }
+.btn.link { border: 0; background: none; color: var(--accent); padding: 2px 4px; }
+.btn[disabled] { opacity: .5; cursor: not-allowed }
+.badge { display: inline-block; border-radius: 999px; padding: 1px 8px; font-size: 11px; font-weight: 600; white-space: nowrap }
+.b-ok { background: var(--ok-soft); color: var(--ok) } .b-warn { background: var(--warn-soft); color: var(--warn) }
+.b-danger { background: var(--danger-soft); color: var(--danger) } .b-muted { background: var(--soft); color: var(--muted) }
+.b-info { background: var(--info-soft); color: var(--info) }
+
+.item { border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px; margin-bottom: 8px; display: flex; justify-content: space-between; gap: 10px; }
+.vacio { border: 1px dashed var(--line); border-radius: var(--r); padding: 22px; text-align: center; }
+.bloque { border: 1px solid var(--accent); border-radius: var(--r); overflow: hidden; margin-bottom: 8px }
+.bloque-head { background: var(--accent-soft); padding: 10px 12px; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; align-items: center }
+.bloque-body { padding: 10px 12px }
+.fila { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; border-bottom: 1px dashed var(--line); align-items: center }
+.fila:last-child { border-bottom: 0 }
+.precio-linea { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; font-size: 13px }
+.total { display: flex; justify-content: space-between; font-weight: 700; font-size: 16px; border-top: 1px solid var(--line); margin-top: 8px; padding-top: 8px }
+
+/* Panel lateral */
+.fondo { position: fixed; inset: 0; background: rgba(15, 23, 42, .45); display: none; z-index: 10 }
+.fondo.abierto { display: block }
+.panel { position: absolute; top: 0; right: 0; bottom: 0; width: min(1160px, 100vw); background: var(--bg);
+  display: flex; flex-direction: column; box-shadow: -8px 0 24px rgba(0,0,0,.15);
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) 0 }
+.panel-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 12px 16px; background: var(--card); border-bottom: 1px solid var(--line) }
+.panel-head h2 { font-size: 16px; margin: 0 }
+.panel-cuerpo { flex: 1; display: grid; grid-template-columns: 270px 1fr; min-height: 0 }
+@media (max-width: 820px) { .panel-cuerpo { grid-template-columns: 1fr; grid-template-rows: auto 1fr } }
+.lista { border-right: 1px solid var(--line); overflow: auto; padding: 12px; background: var(--card) }
+.op { border: 1px solid var(--line); border-radius: var(--r); padding: 9px 10px; margin-bottom: 8px; cursor: pointer; background: var(--card) }
+.op:hover { border-color: var(--accent) }
+.op.sel { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft) }
+.op.descartada { opacity: .5 }
+.op .nombre { font-weight: 600; display: flex; justify-content: space-between; gap: 6px }
+.detalle { display: flex; flex-direction: column; min-height: 0 }
+.det-head { padding: 12px 16px 0; }
+.tabs { display: flex; gap: 2px; flex-wrap: wrap; border-bottom: 1px solid var(--line); padding: 0 16px; margin-top: 10px }
+.tab { border: 0; background: none; padding: 8px 10px; cursor: pointer; border-bottom: 2px solid transparent; font-size: 13px; color: var(--muted) }
+.tab.activo { color: var(--fg); border-bottom-color: var(--accent); font-weight: 600 }
+.ico { font-size: 11px; margin-left: 3px }
+.ico-ok { color: var(--ok) } .ico-falta { color: var(--warn) } .ico-revisar { color: var(--danger) } .ico-vacio { color: var(--muted) }
+.det-body { flex: 1; overflow: auto; padding: 16px }
+.det-foot { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; align-items: center; padding: 10px 16px; border-top: 1px solid var(--line); background: var(--card) }
+
+label.lbl { display: block; font-size: 12px; color: var(--muted); margin-bottom: 3px }
+.ctrl { width: 100%; border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; background: var(--card); font-size: 13px }
+textarea.ctrl { min-height: 110px; resize: vertical }
+.campo { margin-bottom: 12px }
+.ayuda { font-size: 11.5px; color: var(--muted); margin-top: 3px }
+.dos { display: grid; grid-template-columns: 1fr 1fr; gap: 14px } @media (max-width: 700px) { .dos { grid-template-columns: 1fr } }
+table { border-collapse: collapse; width: 100% }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); font-size: 13px; vertical-align: middle }
+th { font-size: 11.5px; color: var(--muted); font-weight: 600 }
+td input.ctrl { padding: 3px 6px }
+.alerta { border-radius: var(--r); padding: 8px 12px; font-size: 12.5px; margin-bottom: 12px }
+.alerta.danger { background: var(--danger-soft); color: var(--danger) }
+.alerta.warn { background: var(--warn-soft); color: var(--warn) }
+.alerta.info { background: var(--info-soft); color: var(--info) }
+.check-sec { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; margin-bottom: 6px; cursor: pointer }
+.check-sec:hover { border-color: var(--accent) }
+.tip { display: inline-block; width: 15px; height: 15px; border-radius: 50%; background: var(--soft); color: var(--muted); text-align: center; font-size: 10px; line-height: 15px; cursor: help; margin-left: 4px }
+
+.comparar { overflow: auto; padding: 16px; grid-column: 1 / -1 }
+.comparar th:first-child, .comparar td:first-child { position: sticky; left: 0; background: var(--card) }
+.comparar td, .comparar th { min-width: 180px }
+.comparar .mejor { color: var(--ok); font-weight: 700 }
+
+/* Modales */
+.modal { position: fixed; inset: 0; background: rgba(15, 23, 42, .5); display: none; align-items: center; justify-content: center; z-index: 20; padding: 16px }
+.modal.abierto { display: flex }
+.modal-caja { background: var(--card); border-radius: 10px; width: min(520px, 100%); max-height: 92vh; overflow: auto }
+.modal-caja.ancho { width: min(820px, 100%) }
+.modal-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--line); font-weight: 600 }
+.modal-body { padding: 16px } .modal-foot { padding: 10px 16px; border-top: 1px solid var(--line); display: flex; justify-content: flex-end; gap: 8px }
+.monedas { display: flex; gap: 8px } .monedas label { flex: 1; border: 1px solid var(--line); border-radius: 6px; padding: 8px; cursor: pointer; text-align: center }
+.monedas input { display: none } .monedas input:checked + span { color: var(--accent); font-weight: 700 }
+.monedas label:has(input:checked) { border-color: var(--accent); background: var(--accent-soft) }
+
+/* Vista del cliente: hoja tipo PDF */
+.hoja { background: #fff; color: #1e293b; border: 1px solid #e5e9ef; border-radius: 6px; padding: 24px 28px; font-size: 12.5px }
+.hoja h3 { font-size: 17px; margin: 0 0 4px } .hoja h4 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: #2563eb; margin: 18px 0 6px }
+.hoja th, .hoja td { border-bottom: 1px solid #e5e9ef; color: #1e293b; font-size: 12px }
+.hoja ul { margin: 0; padding-left: 18px } .hoja .pie { margin-top: 18px; color: #64748b; font-size: 11px; border-top: 1px solid #e5e9ef; padding-top: 8px }
+.membrete { display: flex; justify-content: space-between; border-bottom: 2px solid #2563eb; padding-bottom: 8px; margin-bottom: 14px; color: #64748b; font-size: 11px }
+
+.hotel { border: 1px solid var(--line); border-radius: var(--r); margin-bottom: 8px; background: var(--card) }
+.hotel-fila { display: flex; gap: 10px; align-items: center; padding: 8px 10px; flex-wrap: wrap }
+.hotel-detalle { padding: 12px; border-top: 1px solid var(--line) }
+.foto-mini { width: 44px; height: 33px; border-radius: 4px; flex: none }
+.estrellas { color: #d97706; letter-spacing: 1px; font-size: 12px }
+.fotos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; max-width: 480px }
+.foto { aspect-ratio: 4 / 3; border: 1px dashed var(--line); border-radius: 6px; display: flex; align-items: center; justify-content: center;
+  font-size: 12px; color: var(--muted); cursor: pointer }
+.foto:hover { border-color: var(--accent) }
+.foto.llena { border-style: solid; color: #fff; align-items: flex-end; justify-content: flex-start; padding: 5px; text-shadow: 0 1px 2px rgba(0,0,0,.5) }
+.hotel-pdf { margin-bottom: 12px } .tira { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 4px; max-width: 520px }
+.foto-pdf { aspect-ratio: 4 / 3; border-radius: 3px; color: #fff; font-size: 10px; padding: 4px; display: flex; align-items: flex-end }
+.tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin }
+.tab { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; padding: 8px 8px; flex: none }
+.tab svg { opacity: .7 } .tab.activo svg { opacity: 1; color: var(--accent) }
+.ico-tit { display: inline-flex; gap: 7px; align-items: center }
+.ico-tit svg { color: var(--muted) }
+.progreso { display: flex; align-items: center; gap: 8px; margin-top: 7px }
+.barra { flex: 1; height: 4px; border-radius: 2px; background: var(--soft); overflow: hidden }
+.barra span { display: block; height: 100%; transition: width .2s }
+@media (prefers-reduced-motion: reduce) { .barra span { transition: none } }
+.barra-herr { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 8px 10px; background: var(--soft); border-radius: var(--r); margin-bottom: 10px }
+.barra-herr .btn { display: inline-flex; gap: 6px; align-items: center }
+.archivo { display: flex; gap: 8px; align-items: center; border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; margin-bottom: 6px; font-size: 13px }
+.soltar { display: flex; gap: 6px; align-items: center; justify-content: center; border: 1px dashed var(--line); border-radius: 6px; padding: 12px; font-size: 12px; color: var(--muted); cursor: pointer }
+.soltar:hover { border-color: var(--accent); color: var(--accent) }
+.vacio-ico { display: flex; flex-direction: column; align-items: center; gap: 6px }
+.vacio-ico svg { width: 26px; height: 26px }
+.sug-caja { position: relative }
+.sugerencias { position: absolute; left: 0; right: 0; top: 100%; z-index: 5; background: var(--card); border: 1px solid var(--line);
+  border-radius: 6px; box-shadow: 0 6px 16px rgba(0,0,0,.12); margin-top: 2px }
+.sugerencias:empty { display: none }
+.sug { display: flex; gap: 8px; align-items: center; padding: 6px 8px; cursor: pointer; width: 100%; border: 0; background: none; text-align: left }
+.sug:hover { background: var(--soft) }
+.notas { margin-top: 18px } .notas summary { cursor: pointer; font-weight: 600 } .notas li { margin-bottom: 4px }
+</style>
+<div class="wrap">
+  <div class="aviso">Maqueta para revisar T-155 y T-156: datos de ejemplo, no se conecta al sistema. Prueba: <b>+ Paquete de mayorista</b> → recorre las pestañas → <b>Comparar lado a lado</b> → <b>Vista del cliente</b> → <b>Listo</b>. Todo se guarda al escribir y el mayorista elegido aparece en la cotización al instante.</div>
+
+  <div class="head">
+    <h1>CDKM-1125-0000012 · Familia Ríos</h1>
+    <span class="chip">2 adultos + 1 niño</span>
+    <span class="chip">12 – 17 dic 2026</span>
+  </div>
+  <div class="head small">
+    <span class="muted">Destinos:</span>
+    <span class="chip activo">Panamá · 12–17 dic</span>
+    <span class="chip apagado" title="Cada destino tiene su propio paquete de mayorista">Cartagena · 17–20 dic</span>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="card-header">
+        <span>Alternativa 1 · Panamá</span>
+        <span style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn" title="Tours, traslados, hoteles y pasajes de la agencia (sin cambios)">+ Servicio de la agencia</button>
+          <button class="btn primario" data-act="abrir-panel">+ Paquete de mayorista</button>
+        </span>
+      </div>
+      <div class="card-body" id="lienzo"></div>
+    </div>
+    <div class="card">
+      <div class="card-header">Precio</div>
+      <div class="card-body" id="precio"></div>
+    </div>
+  </div>
+
+  <details class="notas card card-body">
+    <summary>Qué cambia respecto de hoy</summary>
+    <ul class="small">
+      <li>El paquete de mayorista tiene <b>entrada propia</b>; ya no es una pestaña del modal «Agregar servicio».</li>
+      <li>Se arma <b>en caliente</b>: cada cambio se guarda al escribir y lo del mayorista elegido se ve en la cotización al instante, sin paso de «usar».</li>
+      <li>Panel lateral sobre el cotizador (no una página aparte: el paquete siempre pertenece a una cotización y una alternativa), en dos columnas: a la izquierda los mayoristas consultados; a la derecha la opción con <b>pestañas</b> marcadas ✓ completa / ⚠ falta.</li>
+      <li>El alta pide solo proveedor y moneda. El nombre del paquete para el cliente se llena solo con destino y días (editable en Resumen). El vuelo pasa a su pestaña y es <b>informativo</b> (no suma).</li>
+      <li>Se pueden cargar hoteles sin elegir antes el mayorista. Elegir avisa, sin bloquear, si falta el precio.</li>
+      <li>Cada hotel: nombre, categoría en estrellas, régimen, calificación de los viajeros con su fuente, descripción larga, 3 fotos (1 fachada y 2 habitación) y por ocupación <b>costo, fee y venta</b>.</li>
+      <li>Cada tour y cada opcional: título, descripción larga y hasta 3 fotos (el tour con su día; el opcional con su precio). En el PDF, el texto va debajo de las fotos.</li>
+      <li><b>Reutilizar</b> con un solo patrón en hoteles, tours y opcionales: «Buscar en…» abre lo guardado para el destino; al escribir el nombre aparecen coincidencias para no duplicar; lo nuevo se guarda con «Registrar en Proveedores» / «Guardar para reutilizar». Siempre se copia: editar la copia no cambia la ficha guardada.</li>
+      <li>El alta puede <b>copiar el paquete de otra cotización</b> (la opción de mayorista completa): copia todo menos los precios.</li>
+      <li>Datos internos de cada mayorista: <b>n.º de cotización, vigencia de precios</b> (aviso «vence en N días» / «vencida») y el <b>archivo original</b>.</li>
+      <li><b>Pegar la tabla de precios</b> del correo o Excel, y <b>fee para todos</b> (markup % o monto) en un clic.</li>
+      <li>Íconos en las pestañas y <b>progreso</b> en cada tarjeta («4 de 6»).</li>
+      <li><b>Comparar lado a lado</b> con el precio «desde» por ocupación.</li>
+      <li><b>Condiciones del paquete</b> por opción (T-156), dentro del PDF de cotización.</li>
+      <li><b>Vista del cliente</b> antes de usar el paquete: muestra el PDF sin el nombre del mayorista y avisa si un texto lo menciona.</li>
+      <li>En el lienzo, el paquete es <b>un solo bloque</b> con sus opciones de hotel y opcionales.</li>
+    </ul>
+  </details>
+</div>
+
+<!-- Panel lateral del paquete de mayorista -->
+<div class="fondo" id="fondo">
+  <div class="panel">
+    <div class="panel-head">
+      <div><h2>Paquete de mayorista · Panamá</h2><div class="small muted">CDKM-1125-0000012 · Alternativa 1</div></div>
+      <span style="display:flex;gap:10px;align-items:center">
+        <span id="guardado" class="small muted" title="Cada cambio se guarda al escribir">✓ Guardado</span>
+        <button class="btn" id="btn-vista" data-act="alternar-vista">Comparar lado a lado</button>
+        <button class="btn" data-act="cerrar-panel" title="Cerrar">✕</button>
+      </span>
+    </div>
+    <div class="panel-cuerpo" id="panel-cuerpo"></div>
+  </div>
+</div>
+
+<!-- Alta de mayorista -->
+<div class="modal" id="modal-alta">
+  <div class="modal-caja">
+    <div class="modal-head">Agregar mayorista <button class="btn link" data-act="cerrar-modal">✕</button></div>
+    <div class="modal-body">
+      <div class="campo">
+        <label class="lbl">Proveedor mayorista</label>
+        <select class="ctrl" id="alta-proveedor"></select>
+      </div>
+      <div class="campo">
+        <label class="lbl">Moneda del paquete</label>
+        <div class="monedas">
+          <label><input type="radio" name="alta-moneda" value="USD" checked><span>USD · dólares</span></label>
+          <label><input type="radio" name="alta-moneda" value="PEN"><span>PEN · soles</span></label>
+        </div>
+        <div class="ayuda">Los precios de hoteles se cargan en esta moneda.</div>
+      </div>
+      <div class="alerta info">El nombre del paquete para el cliente se llena solo: <b>Panamá 6D/5N</b> (destino y días). Puedes cambiarlo después en Resumen.</div>
+      <div class="campo">
+        <label class="lbl">Copiar el paquete de otra cotización (opcional)</label>
+        <select class="ctrl" id="alta-copiar">
+          <option value="">No, empezar vacío</option>
+          <option value="anterior">Nuevo Mundo Viajes · Panamá 5D/4N · CDKM-1025-0000044 (12-oct)</option>
+        </select>
+        <div class="ayuda">Copia hoteles con fotos y descripción, vuelo, incluye, tours, opcionales y condiciones. Los precios no se copian: pídelos de nuevo al mayorista.</div>
+      </div>
+      <div class="ayuda">Si empiezas vacío, vuelos, incluye, tours, opcionales y condiciones se completan después, en sus pestañas.</div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" data-act="cerrar-modal">Cancelar</button>
+      <button class="btn primario" data-act="crear-op">Agregar y cargar hoteles</button>
+    </div>
+  </div>
+</div>
+
+<!-- Vista del cliente -->
+<div class="modal" id="modal-cliente">
+  <div class="modal-caja ancho">
+    <div class="modal-head">Vista del cliente (así sale en el PDF) <button class="btn link" data-act="cerrar-modal">✕</button></div>
+    <div class="modal-body" id="cliente-body"></div>
+  </div>
+</div>
+
+<!-- Pegar la tabla de precios del mayorista -->
+<div class="modal" id="modal-pegar">
+  <div class="modal-caja ancho">
+    <div class="modal-head">Pegar tabla de precios <button class="btn link" data-act="cerrar-modal">✕</button></div>
+    <div class="modal-body">
+      <div class="small muted" style="margin-bottom:6px">Copia la tabla del correo o del Excel del mayorista y pégala aquí. Una fila por hotel: nombre y precios de simple, doble y triple, en ese orden. Si el hotel ya está cargado, se actualizan sus precios.</div>
+      <textarea class="ctrl" id="pegar-texto" style="min-height:120px;font-family:ui-monospace,Consolas,monospace;font-size:12px">Hotel	SGL	DBL	TPL
+Riu Plaza Panamá	USD 1,110	USD 820	USD 785
+Hotel El Panamá	980	760	720
+Hilton Panamá	1,420	1,050	—</textarea>
+      <div class="small" style="display:flex;gap:14px;margin:8px 0;flex-wrap:wrap;align-items:center">
+        <span class="muted">Los precios pegados son:</span>
+        <label><input type="radio" name="pegar-tipo" value="costo" checked> Costo del mayorista (se suma el fee para todos)</label>
+        <label><input type="radio" name="pegar-tipo" value="venta"> Precio de venta</label>
+      </div>
+      <div id="pegar-vista"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" data-act="cerrar-modal">Cancelar</button>
+      <button class="btn primario" data-act="confirmar-pegar" id="btn-pegar">Agregar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Biblioteca para reutilizar hoteles, tours y opcionales -->
+<div class="modal" id="modal-biblio">
+  <div class="modal-caja ancho">
+    <div class="modal-head"><span id="biblio-titulo"></span> <button class="btn link" data-act="cerrar-modal">✕</button></div>
+    <div class="modal-body">
+      <input class="ctrl" id="biblio-buscar" placeholder="Buscar por nombre o descripción…" autocomplete="off">
+      <div class="ayuda" id="biblio-ayuda"></div>
+      <div id="biblio-lista" style="margin-top:10px"></div>
+      <div class="ayuda">Se agrega una copia: puedes editarla sin cambiar la ficha guardada.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const ADULTOS = 2, NINOS = 1;
+// Nombre sugerido del paquete: destino + días/noches del destino activo (12 al 17 dic). Si la alternativa
+// tuviera un nombre propio (no «Alternativa N»), se sugeriría ese.
+const SUGERIDO = 'Panamá 6D/5N';
+const nombrePaquete = (op) => String(op.desc || '').trim() || SUGERIDO;
+const PROVEEDORES = ['CIC Travel', 'Costamar Travel', 'Destinos Mundiales', 'Nuevo Mundo Viajes'];
+const OCUP = [['simple', 'Simple'], ['doble', 'Doble'], ['triple', 'Triple']];
+const TEXTOS_GUARDADOS = {
+  'Internacional estándar': { incluye: 'Boleto aéreo ida y vuelta\nTraslados aeropuerto – hotel – aeropuerto\nAlojamiento con desayuno\nAsistencia al viajero', noIncluye: 'Tasas de salida\nPropinas\nGastos personales' },
+  'Solo terrestre': { incluye: 'Traslados aeropuerto – hotel – aeropuerto\nAlojamiento con desayuno\nTours indicados en el itinerario', noIncluye: 'Boleto aéreo\nAlmuerzos y cenas\nPropinas' },
+};
+
+// Hotel de ejemplo: venta y costo por ocupación [simple, doble, triple]; fotos = 1 fachada + 2 habitación.
+function H(nombre, estrellas, puntaje, desc, venta, costo, ofrecer, nFotos = 3) {
+  return { nombre, estrellas, regimen: 'Desayuno', desc,
+    puntaje: puntaje ? { valor: puntaje[0], escala: puntaje[1], fuente: puntaje[2] } : { valor: '', escala: '10', fuente: '' },
+    simple: venta[0], doble: venta[1], triple: venta[2], costo: { simple: costo[0], doble: costo[1], triple: costo[2] },
+    fotos: [0, 1, 2].map((i) => i < nFotos), ofrecer, abierto: false };
+}
+let estado = {
+  ops: [
+    { id: 1, proveedor: 'CIC Travel', moneda: 'USD', desc: 'Panamá 6D/5N con City Tour y Canal', estado: 'elegida',
+      numero: 'COT-88412', vigencia: '2026-11-28', archivos: [{ nombre: 'CIC-Panama-dic-Rios.pdf', tam: '312 KB' }],
+      vuelo: { aerolinea: 'Copa Airlines', detalle: 'Lima – Panamá · CM 232 · 12-dic 09:40\nPanamá – Lima · CM 231 · 17-dic 16:10\n1 maleta de 23 kg por persona' },
+      hoteles: [
+        H('Riu Plaza Panamá', 4, ['8.6', '10', 'Booking'], 'Hotel moderno en la zona bancaria, a pasos de la Vía España. Piscina en la azotea, gimnasio y restaurante buffet.', [1290, 950, 910], [1110, 820, 785], true),
+        H('JW Marriott Panamá', 5, ['9.0', '10', 'Booking'], 'Torre frente a la bahía en Punta Pacífica, con vista al mar, spa y casino. Habitaciones amplias con balcón.', [1480, 1120, 1060], [1270, 960, 910], true),
+        H('Ibis Panamá', 3, null, '', [1050, 820, null], [905, 705, null], false, 1),
+      ],
+      incluye: 'Boleto aéreo Lima – Panamá – Lima\nTraslados aeropuerto – hotel – aeropuerto\n5 noches de alojamiento\nDesayunos diarios\nCity Tour + Canal de Panamá\nAsistencia al viajero',
+      noIncluye: 'Tasas de salida\nPropinas\nGastos personales',
+      tours: [
+        { dia: 2, nombre: 'City Tour + Canal de Panamá', desc: 'Recorrido por la ciudad moderna y el Casco Antiguo. Visita a las esclusas de Miraflores para ver el paso de los barcos por el canal. Duración aproximada: 5 horas.', fotos: [true, true, true] },
+        { dia: 4, nombre: 'Casco Antiguo y Calzada de Amador', desc: 'Caminata por las plazas del Casco Antiguo y paseo por la Calzada de Amador con vista a la ciudad.', fotos: [true, false, false] }],
+      opcionales: [
+        { nombre: 'Excursión a San Blas (full day)', precio: 145, agregado: false, desc: 'Traslado en 4x4 y lancha a las islas de Guna Yala. Almuerzo típico, tiempo libre en playa de arena blanca y snorkel. Salida 5:00 a. m., retorno 6:00 p. m.', fotos: [true, true, true] },
+        { nombre: 'Isla Taboga', precio: 95, agregado: false, desc: 'Ferry a la «isla de las flores», a 30 minutos de la ciudad. Playa, caminata por el pueblo y almuerzo.', fotos: [true, true, false] }],
+      condiciones: 'Reserva con 30 % de adelanto; saldo 20 días antes de la salida.\nAnulación: hasta 30 días antes, USD 100 por persona; de 29 a 15 días, 50 %; menos de 15 días, 100 %.\nTarifas sujetas a disponibilidad al momento de reservar.\nEl boleto aéreo no es reembolsable una vez emitido.' },
+    { id: 2, proveedor: 'Costamar Travel', moneda: 'USD', desc: 'Panamá clásico 6D/5N', estado: 'candidata',
+      numero: 'PTY-2026-117', vigencia: '2026-12-10', archivos: [],
+      vuelo: { aerolinea: 'Copa Airlines', detalle: 'Vuelos directos desde Lima. Horarios por confirmar.' },
+      hoteles: [
+        H('Riu Plaza Panamá', 4, ['8.6', '10', 'Booking'], 'Hotel moderno en la zona bancaria, con piscina en la azotea.', [1350, 990, 940], [1160, 850, 810], true),
+        H('Sortis Hotel', 5, ['4.5', '5', 'TripAdvisor'], 'Hotel de lujo en Obarrio con spa y piscina infinita.', [1600, 1190, null], [1380, 1025, null], true, 2),
+      ],
+      incluye: 'Boleto aéreo Lima – Panamá – Lima\nTraslados\n5 noches de alojamiento con desayuno\nCity Tour',
+      noIncluye: 'Tasas de salida\nPropinas',
+      tours: [{ dia: 2, nombre: 'City Tour panorámico', desc: '', fotos: [false, false, false] }],
+      opcionales: [{ nombre: 'Excursión a San Blas (full day)', precio: 160, agregado: false, desc: '', fotos: [false, false, false] }],
+      condiciones: '' },
+    { id: 3, proveedor: 'Destinos Mundiales', moneda: 'USD', desc: 'Panamá y compras 6D/5N', estado: 'candidata',
+      numero: '', vigencia: '2026-11-20', archivos: [],
+      vuelo: { aerolinea: '', detalle: '' },
+      hoteles: [],
+      incluye: 'Boleto aéreo\nTraslados\nAlojamiento con desayuno',
+      noIncluye: '',
+      tours: [], opcionales: [],
+      condiciones: 'Precios por persona en habitación doble. Para cambios comunicarse con Destinos Mundiales al (01) 445-0000.\nPenalidad por anulación según políticas de la aerolínea.' },
+  ],
+  sel: 1, tab: 'resumen', vista: 'detalle', confirmarElegir: null,
+  feeTodos: { valor: 15, tipo: 'pct' }, feeAplicado: null,
+  usado: null,          // id de la opción usada en la cotización
+  hotelElegido: null,   // índice del hotel que el cliente eligió en el lienzo
+};
+let siguienteId = 4;
+
+// Biblioteca de reutilización, ya filtrada por el destino activo (Panamá). Se copia al usarla: editar la
+// copia no cambia el original ni un PDF ya enviado (mismo criterio que contenido_tour, sesión 12e).
+const BIBLIO = {
+  hoteles: [
+    { nombre: 'Riu Plaza Panamá', estrellas: 4, regimen: 'Desayuno', puntaje: { valor: '8.6', escala: '10', fuente: 'Booking' }, desc: 'Hotel moderno en la zona bancaria, a pasos de la Vía España. Piscina en la azotea, gimnasio y restaurante buffet.', fotos: [true, true, true], origen: 'Proveedores' },
+    { nombre: 'Las Américas Golden Tower', estrellas: 4, regimen: 'Desayuno', puntaje: { valor: '8.3', escala: '10', fuente: 'Booking' }, desc: 'Torre en Punta Pacífica, junto al centro comercial Multiplaza. Habitaciones con cocineta.', fotos: [true, true, false], origen: 'Proveedores' },
+    { nombre: 'Wyndham Albrook Mall', estrellas: 4, regimen: 'Desayuno', puntaje: { valor: '8.1', escala: '10', fuente: 'Booking' }, desc: 'Conectado al Albrook Mall, a 10 minutos del Casco Antiguo. Ideal para compras.', fotos: [true, false, false], origen: 'Cargado en CDKM-0926-0000031' },
+  ],
+  tours: [
+    { nombre: 'City Tour + Canal de Panamá', desc: 'Recorrido por la ciudad moderna y el Casco Antiguo. Visita a las esclusas de Miraflores para ver el paso de los barcos por el canal. Duración aproximada: 5 horas.', fotos: [true, true, true], origen: 'Catálogo de tours' },
+    { nombre: 'Biomuseo y Calzada de Amador', desc: 'Visita al museo de biodiversidad diseñado por Frank Gehry y paseo por la Calzada de Amador.', fotos: [true, true, false], origen: 'Catálogo de tours' },
+    { nombre: 'Tour de compras Albrook', desc: 'Traslado al Albrook Mall con tiempo libre para compras. Retorno al hotel.', fotos: [true, false, false], origen: 'Contenido guardado' },
+  ],
+  opcionales: [
+    { nombre: 'Excursión a San Blas (full day)', desc: 'Traslado en 4x4 y lancha a las islas de Guna Yala. Almuerzo típico, playa y snorkel. Salida 5:00 a. m., retorno 6:00 p. m.', fotos: [true, true, true], origen: 'Contenido guardado' },
+    { nombre: 'Isla Taboga', desc: 'Ferry a la «isla de las flores», a 30 minutos de la ciudad. Playa, caminata por el pueblo y almuerzo.', fotos: [true, true, false], origen: 'Contenido guardado' },
+    { nombre: 'Valle de Antón (full day)', desc: 'Pueblo en el cráter de un volcán: mercado artesanal, cascada El Macho y aguas termales.', fotos: [true, true, true], origen: 'Contenido guardado' },
+  ],
+};
+const ORIGEN_NUEVO = { hoteles: 'Proveedores', tours: 'Contenido guardado', opcionales: 'Contenido guardado' };
+const TITULO_BIBLIO = {
+  hoteles: ['Buscar en Proveedores', 'Hoteles registrados en Proveedores y los cargados en otras cotizaciones · Panamá'],
+  tours: ['Buscar en el catálogo', 'Catálogo de tours y contenido guardado · Panamá'],
+  opcionales: ['Buscar opcionales guardados', 'Contenido guardado · Panamá'],
+};
+// Opción de una cotización anterior para «Partir de una opción anterior» en el alta.
+const ANTERIOR = JSON.parse(JSON.stringify({ ...estado.ops[0], proveedor: 'Nuevo Mundo Viajes', desc: 'Panamá 5D/4N con City Tour', codigo: 'CDKM-1025-0000044' }));
+// En el ejemplo, parte de lo cargado ya vino de la biblioteca; lo demás muestra «Registrar» / «Guardar».
+estado.ops[0].hoteles[0].origen = 'Proveedores'; estado.ops[1].hoteles[0].origen = 'Proveedores';
+estado.ops[0].tours[0].origen = 'Catálogo de tours';
+estado.ops[0].opcionales.forEach((o) => { o.origen = 'Contenido guardado'; });
+const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+
+function copiarDeBiblio(item, b, lista) {
+  item.nombre = b.nombre; item.desc = b.desc; item.fotos = [...b.fotos]; item.origen = b.origen;
+  if (lista === 'hoteles') { item.estrellas = b.estrellas; item.regimen = b.regimen; item.puntaje = { ...b.puntaje }; }
+}
+function badgeOrigen(item, lista, i) {
+  if (item.origen) return `<span class="badge b-info" title="Es una copia: editarla no cambia el original">${esc(item.origen)} · copia editable</span>`;
+  if (!String(item.nombre || '').trim()) return '';
+  return `<button class="btn link small" data-act="guardar-biblio" data-lista="${lista}" data-i="${i}">${lista === 'hoteles' ? 'Registrar en Proveedores' : 'Guardar para reutilizar'}</button>`;
+}
+function renderSugerencias(lista, i, texto) {
+  const caja = $(`sug-${lista}-${i}`); if (!caja) return;
+  const q = norm(texto);
+  const res = q.length < 2 ? [] : BIBLIO[lista].map((b, k) => [b, k]).filter(([b]) => norm(b.nombre).includes(q) && norm(b.nombre) !== q);
+  caja.innerHTML = res.length ? `<div class="small muted" style="padding:6px 8px 2px">¿Ya existe? Usa la ficha guardada para no duplicarla:</div>` + res.map(([b, k]) =>
+    `<button type="button" class="sug" data-act="usar-biblio" data-lista="${lista}" data-i="${i}" data-b="${k}">
+      <span class="foto-mini" style="width:36px;height:27px;background:${b.fotos[0] ? color(b.nombre, 0) : 'var(--soft)'}"></span>
+      <span style="flex:1;min-width:0"><b>${esc(b.nombre)}</b> <span class="estrellas">${estrellas(b.estrellas)}</span><br><span class="small muted">${esc(b.origen)}</span></span>
+      <span class="small" style="color:var(--accent)">Usar</span></button>`).join('') : '';
+}
+let biblioLista = null;
+function renderBiblio() {
+  const op = opSel(), q = norm($('biblio-buscar').value);
+  const yaEstan = new Set(op[biblioLista].map((x) => norm(x.nombre)));
+  const res = BIBLIO[biblioLista].map((b, k) => [b, k]).filter(([b]) => !q || norm(b.nombre).includes(q) || norm(b.desc).includes(q));
+  $('biblio-lista').innerHTML = res.length ? res.map(([b, k]) => `<div class="item" style="align-items:center">
+      <div style="display:flex;gap:10px;align-items:center;min-width:0"><span class="foto-mini" style="background:${b.fotos[0] ? color(b.nombre, 0) : 'var(--soft)'}"></span>
+        <div style="min-width:0"><b>${esc(b.nombre)}</b> <span class="estrellas">${estrellas(b.estrellas)}</span>
+          <div class="small muted">${esc(b.origen)} · ${b.fotos.filter(Boolean).length} fotos</div>
+          <div class="small" style="color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:300px">${esc(b.desc)}</div></div></div>
+      ${yaEstan.has(norm(b.nombre)) ? '<span class="small muted">Ya está en el paquete</span>' : `<button class="btn" data-act="agregar-biblio" data-b="${k}">Agregar</button>`}</div>`).join('')
+    : '<div class="vacio small muted">Sin resultados. Agrégalo nuevo y guárdalo para la próxima vez.</div>';
+}
+
+const SECCIONES = [
+  ['resumen', 'Resumen'], ['hoteles', 'Hoteles y precios'], ['vuelos', 'Vuelos'],
+  ['incluye', 'Incluye / No incluye'], ['tours', 'Tours'], ['opcionales', 'Opcionales'], ['condiciones', 'Condiciones'],
+];
+const ICONO = { ok: '✓', falta: '⚠', revisar: '⚠', vacio: '○' };
+// Íconos de línea en SVG. En el sistema serían los de Font Awesome que el panel ya carga (sin costo extra).
+const svg = (d) => `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const ICONOS = {
+  resumen: svg('<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>'),
+  hoteles: svg('<path d="M3 21h18M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16M9 7h1M14 7h1M9 11h1M14 11h1M10 21v-4h4v4"/>'),
+  vuelos: svg('<path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/>'),
+  incluye: svg('<path d="M11 6h10M11 12h10M11 18h10M3 6l1.5 1.5L7 5M3 12l1.5 1.5L7 11M3 18l1.5 1.5L7 17"/>'),
+  tours: svg('<circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/>'),
+  opcionales: svg('<circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>'),
+  condiciones: svg('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/>'),
+  clip: svg('<path d="m21.4 11-8.8 8.8a5.5 5.5 0 0 1-7.8-7.8l8.8-8.8a3.7 3.7 0 0 1 5.2 5.2l-8.8 8.8a1.8 1.8 0 0 1-2.6-2.6l8.1-8.1"/>'),
+};
+// «Hoy» fijo para la maqueta; en el sistema, HoraPeru::hoyTexto().
+const HOY = '2026-11-25';
+function badgeVigencia(o) {
+  if (!o.vigencia) return '';
+  const d = Math.round((Date.parse(o.vigencia) - Date.parse(HOY)) / 86400000);
+  const [, mes, dia] = o.vigencia.split('-');
+  const f = `${Number(dia)} ${['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'][Number(mes) - 1]}`;
+  if (d < 0) return `<span class="badge b-danger" title="Pide precios actualizados al mayorista">Vencida (${f})</span>`;
+  if (d <= 3) return `<span class="badge b-warn" title="Precios válidos hasta el ${f}">${d === 0 ? 'Vence hoy' : `Vence en ${d} ${d === 1 ? 'día' : 'días'}`}</span>`;
+  return `<span class="badge b-muted">Válida hasta ${f}</span>`;
+}
+function progreso(o) {
+  const est = SECCIONES.slice(1).map(([k, t]) => [t, estadoSeccion(o, k)]);
+  const ok = est.filter(([, e]) => e === 'ok').length;
+  const color = est.some(([, e]) => e === 'revisar') ? 'var(--danger)' : est.some(([, e]) => e === 'falta') ? 'var(--warn)' : 'var(--ok)';
+  const faltan = est.filter(([, e]) => e !== 'ok').map(([t, e]) => `${t}: ${{ falta: 'falta', revisar: 'menciona al mayorista', vacio: 'vacío' }[e]}`).join(' · ');
+  return { ok, total: est.length, color, faltan };
+}
+const conFee = (c) => c == null ? null : estado.feeTodos.tipo === 'pct' ? Math.round(c * (1 + Number(estado.feeTodos.valor || 0) / 100)) : c + Number(estado.feeTodos.valor || 0);
+function leerPegado(texto) {
+  const num = (s) => { const v = String(s || '').replace(/[^\d.,]/g, '').replace(/,(?=\d{3}(\D|$))/g, '').replace(',', '.'); return v ? Number(v) : null; };
+  return String(texto || '').split('\n').map((l) => l.split(/\t|;|\||\s{2,}/).map((c) => c.trim()).filter((c, i) => c || i > 0))
+    .filter((c) => c.length > 1 && c[0]).map((c) => ({ nombre: c[0], simple: num(c[1]), doble: num(c[2]), triple: num(c[3]) }))
+    .filter((r) => r.simple != null || r.doble != null || r.triple != null);
+}
+function renderPegar() {
+  const op = opSel(), filas = leerPegado($('pegar-texto').value), costo = document.querySelector('[name=pegar-tipo]:checked').value === 'costo';
+  const existe = (n) => op.hoteles.some((x) => norm(x.nombre) === norm(n));
+  $('pegar-vista').innerHTML = filas.length ? `<div class="small muted" style="margin-bottom:4px">Vista previa · ${filas.length} hoteles${costo ? ` · venta con fee ${estado.feeTodos.tipo === 'pct' ? `${estado.feeTodos.valor} %` : `${op.moneda} ${estado.feeTodos.valor}`}` : ''}</div>
+    <div style="overflow:auto"><table><thead><tr><th>Hotel</th>${OCUP.map(([, t]) => `<th>${t}</th>`).join('')}<th></th></tr></thead><tbody>
+    ${filas.map((r) => `<tr><td>${esc(r.nombre)}</td>${OCUP.map(([k]) => `<td class="num">${r[k] == null ? '—' : costo ? `${r[k]} <span class="small muted">→ ${conFee(r[k])}</span>` : r[k]}</td>`).join('')}
+      <td>${existe(r.nombre) ? '<span class="badge b-warn">Actualiza precios</span>' : '<span class="badge b-ok">Nuevo</span>'}</td></tr>`).join('')}</tbody></table></div>`
+    : '<div class="vacio small muted">No se reconocen filas. Cada fila: nombre del hotel y precios separados por tabulación, punto y coma o espacios.</div>';
+  $('btn-pegar').disabled = !filas.length; $('btn-pegar').textContent = filas.length ? `Agregar ${filas.length} hoteles` : 'Agregar';
+}
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const lineas = (s) => String(s || '').split('\n').map((l) => l.trim()).filter(Boolean);
+const fmt = (m, n) => n == null ? '—' : `${m} ${Number(n).toLocaleString('en-US')}`;
+const opSel = () => estado.ops.find((o) => o.id === estado.sel);
+// En caliente: el mayorista elegido está en la cotización apenas tiene un hotel para ofrecer.
+const opElegida = () => estado.ops.find((o) => o.estado === 'elegida');
+const opEnCotizacion = () => { const o = opElegida(); return o && ofrecidos(o).length ? o : null; };
+let tGuardado;
+function marcarGuardado() {
+  const g = $('guardado'); g.textContent = 'Guardando…';
+  clearTimeout(tGuardado); tGuardado = setTimeout(() => { g.textContent = '✓ Guardado'; }, 600);
+}
+const ofrecidos = (op) => op.hoteles.filter((h) => h.ofrecer && h.doble > 0);
+const desde = (op, oc, soloOfrecidos = false) => {
+  const v = (soloOfrecidos ? op.hoteles.filter((h) => h.ofrecer) : op.hoteles).map((h) => h[oc]).filter((x) => x > 0);
+  return v.length ? Math.min(...v) : null;
+};
+
+// Textos que ve el cliente y que no deben nombrar al mayorista.
+function fugas(op) {
+  const nombre = op.proveedor.toLowerCase();
+  const campos = [['Descripción', 'resumen', op.desc], ['Detalle del vuelo', 'vuelos', op.vuelo.detalle],
+    ['Incluye', 'incluye', op.incluye], ['No incluye', 'incluye', op.noIncluye], ['Condiciones', 'condiciones', op.condiciones],
+    ...op.hoteles.map((x) => ['Hoteles', 'hoteles', x.desc]),
+    ...op.tours.map((t) => ['Tours', 'tours', `${t.nombre} ${t.desc || ''}`]),...op.opcionales.map((o) => ['Opcionales', 'opcionales', `${o.nombre} ${o.desc || ''}`])];
+  return campos.filter(([, , texto]) => String(texto || '').toLowerCase().includes(nombre)).map(([c, tab]) => ({ campo: c, tab }));
+}
+
+function estadoSeccion(op, k) {
+  if (fugas(op).some((f) => f.tab === k)) return 'revisar';
+  switch (k) {
+    case 'hoteles': return ofrecidos(op).length ? 'ok' : 'falta';
+    case 'vuelos': return op.vuelo.aerolinea ? 'ok' : 'vacio';
+    case 'incluye': return lineas(op.incluye).length ? 'ok' : 'falta';
+    case 'tours': return op.tours.length ? 'ok' : 'vacio';
+    case 'opcionales': return op.opcionales.length ? 'ok' : 'vacio';
+    case 'condiciones': return op.condiciones.trim() ? 'ok' : 'falta';
+    default: return null;
+  }
+}
+const pendientes = (op) => SECCIONES.filter(([k]) => ['falta', 'revisar'].includes(estadoSeccion(op, k)));
+
+/* ---------- Cotizador (fondo) ---------- */
+function renderLienzo() {
+  const op = opEnCotizacion();
+  let html = `<div class="item"><div><b>Pasaje aéreo Tarapoto – Lima – Tarapoto</b><div class="small muted">Servicio de la agencia · LATAM · 3 pasajeros</div></div><div class="num">USD 540</div></div>`;
+  if (!op) {
+    html += `<div class="vacio"><div style="font-weight:600;margin-bottom:4px">Panamá todavía no tiene paquete de mayorista</div>
+      <div class="small muted" style="margin-bottom:10px">Carga las cotizaciones de los mayoristas y compáralas; la elegida aparece aquí.</div>
+      <button class="btn primario" data-act="abrir-panel">+ Paquete de mayorista</button></div>`;
+  } else {
+    const hs = ofrecidos(op);
+    const resuelto = estado.hotelElegido != null && hs[estado.hotelElegido];
+    html += `<div class="bloque"><div class="bloque-head"><div><b>Paquete: ${esc(nombrePaquete(op))}</b>
+        <div class="small muted" title="Dato interno: no sale en el PDF">🔒 ${esc(op.proveedor)} · solo uso interno</div></div>
+      <span style="display:flex;gap:6px;align-items:center">
+        <span class="badge b-info">${op.moneda}</span>
+        ${resuelto ? '<span class="badge b-ok">Hotel elegido</span>' : `<span class="badge b-warn">Sin resolver · desde ${fmt(op.moneda, desde(op, 'doble', true))}</span>`}
+        <button class="btn" data-act="abrir-panel">Editar paquete</button></span></div>
+      <div class="bloque-body">
+        <div class="small muted" style="margin-bottom:4px">Opciones de hotel · doble · precio del paquete por adulto</div>
+        ${hs.map((h, i) => `<div class="fila"><label style="display:flex;gap:8px;align-items:center;cursor:pointer">
+            <input type="radio" name="hotel-lienzo" data-act="elegir-hotel" data-i="${i}" ${estado.hotelElegido === i ? 'checked' : ''}>
+            ${esc(h.nombre)} <span class="estrellas">${estrellas(h.estrellas)}</span> <span class="muted small">· ${esc(h.regimen)}</span></label>
+            <span class="num">${fmt(op.moneda, h.doble)} × ${ADULTOS} = <b>${fmt(op.moneda, h.doble * ADULTOS)}</b></span></div>`).join('')}
+        ${op.opcionales.filter((o) => o.agregado).map((o) => `<div class="fila"><span>+ Opcional: ${esc(o.nombre)}</span><span class="num">${fmt(op.moneda, o.precio)} × ${ADULTOS} = ${fmt(op.moneda, o.precio * ADULTOS)}</span></div>`).join('')}
+        ${op.vuelo.aerolinea ? `<div class="fila small muted"><span>✈ ${esc(op.vuelo.aerolinea)} · incluido en el paquete</span><span>informativo</span></div>` : ''}
+      </div></div>`;
+  }
+  $('lienzo').innerHTML = html;
+}
+
+function renderPrecio() {
+  const op = opEnCotizacion();
+  let total = 540, html = `<div class="precio-linea"><span>Pasaje aéreo</span><span class="num">USD 540</span></div>`, prefijo = '';
+  if (op) {
+    const hs = ofrecidos(op);
+    const h = hs[estado.hotelElegido];
+    const paquete = h ? h.doble * ADULTOS : (desde(op, 'doble', true) || 0) * ADULTOS;
+    if (!h) prefijo = 'desde ';
+    html += `<div class="precio-linea"><span>Paquete ${h ? esc(h.nombre) : '(hotel sin elegir)'} × ${ADULTOS} adultos</span><span class="num">${prefijo}${fmt(op.moneda, paquete)}</span></div>`;
+    total += paquete;
+    op.opcionales.filter((o) => o.agregado).forEach((o) => {
+      html += `<div class="precio-linea"><span>${esc(o.nombre)} × ${ADULTOS}</span><span class="num">${fmt(op.moneda, o.precio * ADULTOS)}</span></div>`;
+      total += o.precio * ADULTOS;
+    });
+  }
+  html += `<div class="total"><span>Total ${prefijo}</span><span class="num">USD ${total.toLocaleString('en-US')}</span></div>`;
+  if (op && NINOS) html += `<div class="ayuda">El paquete de mayorista no incluye niños.</div>`;
+  $('precio').innerHTML = html;
+}
+
+/* ---------- Panel ---------- */
+function renderPanel() {
+  $('btn-vista').textContent = estado.vista === 'comparar' ? 'Volver al detalle' : 'Comparar lado a lado';
+  if (estado.vista === 'comparar') { $('panel-cuerpo').innerHTML = `<div class="comparar">${htmlComparar()}</div>`; return; }
+  $('panel-cuerpo').innerHTML = `<div class="lista" id="lista"></div>
+    <div class="detalle"><div class="det-head" id="det-head"></div><div class="tabs" id="det-tabs"></div>
+      <div class="det-body" id="det-body"></div><div class="det-foot" id="det-foot"></div></div>`;
+  renderEstados();
+  renderCuerpo();
+}
+
+// Lo que depende del estado de los datos y se puede repintar sin perder el foco del campo que se escribe.
+function renderEstados() {
+  if (estado.vista !== 'detalle') return;
+  const op = opSel();
+  const tarjeta = (o) => {
+    const pr = progreso(o);
+    const badge = o.estado === 'elegida' ? '<span class="badge b-ok">Elegida</span>' : o.estado === 'descartada' ? '<span class="badge b-muted">Descartada</span>' : '<span class="badge b-muted">En comparación</span>';
+    return `<div class="op ${o.id === estado.sel ? 'sel' : ''} ${o.estado === 'descartada' ? 'descartada' : ''}" data-act="sel-op" data-id="${o.id}">
+      <div class="nombre"><span>${esc(o.proveedor)}</span><span class="badge b-info">${o.moneda}</span></div>
+      <div class="small muted num">doble desde ${fmt(o.moneda, desde(o, 'doble'))}</div>
+      <div style="display:flex;gap:6px;margin-top:5px;align-items:center;flex-wrap:wrap">${badge}${badgeVigencia(o)}</div>
+      <div class="progreso" title="${esc(pr.faltan || 'Todo completo')}"><div class="barra"><span style="width:${pr.ok / pr.total * 100}%;background:${pr.color}"></span></div>
+        <span class="small muted num">${pr.ok} de ${pr.total}</span></div></div>`;
+  };
+  const activas = estado.ops.filter((o) => o.estado !== 'descartada');
+  const descartadas = estado.ops.filter((o) => o.estado === 'descartada');
+  $('lista').innerHTML = activas.map(tarjeta).join('') + `<button class="btn" style="width:100%" data-act="abrir-alta">+ Agregar mayorista</button>
+    <div class="ayuda" style="margin-top:8px">Carga la cotización de cada mayorista consultado y compáralas.</div>` +
+    (descartadas.length ? `<button class="btn link small" style="margin-top:10px" data-act="ver-descartados">
+        ${estado.verDescartados ? '▾' : '▸'} Descartados (${descartadas.length})</button>
+      ${estado.verDescartados ? `<div style="margin-top:6px">${descartadas.map(tarjeta).join('')}</div>` : ''}` : '');
+
+  if (!op) return;
+  $('det-head').innerHTML = `<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center">
+    <div><b style="font-size:15px">${esc(op.proveedor)}</b> <span class="badge b-info">${op.moneda}</span>
+      ${op.estado === 'elegida' ? '<span class="badge b-ok">Elegida</span>' : ''} ${badgeVigencia(op)}
+      <div class="small muted">Para el cliente: «${esc(nombrePaquete(op))}»</div></div>
+    <div class="small muted num">doble desde <b style="color:var(--fg)">${fmt(op.moneda, desde(op, 'doble'))}</b> por adulto</div></div>`;
+  $('det-tabs').innerHTML = SECCIONES.map(([k, t]) => {
+    const e = estadoSeccion(op, k);
+    return `<button class="tab ${estado.tab === k ? 'activo' : ''}" data-act="tab" data-tab="${k}">${ICONOS[k]}<span>${t}</span>${e ?`<span class="ico ico-${e}">${ICONO[e]}</span>` : ''}</button>`;
+  }).join('');
+
+  const motivo = op.estado !== 'elegida' ? 'Solo el mayorista elegido aparece en la cotización'
+    : !ofrecidos(op).length ? 'Marca al menos un hotel para que aparezca en la cotización'
+    : '✓ En la cotización: los cambios se ven al instante';
+  let izq = '';
+  if (op.estado === 'descartada') izq = `<button class="btn" data-act="reactivar">Reactivar</button>`;
+  else if (op.estado !== 'elegida') {
+    izq = estado.confirmarElegir === op.id
+      ? `<span class="small" style="color:var(--warn)">Todavía no tiene precios de hotel.</span> <button class="btn exito" data-act="elegir" data-forzar="1">Elegir igual</button> <button class="btn link" data-act="cancelar-elegir">Cancelar</button>`
+      : `<button class="btn exito" data-act="elegir">Elegir este mayorista</button> <button class="btn link" data-act="descartar" title="Lo comparaste y no conviene: queda guardado y se puede reactivar">Descartar</button>`;
+  }
+  // Eliminar es para un error (cargado por equivocación o duplicado); pide confirmación en la misma barra.
+  if (estado.confirmarEliminar === op.id) {
+    const enCot = opEnCotizacion()?.id === op.id;
+    izq = `<span class="small" style="color:var(--danger)">¿Eliminar ${esc(op.proveedor)} con ${op.hoteles.length} hoteles, ${op.tours.length} tours y ${op.opcionales.length} opcionales? No se puede deshacer.${enCot ? ' El paquete sale de la cotización y el total cambia.' : ''}</span>
+      <button class="btn" style="border-color:var(--danger);color:var(--danger)" data-act="eliminar" data-confirmar="1">Sí, eliminar</button>
+      <button class="btn link" data-act="cancelar-eliminar">Cancelar</button>`;
+  } else {
+    izq += ` <button class="btn link" style="color:var(--danger)" data-act="eliminar" title="Para un error: borra la opción con sus hoteles, tours y opcionales">Eliminar</button>`;
+  }
+  $('det-foot').innerHTML = `<span>${izq}</span><span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    ${motivo ? `<span class="small muted">${motivo}</span>` : ''}
+    <button class="btn" data-act="ver-cliente">Vista del cliente</button>
+    <button class="btn primario" data-act="cerrar-panel">Listo</button></span>`;
+
+  const aviso = $('fuga-aviso');
+  if (aviso) aviso.innerHTML = htmlFuga(op);
+}
+
+const estrellas = (n) => Number(n) ? '★'.repeat(Number(n)) : '';
+const color = (s, j) => { let h = 0; for (const c of String(s || 'x')) h = (h * 31 + c.charCodeAt(0)) % 360; const a = (h + j * 47) % 360;
+  return `linear-gradient(135deg, hsl(${a} 45% 62%), hsl(${(a + 40) % 360} 50% 40%))`; };
+const feeDe = (x, oc) => x[oc] != null && x.costo[oc] != null ? x[oc] - x.costo[oc] : null;
+function pctTexto(x, oc) {
+  const f = feeDe(x, oc); if (f == null || !x.costo[oc] || !x[oc]) return '';
+  return `Markup ${(f / x.costo[oc] * 100).toFixed(0)} % · margen ${(f / x[oc] * 100).toFixed(0)} %`;
+}
+function htmlFotos(lista, i, fotos, nombre, etiquetas) {
+  return `<div class="fotos">${etiquetas.map((t, j) => `<div class="foto ${fotos[j] ? 'llena' : ''}" data-act="foto" data-lista="${lista}" data-i="${i}" data-f="${j}"
+    style="${fotos[j] ? `background:${color(nombre, j)}` : ''}" title="${fotos[j] ? 'Quitar foto' : 'Subir foto'}"><span>${fotos[j] ? `${t} ✕` : `+ ${t}`}</span></div>`).join('')}</div>`;
+}
+function htmlHotel(op, x, i) {
+  const m = op.moneda;
+  return `<div class="hotel">
+    <div class="hotel-fila">
+      <label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-campo="hoteles.${i}.ofrecer" ${x.ofrecer ? 'checked' : ''}>Ofrecer</label>
+      <div class="foto-mini" style="background:${x.fotos[0] ? color(x.nombre, 0) : 'var(--soft)'}"></div>
+      <div style="flex:1;min-width:0"><b>${esc(x.nombre || 'Hotel sin nombre')}</b> <span class="estrellas">${estrellas(x.estrellas)}</span> ${badgeOrigen(x, 'hoteles', i)}
+        <div class="small muted">${esc(x.regimen)} · doble ${fmt(m, x.doble)} · ${x.fotos.filter(Boolean).length}/3 fotos${x.puntaje.valor ? ` · ${esc(x.puntaje.valor)}/${x.puntaje.escala} viajeros` : ''}</div></div>
+      <button class="btn" data-act="toggle-hotel" data-i="${i}">${x.abierto ? 'Cerrar' : 'Editar'}</button>
+      <button class="btn link" data-act="quitar" data-lista="hoteles" data-i="${i}" title="Quitar">✕</button>
+    </div>
+    ${x.abierto ? `<div class="hotel-detalle">
+      <div class="dos">
+        <div>
+          <div class="campo sug-caja"><label class="lbl">Nombre del hotel</label><input class="ctrl" autocomplete="off" data-campo="hoteles.${i}.nombre" data-sugerir="hoteles" data-i="${i}" value="${esc(x.nombre)}" placeholder="Escribe y se busca en Proveedores">
+            <div class="sugerencias" id="sug-hoteles-${i}"></div></div>
+          <div class="dos" style="gap:10px">
+            <div class="campo"><label class="lbl">Categoría</label><select class="ctrl" data-campo="hoteles.${i}.estrellas" data-repinta="1">
+              <option value="">Sin categoría</option>${[1, 2, 3, 4, 5].map((n) => `<option value="${n}" ${Number(x.estrellas) === n ? 'selected' : ''}>${n} ${n === 1 ? 'estrella' : 'estrellas'}</option>`).join('')}</select></div>
+            <div class="campo"><label class="lbl">Régimen</label><input class="ctrl" data-campo="hoteles.${i}.regimen" value="${esc(x.regimen)}"></div>
+          </div>
+          <div class="campo"><label class="lbl">Calificación de los viajeros (opcional)</label>
+            <div style="display:flex;gap:6px"><input class="ctrl num" style="width:64px" data-campo="hoteles.${i}.puntaje.valor" value="${esc(x.puntaje.valor)}" placeholder="8.6">
+              <select class="ctrl" style="width:70px" data-campo="hoteles.${i}.puntaje.escala"><option value="10" ${x.puntaje.escala === '10' ? 'selected' : ''}>/ 10</option><option value="5" ${x.puntaje.escala === '5' ? 'selected' : ''}>/ 5</option></select>
+              <input class="ctrl" data-campo="hoteles.${i}.puntaje.fuente" value="${esc(x.puntaje.fuente)}" placeholder="Fuente: Booking, TripAdvisor…"></div>
+            <div class="ayuda">Sale en el PDF con su fuente.</div></div>
+        </div>
+        <div class="campo"><label class="lbl">Descripción para el cliente</label>
+          <textarea class="ctrl" style="min-height:178px" data-campo="hoteles.${i}.desc" placeholder="Ubicación, servicios, tipo de habitaciones…">${esc(x.desc)}</textarea></div>
+      </div>
+      <label class="lbl">Fotos: 1 de fachada y 2 de habitación</label>${htmlFotos('hoteles', i, x.fotos, x.nombre, ['Fachada', 'Habitación', 'Habitación'])}
+      <label class="lbl" style="margin-top:14px">Precio del paquete por adulto · ${m}</label>
+      <div style="overflow:auto"><table><thead><tr><th>Ocupación</th><th>Costo del mayorista</th><th>Fee (tu ganancia)</th><th>Venta al cliente</th></tr></thead><tbody>
+        ${OCUP.map(([k, t]) => `<tr><td>${t}</td>
+          <td><input class="ctrl num" type="number" min="0" style="width:96px" data-campo="hoteles.${i}.costo.${k}" value="${x.costo[k] ?? ''}" placeholder="—"></td>
+          <td><input class="ctrl num" type="number" style="width:96px" data-fee="${i}.${k}" value="${feeDe(x, k) ?? ''}" placeholder="—">
+            <div class="small muted" data-pct="${i}.${k}">${pctTexto(x, k)}</div></td>
+          <td><input class="ctrl num" type="number" min="0" style="width:96px" data-campo="hoteles.${i}.${k}" value="${x[k] ?? ''}" placeholder="—"></td></tr>`).join('')}
+      </tbody></table></div>
+      <div class="ayuda">Escribe el costo y el fee, o el costo y la venta: el otro se calcula. Vacío: el mayorista no ofrece esa ocupación.</div>
+    </div>` : ''}
+  </div>`;
+}
+function actualizarPct(i, oc) {
+  const p = document.querySelector(`[data-pct="${i}.${oc}"]`); if (p) p.textContent = pctTexto(opSel().hoteles[i], oc);
+}
+
+function htmlFuga(op) {
+  const f = fugas(op).filter((x) => x.tab === estado.tab);
+  return f.length ? `<div class="alerta danger">Este texto menciona a «${esc(op.proveedor)}». El cliente lo vería en el PDF: quítalo o reemplázalo.</div>` : '';
+}
+
+function renderCuerpo() {
+  const op = opSel();
+  if (!op) { $('det-body').innerHTML = '<div class="vacio">Agrega el primer mayorista.</div>'; return; }
+  const m = op.moneda;
+  let h = '<div id="fuga-aviso"></div>';
+  switch (estado.tab) {
+    case 'resumen':
+      h += `<div class="dos"><div>
+          <div class="campo"><label class="lbl">Proveedor mayorista</label><input class="ctrl" value="${esc(op.proveedor)}" disabled>
+            <div class="ayuda">Solo uso interno: no sale en el PDF.</div></div>
+          <div class="campo"><label class="lbl">Moneda del paquete</label><select class="ctrl" data-campo="moneda" data-repinta="1">
+            ${['USD', 'PEN'].map((x) => `<option ${op.moneda === x ? 'selected' : ''}>${x}</option>`).join('')}</select>
+            <div class="ayuda">Los precios de hoteles se cargan en esta moneda.</div></div>
+          <div class="campo"><label class="lbl">Nombre del paquete para el cliente</label><input class="ctrl" data-campo="desc" value="${esc(op.desc)}" placeholder="${SUGERIDO}">
+            <div class="ayuda">Sale en el lienzo, el PDF y la factura; el cliente nunca ve quién es el mayorista. Se llena con el destino y los días; vacío, se usa «${SUGERIDO}».
+              ${op.desc.trim() !== SUGERIDO ? `<button class="btn link small" data-act="usar-sugerido">Usar «${SUGERIDO}»</button>` : ''}</div></div>
+          <div class="dos" style="gap:10px">
+            <div class="campo"><label class="lbl">N.º de cotización del mayorista</label><input class="ctrl" data-campo="numero" value="${esc(op.numero)}" placeholder="Ej. COT-88412"></div>
+            <div class="campo"><label class="lbl">Precios válidos hasta</label><input class="ctrl" type="date" data-campo="vigencia" value="${esc(op.vigencia)}"></div>
+          </div>
+          <div class="campo"><label class="lbl">Cotización original del mayorista</label>
+            ${op.archivos.map((a, j) => `<div class="archivo">${ICONOS.condiciones}<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">${esc(a.nombre)} <span class="small muted">· ${a.tam}</span></span>
+              <button class="btn link" data-act="quitar-archivo" data-j="${j}" title="Quitar">✕</button></div>`).join('')}
+            <div class="soltar" data-act="adjuntar">${ICONOS.clip} Arrastra aquí el PDF o la captura del correo, o <b>elige un archivo</b></div>
+            <div class="ayuda">Número, vigencia y archivo son internos: no salen en el PDF del cliente.</div></div>
+        </div><div><label class="lbl">Qué falta</label>
+          ${SECCIONES.slice(1).map(([k, t]) => {
+            const e = estadoSeccion(op, k);
+            const txt = { ok: 'Completo', falta: 'Falta', revisar: 'Menciona al mayorista', vacio: 'Opcional, vacío' }[e];
+            const cls = { ok: 'b-ok', falta: 'b-warn', revisar: 'b-danger', vacio: 'b-muted' }[e];
+            return `<div class="check-sec" data-act="tab" data-tab="${k}"><span class="ico-tit">${ICONOS[k]} ${t}</span><span class="badge ${cls}">${txt}</span></div>`;
+          }).join('')}</div></div>`;
+      break;
+    case 'hoteles':
+      h += `<div style="display:flex;justify-content:space-between;align-items:end;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+          <div><b>Hoteles del paquete · ${m}</b><span class="tip" title="El precio de cada ocupación es el paquete completo por adulto (vuelo, hotel y tours de este mayorista), no solo el hospedaje. Los niños no están incluidos.">?</span></div>
+          <div class="small muted">Marca «Ofrecer» en los hoteles que verá el cliente.</div></div>
+        <div class="barra-herr">
+          <span class="small"><b>Fee para todos</b></span>
+          <input class="ctrl num" type="number" min="0" id="fee-todos-valor" value="${estado.feeTodos.valor}" style="width:72px">
+          <select class="ctrl" id="fee-todos-tipo" style="width:auto">
+            <option value="pct" ${estado.feeTodos.tipo === 'pct' ? 'selected' : ''}>% de markup sobre el costo</option>
+            <option value="monto" ${estado.feeTodos.tipo === 'monto' ? 'selected' : ''}>${m} por adulto</option></select>
+          <button class="btn" data-act="aplicar-fee">Aplicar a todos</button>
+          ${estado.feeAplicado != null ? `<span class="small" style="color:var(--ok)">✓ ${estado.feeAplicado} precios actualizados</span>` : ''}
+          <span style="flex:1"></span>
+          <button class="btn" data-act="abrir-pegar">${ICONOS.resumen} Pegar tabla de precios</button>
+        </div>
+        ${op.hoteles.map((x, i) => htmlHotel(op, x, i)).join('')}
+        ${op.hoteles.length ? '' : `<div class="vacio small muted vacio-ico">${ICONOS.hoteles}<div>Sin hoteles todavía. Pega la tabla del mayorista, búscalos en Proveedores o agrégalos uno por uno.</div></div>`}
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
+          <button class="btn" data-act="abrir-biblio" data-lista="hoteles">Buscar en Proveedores</button>
+          <button class="btn" data-act="agregar" data-lista="hoteles">+ Hotel nuevo</button></div>
+        <div class="ayuda">Un hotel de Proveedores llega con su categoría, descripción y fotos; solo cargas el precio de este mayorista.</div>`;
+      break;
+    case 'vuelos':
+      h += `<div class="alerta info">Informativo: el vuelo ya está dentro del precio del paquete y <b>no suma</b> al total. Para un pasaje aparte (por ejemplo Tarapoto – Lima) usa «Servicio de la agencia».</div>
+        <div class="campo"><label class="lbl">Aerolínea</label><input class="ctrl" data-campo="vuelo.aerolinea" value="${esc(op.vuelo.aerolinea)}" placeholder="Buscar aerolínea…"></div>
+        <div class="campo"><label class="lbl">Detalle del vuelo</label><textarea class="ctrl" data-campo="vuelo.detalle" placeholder="Tramos, horarios, equipaje…">${esc(op.vuelo.detalle)}</textarea></div>`;
+      break;
+    case 'incluye':
+      h += `<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap"><span class="small muted">Usar texto guardado:</span>
+          <select class="ctrl" style="width:auto" data-act-change="texto-guardado"><option value="">Elegir…</option>${Object.keys(TEXTOS_GUARDADOS).map((k) => `<option>${k}</option>`).join('')}</select>
+          <button class="btn link">Guardar este texto</button></div>
+        <div class="dos">
+          <div class="campo"><label class="lbl">Incluye (una línea por punto)</label><textarea class="ctrl" style="min-height:180px" data-campo="incluye">${esc(op.incluye)}</textarea></div>
+          <div class="campo"><label class="lbl">No incluye</label><textarea class="ctrl" style="min-height:180px" data-campo="noIncluye">${esc(op.noIncluye)}</textarea></div></div>`;
+      break;
+    case 'tours':
+      h += `<div class="small muted" style="margin-bottom:8px">Tours que vienen dentro del paquete. Salen en el itinerario del PDF, por día, con su descripción y fotos.</div>
+        ${op.tours.map((t, i) => `<div class="hotel"><div class="hotel-detalle" style="border-top:0">
+          <div style="display:flex;gap:8px;align-items:end">
+            <div style="width:70px"><label class="lbl">Día</label><input class="ctrl num" type="number" min="1" data-campo="tours.${i}.dia" value="${t.dia}"></div>
+            <div style="flex:1;min-width:0" class="sug-caja"><label class="lbl">Título</label><input class="ctrl" autocomplete="off" data-campo="tours.${i}.nombre" data-sugerir="tours" data-i="${i}" value="${esc(t.nombre)}" placeholder="Escribe y se busca en el catálogo">
+              <div class="sugerencias" id="sug-tours-${i}"></div></div>
+            <button class="btn link" data-act="quitar" data-lista="tours" data-i="${i}" title="Quitar">✕</button></div>
+          <div style="margin-top:4px">${badgeOrigen(t, 'tours', i)}</div>
+          <div class="campo" style="margin-top:10px"><label class="lbl">Descripción</label>
+            <textarea class="ctrl" data-campo="tours.${i}.desc" placeholder="Qué se hace, recorrido, horarios, duración…">${esc(t.desc)}</textarea></div>
+          <label class="lbl">Fotos (hasta 3)</label>${htmlFotos('tours', i, t.fotos, t.nombre, ['Foto 1', 'Foto 2', 'Foto 3'])}
+        </div></div>`).join('')}
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
+          <button class="btn" data-act="abrir-biblio" data-lista="tours">Buscar en el catálogo</button>
+          <button class="btn" data-act="agregar" data-lista="tours">+ Tour nuevo</button></div>`;
+      break;
+    case 'opcionales':
+      h += `<div class="small muted" style="margin-bottom:8px">Actividades que el cliente puede sumar. Sin marcar salen en el PDF como «Tours opcionales», con su descripción y fotos; marcadas, se suman al total.</div>
+        ${op.opcionales.map((o, i) => `<div class="hotel"><div class="hotel-detalle" style="border-top:0">
+          <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap">
+            <div style="flex:1;min-width:180px" class="sug-caja"><label class="lbl">Título</label><input class="ctrl" autocomplete="off" data-campo="opcionales.${i}.nombre" data-sugerir="opcionales" data-i="${i}" value="${esc(o.nombre)}" placeholder="Escribe y se busca en lo guardado">
+              <div class="sugerencias" id="sug-opcionales-${i}"></div></div>
+            <div style="width:150px"><label class="lbl" style="white-space:nowrap">Precio por adulto · ${m}</label><input class="ctrl num" type="number" min="0" data-campo="opcionales.${i}.precio" value="${o.precio ?? ''}"></div>
+            <label class="small" style="display:flex;gap:6px;align-items:center;padding-bottom:6px" ${op.estado === 'elegida' ? '' : 'title="Solo en el mayorista elegido"'}>
+              <input type="checkbox" data-campo="opcionales.${i}.agregado" ${o.agregado ? 'checked' : ''} ${op.estado === 'elegida' ? '' : 'disabled'}>Sumar al total</label>
+            <button class="btn link" data-act="quitar" data-lista="opcionales" data-i="${i}" title="Quitar">✕</button></div>
+          <div style="margin-top:4px">${badgeOrigen(o, 'opcionales', i)}</div>
+          <div class="campo" style="margin-top:10px"><label class="lbl">Descripción</label>
+            <textarea class="ctrl" data-campo="opcionales.${i}.desc" placeholder="Qué incluye, recorrido, horarios, duración…">${esc(o.desc)}</textarea></div>
+          <label class="lbl">Fotos (hasta 3)</label>${htmlFotos('opcionales', i, o.fotos, o.nombre, ['Foto 1', 'Foto 2', 'Foto 3'])}
+        </div></div>`).join('')}
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
+          <button class="btn" data-act="abrir-biblio" data-lista="opcionales">Buscar opcionales guardados</button>
+          <button class="btn" data-act="agregar" data-lista="opcionales">+ Opcional nuevo</button></div>`;
+      break;
+    case 'condiciones':
+      h += `<div class="small muted" style="margin-bottom:8px">Las condiciones propias de este mayorista: reserva, pagos, anulación y cambios. Salen en el PDF de cotización, en «Condiciones del paquete».</div>
+        <textarea class="ctrl" style="min-height:220px" data-campo="condiciones" placeholder="Pega aquí las condiciones que envió el mayorista…">${esc(op.condiciones)}</textarea>
+        <div class="ayuda">En el PDF se agrega: «Para este paquete prevalecen estas condiciones sobre las condiciones generales del servicio». Revisa que el texto no traiga el nombre, teléfono ni correo del mayorista.</div>`;
+      break;
+  }
+  $('det-body').innerHTML = h;
+  $('fuga-aviso').innerHTML = htmlFuga(op);
+}
+
+function htmlComparar() {
+  const ops = estado.ops.filter((o) => o.estado !== 'descartada');
+  const mejor = (oc) => Math.min(...ops.map((o) => desde(o, oc)).filter((x) => x != null));
+  const celdaPrecio = (o, oc) => { const v = desde(o, oc); return `<span class="num ${v != null && v === mejor(oc) ? 'mejor' : ''}">${fmt(o.moneda, v)}</span>`; };
+  const filas = [
+    ['Estado', (o) => o.estado === 'elegida' ? '<span class="badge b-ok">Elegida</span>' : '<span class="badge b-muted">En comparación</span>'],
+    ['Moneda', (o) => `<span class="badge b-info">${o.moneda}</span>`],
+    ['Vigencia', (o) => badgeVigencia(o) || '<span class="muted">Sin fecha</span>'],
+    ...OCUP.map(([k, t]) => [`${t} desde (por adulto)`, (o) => celdaPrecio(o, k)]),
+    ['Hoteles', (o) => o.hoteles.length ? o.hoteles.map((x) => `${esc(x.nombre)} <span class="estrellas">${estrellas(x.estrellas)}</span>`).join('<br>') : '<span class="badge b-warn">Falta</span>'],
+    ['Vuelo', (o) => o.vuelo.aerolinea ? esc(o.vuelo.aerolinea) : '<span class="muted">—</span>'],
+    ['Incluye', (o) => lineas(o.incluye).length ? `<ul style="margin:0;padding-left:16px">${lineas(o.incluye).map((l) => `<li>${esc(l)}</li>`).join('')}</ul>` : '<span class="badge b-warn">Falta</span>'],
+    ['Tours', (o) => o.tours.length || '<span class="muted">—</span>'],
+    ['Opcionales', (o) => o.opcionales.length ? o.opcionales.map((x) => `${esc(x.nombre)} · ${fmt(o.moneda, x.precio)}`).join('<br>') : '<span class="muted">—</span>'],
+    ['Condiciones', (o) => { const e = estadoSeccion(o, 'condiciones'); return e === 'ok' ? '<span class="badge b-ok">Cargadas</span>' : e === 'revisar' ? '<span class="badge b-danger">Mencionan al mayorista</span>' : '<span class="badge b-warn">Falta</span>'; }],
+    ['', (o) => o.estado === 'elegida' ? '<span class="small muted">Ya es la elegida</span>' : `<button class="btn exito" data-act="elegir-desde-comparar" data-id="${o.id}">Elegir este</button>`],
+  ];
+  return `<div class="small muted" style="margin-bottom:8px">En verde, el precio más bajo por ocupación. Los descartados no aparecen.</div>
+    <div class="card" style="overflow:auto"><table><thead><tr><th></th>${ops.map((o) => `<th style="font-size:13px;color:var(--fg)">${esc(o.proveedor)}<div class="small muted" style="font-weight:400">${esc(nombrePaquete(o))}</div></th>`).join('')}</tr></thead>
+    <tbody>${filas.map(([t, f]) => `<tr><td class="muted small" style="font-weight:600">${t}</td>${ops.map((o) => `<td>${f(o)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+}
+
+function renderCliente() {
+  const op = opSel(), m = op.moneda, hs = op.hoteles.filter((h) => h.ofrecer);
+  const f = fugas(op);
+  const lista = (s) => lineas(s).length ? `<ul>${lineas(s).map((l) => `<li>${esc(l)}</li>`).join('')}</ul>` : '<div style="color:#b45309">Sin cargar</div>';
+  $('cliente-body').innerHTML = (f.length
+      ? `<div class="alerta danger"><b>Revisa antes de enviar:</b> el nombre «${esc(op.proveedor)}» aparece en ${[...new Set(f.map((x) => x.campo))].join(', ')}.</div>`
+      : `<div class="alerta info">El PDF no muestra quién es el mayorista. No se encontró su nombre en los textos; igual revisa teléfonos o correos.</div>`) +
+    `<div class="hoja"><div class="membrete"><b style="color:#1e293b">Logo de tu agencia</b><span>Cotización CDKM-1125-0000012</span></div>
+      <h3>${esc(nombrePaquete(op))}</h3><div style="color:#64748b">Panamá · 12 al 17 de diciembre de 2026 · 2 adultos + 1 niño</div>
+      <h4>Opciones de hoteles · precio por persona en ${m === 'USD' ? 'dólares' : 'soles'}</h4>
+      ${hs.length ? `<table><thead><tr><th>Hotel</th><th>Régimen</th>${OCUP.map(([, t]) => `<th>${t}</th>`).join('')}</tr></thead><tbody>
+        ${hs.map((x) => `<tr><td>${esc(x.nombre)}<div style="color:#64748b;font-size:11px">${x.estrellas ? `${x.estrellas} estrellas` : ''}</div></td><td>${esc(x.regimen)}</td>${OCUP.map(([k]) => `<td>${fmt(m, x[k])}</td>`).join('')}</tr>`).join('')}</tbody></table>
+        <h4>Los hoteles</h4>
+        ${hs.map((x) => `<div class="hotel-pdf">
+          ${x.fotos.some(Boolean) ? `<div class="tira">${x.fotos.map((f, j) => f ? `<div class="foto-pdf" style="background:${color(x.nombre, j)}">${j === 0 ? 'Fachada' : 'Habitación'}</div>` : '').join('')}</div>` : ''}
+          <div><b>${esc(x.nombre)}</b> · ${x.estrellas ? `Hotel ${x.estrellas} estrellas` : 'Sin categoría'}${x.puntaje.valor ? ` · Calificación de los viajeros: ${esc(x.puntaje.valor)}/${x.puntaje.escala}${x.puntaje.fuente ? ` (${esc(x.puntaje.fuente)})` : ''}` : ''}</div>
+          ${x.desc ? `<div style="color:#475569">${esc(x.desc)}</div>` : ''}</div>`).join('')}` : '<div style="color:#b45309">Sin hoteles para ofrecer</div>'}
+      ${op.vuelo.aerolinea ? `<h4>Vuelo</h4><div>${esc(op.vuelo.aerolinea)}</div><div style="white-space:pre-line;color:#64748b">${esc(op.vuelo.detalle)}</div>` : ''}
+      ${op.tours.length ? `<h4>Itinerario</h4>${[...op.tours].sort((a, b) => a.dia - b.dia).map((t) => `<div style="margin-bottom:10px"><b>Día ${t.dia}: ${esc(t.nombre)}</b>
+        ${t.desc ? `<div style="color:#475569">${esc(t.desc)}</div>` : ''}
+        ${t.fotos.some(Boolean) ? `<div class="tira" style="margin-top:4px">${t.fotos.map((f, j) => f ? `<div class="foto-pdf" style="background:${color(t.nombre, j)}"></div>` : '').join('')}</div>` : ''}</div>`).join('')}` : ''}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px"><div><h4>Incluye</h4>${lista(op.incluye)}</div><div><h4>No incluye</h4>${lista(op.noIncluye)}</div></div>
+      ${op.opcionales.filter((o) => !o.agregado).length ? `<h4>Tours opcionales (no incluidos en el precio)</h4>${op.opcionales.filter((o) => !o.agregado).map((o) => `<div style="margin-bottom:10px">
+        ${o.fotos.some(Boolean) ? `<div class="tira">${o.fotos.map((f, j) => f ? `<div class="foto-pdf" style="background:${color(o.nombre, j)}"></div>` : '').join('')}</div>` : ''}
+        <div><b>${esc(o.nombre)}</b> · ${fmt(m, o.precio)} por persona</div>
+        ${o.desc ? `<div style="color:#475569">${esc(o.desc)}</div>` : ''}</div>`).join('')}` : ''}
+      <h4>Condiciones del paquete</h4>
+      ${op.condiciones.trim() ? `<div style="white-space:pre-line">${esc(op.condiciones)}</div>` : '<div style="color:#b45309">Sin condiciones cargadas</div>'}
+      <div style="margin-top:6px;font-style:italic">Para este paquete prevalecen estas condiciones sobre las condiciones generales del servicio.</div>
+      <div class="pie">Consulta las condiciones generales del servicio en el documento adjunto.</div></div>`;
+}
+
+function render() { renderLienzo(); renderPrecio(); if ($('fondo').classList.contains('abierto')) renderPanel(); }
+
+/* ---------- Acciones ---------- */
+function asignar(op, ruta, valor) {
+  const partes = ruta.split('.'); let obj = op;
+  for (let i = 0; i < partes.length - 1; i++) obj = obj[partes[i]];
+  obj[partes.at(-1)] = valor;
+}
+
+document.addEventListener('input', (e) => {
+  if (e.target.id === 'biblio-buscar') { renderBiblio(); return; }
+  if (e.target.id === 'pegar-texto' || e.target.name === 'pegar-tipo') { renderPegar(); return; }
+  if (e.target.id === 'fee-todos-valor') { estado.feeTodos.valor = e.target.value; return; }
+  if (e.target.id === 'fee-todos-tipo') { estado.feeTodos.tipo = e.target.value; return; }
+  const fe = e.target.closest('[data-fee]');
+  if (fe) {
+    const [i, oc] = fe.dataset.fee.split('.'); const x = opSel().hoteles[i];
+    if (x.costo[oc] != null && fe.value !== '') {
+      x[oc] = x.costo[oc] + Number(fe.value);
+      const v = document.querySelector(`[data-campo="hoteles.${i}.${oc}"]`); if (v) v.value = x[oc];
+    }
+    actualizarPct(i, oc); marcarGuardado(); renderEstados(); renderLienzo(); renderPrecio(); return;
+  }
+  const el = e.target.closest('[data-campo]'); if (!el || el.type === 'checkbox') return;
+  const op = opSel();
+  asignar(op, el.dataset.campo, el.type === 'number' ? (el.value === '' ? null : Number(el.value)) : el.value);
+  const mm = el.dataset.campo.match(/^hoteles\.(\d+)\.(?:costo\.)?(simple|doble|triple)$/);
+  if (mm) {
+    const f = document.querySelector(`[data-fee="${mm[1]}.${mm[2]}"]`);
+    if (f) f.value = feeDe(op.hoteles[mm[1]], mm[2]) ?? '';
+    actualizarPct(mm[1], mm[2]);
+  }
+  if (el.dataset.repinta) renderCuerpo();
+  if (el.dataset.sugerir) renderSugerencias(el.dataset.sugerir, el.dataset.i, el.value);
+  marcarGuardado(); renderEstados(); renderLienzo(); renderPrecio();
+});
+document.addEventListener('change', (e) => {
+  const el = e.target;
+  if (el.matches('[data-campo][type=checkbox]')) { asignar(opSel(), el.dataset.campo, el.checked); marcarGuardado(); renderEstados(); renderLienzo(); renderPrecio(); }
+  if (el.dataset.actChange === 'texto-guardado' && el.value) {
+    const t = TEXTOS_GUARDADOS[el.value], op = opSel();
+    op.incluye = t.incluye; op.noIncluye = t.noIncluye; renderCuerpo(); renderEstados();
+  }
+  if (el.dataset.act === 'elegir-hotel') { estado.hotelElegido = Number(el.dataset.i); renderLienzo(); renderPrecio(); }
+});
+
+const abrir = (id) => $(id).classList.add('abierto');
+const cerrarModales = () => document.querySelectorAll('.modal').forEach((m) => m.classList.remove('abierto'));
+
+function elegir(op) {
+  estado.ops.forEach((o) => { if (o.estado === 'elegida') o.estado = 'candidata'; });
+  op.estado = 'elegida'; estado.confirmarElegir = null; estado.hotelElegido = null;
+  marcarGuardado();
+}
+
+document.addEventListener('click', (e) => {
+  document.querySelectorAll('.sugerencias').forEach((s) => { if (!s.contains(e.target)) s.innerHTML = ''; });
+  const el = e.target.closest('[data-act]'); if (!el || el.dataset.act === 'elegir-hotel') return;
+  const op = opSel();
+  switch (el.dataset.act) {
+    case 'abrir-panel': $('fondo').classList.add('abierto'); estado.vista = 'detalle'; if (opElegida()) estado.sel = opElegida().id; renderPanel(); break;
+    case 'cerrar-panel': $('fondo').classList.remove('abierto'); break;
+    case 'alternar-vista': estado.vista = estado.vista === 'comparar' ? 'detalle' : 'comparar'; renderPanel(); break;
+    case 'sel-op': estado.sel = Number(el.dataset.id); estado.confirmarElegir = null; estado.confirmarEliminar = null; renderEstados(); renderCuerpo(); break;
+    case 'tab': estado.tab = el.dataset.tab; renderEstados(); renderCuerpo(); break;
+    case 'elegir':
+      if (!ofrecidos(op).length && !el.dataset.forzar) { estado.confirmarElegir = op.id; renderEstados(); break; }
+      elegir(op); renderEstados(); renderCuerpo(); renderLienzo(); renderPrecio(); break;
+    case 'cancelar-elegir': estado.confirmarElegir = null; renderEstados(); break;
+    case 'elegir-desde-comparar': elegir(estado.ops.find((o) => o.id === Number(el.dataset.id))); estado.sel = Number(el.dataset.id); estado.vista = 'detalle'; renderPanel(); renderLienzo(); renderPrecio(); break;
+    case 'descartar': op.estado = 'descartada'; renderEstados(); break;
+    case 'reactivar': op.estado = 'candidata'; renderEstados(); break;
+    case 'agregar': {
+      const nuevo = { hoteles: { ...H('', null, null, '', [null, null, null], [null, null, null], true, 0), abierto: true },
+        tours: { dia: (op.tours.at(-1)?.dia ?? 0) + 1, nombre: '', desc: '', fotos: [false, false, false] },
+        opcionales: { nombre: '', precio: null, agregado: false, desc: '', fotos: [false, false, false] } }[el.dataset.lista];
+      op[el.dataset.lista].push(nuevo); marcarGuardado(); renderCuerpo(); renderEstados();
+      $('det-body').scrollTop = $('det-body').scrollHeight; break;
+    }
+    case 'quitar': op[el.dataset.lista].splice(Number(el.dataset.i), 1); marcarGuardado(); renderCuerpo(); renderEstados(); renderLienzo(); renderPrecio(); break;
+    case 'ver-cliente': renderCliente(); abrir('modal-cliente'); break;
+    case 'abrir-alta': {
+      const usados = estado.ops.map((o) => o.proveedor);
+      $('alta-proveedor').innerHTML = PROVEEDORES.map((p) => `<option ${usados.includes(p) ? 'disabled' : ''}>${p}${usados.includes(p) ? ' (ya cargado)' : ''}</option>`).join('');
+      $('alta-proveedor').value = PROVEEDORES.find((p) => !usados.includes(p)) ?? '';
+      $('alta-copiar').value = ''; abrir('modal-alta'); break;
+    }
+    case 'crear-op': {
+      const proveedor = $('alta-proveedor').value; if (!proveedor) break;
+      let nueva = { id: siguienteId++, proveedor, moneda: document.querySelector('[name=alta-moneda]:checked').value,
+        desc: SUGERIDO, estado: estado.ops.some((o) => o.estado === 'elegida') ? 'candidata' : 'elegida',
+        numero: '', vigencia: '', archivos: [],
+        vuelo: { aerolinea: '', detalle: '' }, hoteles: [], incluye: '', noIncluye: '', tours: [], opcionales: [], condiciones: '' };
+      if ($('alta-copiar').value) {
+        // Copia todo menos los precios: el mayorista cotiza de nuevo para cada fecha.
+        const c = JSON.parse(JSON.stringify(ANTERIOR)), origen = `Copiado de ${ANTERIOR.codigo}`;
+        c.hoteles.forEach((x) => { OCUP.forEach(([k]) => { x[k] = null; x.costo[k] = null; }); x.origen = origen; x.abierto = false; });
+        c.tours.forEach((t) => { t.origen = origen; });
+        c.opcionales.forEach((o) => { o.origen = origen; o.agregado = false; });
+        nueva = { ...nueva, desc: c.desc, vuelo: c.vuelo, hoteles: c.hoteles, incluye: c.incluye, noIncluye: c.noIncluye, tours: c.tours, opcionales: c.opcionales, condiciones: c.condiciones };
+      }
+      estado.ops.push(nueva); estado.sel = nueva.id; estado.tab = 'hoteles'; estado.vista = 'detalle';
+      cerrarModales(); renderPanel(); break;
+    }
+    case 'abrir-biblio':
+      biblioLista = el.dataset.lista; $('biblio-titulo').textContent = TITULO_BIBLIO[biblioLista][0];
+      $('biblio-ayuda').textContent = TITULO_BIBLIO[biblioLista][1]; $('biblio-buscar').value = '';
+      renderBiblio(); abrir('modal-biblio'); $('biblio-buscar').focus(); break;
+    case 'agregar-biblio': {
+      const lista = biblioLista;
+      const item = { hoteles: { ...H('', null, null, '', [null, null, null], [null, null, null], true, 0), abierto: true },
+        tours: { dia: (op.tours.at(-1)?.dia ?? 0) + 1, nombre: '', desc: '', fotos: [] },
+        opcionales: { nombre: '', precio: null, agregado: false, desc: '', fotos: [] } }[lista];
+      copiarDeBiblio(item, BIBLIO[lista][el.dataset.b], lista);
+      op[lista].push(item); cerrarModales(); estado.tab = lista; marcarGuardado(); renderEstados(); renderCuerpo(); break;
+    }
+    case 'usar-biblio':
+      copiarDeBiblio(op[el.dataset.lista][el.dataset.i], BIBLIO[el.dataset.lista][el.dataset.b], el.dataset.lista);
+      marcarGuardado(); renderCuerpo(); renderEstados(); renderLienzo(); break;
+    case 'guardar-biblio': {
+      const lista = el.dataset.lista, x = op[lista][el.dataset.i];
+      x.origen = ORIGEN_NUEVO[lista];
+      BIBLIO[lista].push({ nombre: x.nombre, desc: x.desc, fotos: [...x.fotos], estrellas: x.estrellas, regimen: x.regimen, puntaje: x.puntaje ? { ...x.puntaje } : null, origen: x.origen });
+      marcarGuardado(); renderCuerpo(); break;
+    }
+    case 'aplicar-fee': {
+      let n = 0;
+      op.hoteles.forEach((x) => OCUP.forEach(([k]) => { if (x.costo[k] != null) { x[k] = conFee(x.costo[k]); n++; } }));
+      estado.feeAplicado = n; marcarGuardado(); renderCuerpo(); renderEstados(); renderLienzo(); renderPrecio();
+      setTimeout(() => { estado.feeAplicado = null; }, 0); break;
+    }
+    case 'abrir-pegar': renderPegar(); abrir('modal-pegar'); break;
+    case 'confirmar-pegar': {
+      const costo = document.querySelector('[name=pegar-tipo]:checked').value === 'costo';
+      leerPegado($('pegar-texto').value).forEach((r) => {
+        let x = op.hoteles.find((h) => norm(h.nombre) === norm(r.nombre));
+        if (!x) { x = H(r.nombre, null, null, '', [null, null, null], [null, null, null], true, 0); op.hoteles.push(x); }
+        OCUP.forEach(([k]) => {
+          if (r[k] == null) return;
+          if (costo) { x.costo[k] = r[k]; x[k] = conFee(r[k]); } else { x[k] = r[k]; }
+        });
+      });
+      cerrarModales(); marcarGuardado(); renderCuerpo(); renderEstados(); renderLienzo(); renderPrecio(); break;
+    }
+    case 'adjuntar':
+      op.archivos.push({ nombre: `cotizacion-${norm(op.proveedor).replace(/\s+/g, '-')}-${op.archivos.length + 1}.pdf`, tam: '248 KB' });
+      marcarGuardado(); renderCuerpo(); break;
+    case 'quitar-archivo': op.archivos.splice(Number(el.dataset.j), 1); marcarGuardado(); renderCuerpo(); break;
+    case 'ver-descartados': estado.verDescartados = !estado.verDescartados; renderEstados(); break;
+    case 'eliminar':
+      if (!el.dataset.confirmar) { estado.confirmarEliminar = op.id; renderEstados(); break; }
+      if (op.estado === 'elegida') estado.hotelElegido = null;
+      estado.ops = estado.ops.filter((o) => o.id !== op.id); estado.confirmarEliminar = null;
+      estado.sel = (estado.ops.find((o) => o.estado !== 'descartada') ?? estado.ops[0])?.id ?? null;
+      marcarGuardado(); renderPanel(); renderLienzo(); renderPrecio(); break;
+    case 'cancelar-eliminar': estado.confirmarEliminar = null; renderEstados(); break;
+    case 'usar-sugerido': op.desc = SUGERIDO; marcarGuardado(); renderCuerpo(); renderEstados(); renderLienzo(); break;
+    case 'toggle-hotel': op.hoteles[el.dataset.i].abierto = !op.hoteles[el.dataset.i].abierto; renderCuerpo(); break;
+    case 'foto': {
+      const fotos = op[el.dataset.lista][el.dataset.i].fotos; fotos[el.dataset.f] = !fotos[el.dataset.f];
+      marcarGuardado(); renderCuerpo(); renderEstados(); break;
+    }
+    case 'cerrar-modal': cerrarModales(); break;
+  }
+});
+$('fondo').addEventListener('click', (e) => { if (e.target.id === 'fondo') $('fondo').classList.remove('abierto'); });
+document.querySelectorAll('.modal').forEach((m) => m.addEventListener('click', (e) => { if (e.target === m) cerrarModales(); }));
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (document.querySelector('.modal.abierto')) cerrarModales(); else $('fondo').classList.remove('abierto'); } });
+
+render();
+</script>
