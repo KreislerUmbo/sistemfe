@@ -46,7 +46,7 @@ Compras** (fase 5) y el motor de pendientes automáticos (11f). Se desglosan cua
 
 | ID | Módulo | Qué | Estado | Depende de | Rama / commit |
 |---|---|---|---|---|---|
-| T-134 | COM | Proveedor: RUC no único con aviso, dirección fiscal y de local, ciudad visible, alta rápida con consulta RUC, **proveedor no domiciliado** (país y documento del exterior), listado «sin documento», aviso «sin teléfono». `docs/tareas/T-134-…` | por hacer | T-133 | — |
+| T-134 | COM | Proveedor: RUC no único con aviso, dirección fiscal y de local, ciudad visible, alta rápida con consulta RUC, **proveedor no domiciliado** (país y documento del exterior), listado «sin documento», aviso «sin teléfono». `docs/tareas/T-134-…` | en revisión | T-133 | — |
 | T-135 | COM | **Comprobante de compra:** tabla `compras` (tipo de la **tabla 10 de SUNAT**, serie, número, fecha, **periodo de anotación**, moneda y tipo de cambio, base/IGV/exonerado/inafecto/otros/total, adjuntos PDF/XML, condición contado o crédito con vencimiento) con CRUD; **único por proveedor + tipo + serie + número**; **periodo cerrado** no admite cambios; **anular** con motivo, nunca borrar; pide completar el RUC en la primera compra de un proveedor sin documento; permisos, menú y módulo activable por tenant. Sin pagos todavía. Sin líneas de producto (van en T-154, §3.7f) | por hacer | T-134 | — |
 | T-153 | VEN + COM | **Kárdex y servicio único de stock** (§3.7f): `stock_movimientos` (tipo, cantidad, saldo, documento, usuario); `StockVentaService` pasa a ser el único servicio de stock y escribe el kárdex en ventas, edición, eliminación y NC; el stock de la ficha del producto solo cambia como **ajuste con motivo**; saldo inicial al migrar. `docs/tareas/T-153-…` | por hacer | — | — |
 | T-154 | COM + VEN | **Líneas de producto en la compra** (§3.7f): `compra_lineas` opcionales (con `presentacion_id` y copia del `factor`) que suman stock por el servicio de T-153 y actualizan `products.costo_promedio` (promedio ponderado, sin IGV si va a crédito fiscal); anular y NC de compra restan; sin líneas, la compra es solo montos. `docs/tareas/T-154-…` | por hacer | T-135, T-153 | — |
@@ -75,7 +75,9 @@ Compras** (fase 5) y el motor de pendientes automáticos (11f). Se desglosan cua
 
 | Módulo | Qué | Origen |
 |---|---|---|
-| AGE + COM | Agencia → Proveedores no tiene el control «ver todos» de §3.7c del plan: el backend ya acepta `?alcance=todos` (`Proveedor::scopeDeAlcance`), falta en pantalla. Sin él, para ponerle tipo turístico a un proveedor general hay que entrar a su ficha por la URL. Encaja con T-134 | hallazgo de T-133, 25-nov-2026 |
+| PLA + VEN | La consulta de documento (`ClientController::searchDocument`) reenvía el código HTTP de apisperu: un 401 cerraría la sesión del panel. Tampoco valida el número antes de armar la URL | hallazgo de T-134, 25-nov-2026 |
+| COM + AGE | El aviso de documento repetido solo está en el alta: falta al editar y en «Promover a proveedor» del cotizador, que crea directo | hallazgo de T-134, 25-nov-2026 |
+| COM | El país de un proveedor no domiciliado es texto libre; el Registro de Compras pide el código SUNAT (tabla 35) | hallazgo de T-134, 25-nov-2026 |
 | PLA + COM | Los tipos de proveedor generales («Insumos», «Mercadería») no se pueden crear como generales: el CRUD del superadmin guarda todo tipo con `giro='agencia_viajes'`, que es lo que define «turístico» | hallazgo de T-133, 25-nov-2026 |
 | CAJ | Las filas de permisos `*_supplier` siguen en las bases de los tenants (las crea una migración vieja); desde T-133 no gobiernan ninguna ruta ni se ven en Roles. Borrarlas en una migración aparte | hallazgo de T-133, 25-nov-2026 |
 | PLA | `TenantProvisioningService::eliminarSiVacio()` no cuenta `proveedores` en tiendas ni créditos (tampoco contaba `suppliers`) | hallazgo de T-133, 25-nov-2026 |

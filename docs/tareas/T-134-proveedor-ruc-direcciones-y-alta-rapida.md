@@ -58,9 +58,40 @@ Pantalla: alta de un proveedor con RUC repetido en agencia-demo.
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
+- **Commits:** `3f230f25` (backend), `f3108624` (pantallas), `ffbd59f9` (dorados de T-095).
+- **Tests:** CA1, CA2, CA3, CA4 y CA6 en `ProveedorRucYAltaRapidaTest`; CA5 en
+  `ProveedorBaseTest::test_t134_ca5_el_alta_rapida_pide_gestionar` (HTTP, tenant nuevo); CA2 y CA3
+  también en `helpers/proveedor.test.ts`. Suite del backend: 2484 tests, 2483 en verde; falló solo el intermitente conocido (`Fila13Fase1cFacturacionTest::test_descuento_del_combo…`), que solo pasa (34/34). Frontend: Vitest 360/360,
+  `type-check` y `build` limpios.
+- **Prueba en pantalla (agencia-demo):** alta rápida con un RUC real (trae razón social, dirección
+  fiscal y ciudad), RUC inexistente (mensaje y el formulario sigue), RUC repetido en alta rápida y
+  en Agencia (aviso y «crear igual»), no domiciliado, filtro «sin documento» y «ver todos»
+  (41 turísticos). Los proveedores de prueba se borraron. La ciudad en el buscador y en la
+  contraparte de Caja se verificó por test, no en pantalla.
+- **Al desplegar:** `tenants:migrate-verticales` (4 columnas nuevas en `proveedores`).
 - **Desviaciones de la tarea y por qué:**
+  - Columna `ciudad` en texto libre (decidido: no hay ubigeo desde T-083). La llena la provincia de
+    la consulta RUC, o el distrito si no hay provincia.
+  - `direccion` queda como dirección del local; `direccion_fiscal` es nueva. El formulario de Agencia
+    ahora pone la dirección de SUNAT en la fiscal, no en la del local.
+  - «Datos incompletos» se calcula (sin documento, teléfono o dirección), no es una columna.
+  - El aviso de repetido compara el número de documento (de cualquier tipo); en un no domiciliado,
+    además el país. Incluye inactivos.
+  - Un no domiciliado exige país; el documento del exterior es opcional (sin él sale en «sin
+    documento»).
+  - El RUC de 11 dígitos se valida solo cuando el documento cambia, para no bloquear la edición de
+    datos viejos.
+  - La consulta de documento ya no devuelve el mensaje de la excepción (traía la URL con el token) y
+    lo registra en el log sin el token.
+  - Se actualizaron tests de T-132, T-133 y T-095 que comparan las columnas del proveedor.
 
 ## Hallazgos fuera de alcance
--
+- `searchDocument` reenvía el código HTTP de apisperu: un 401 (token vencido) haría que el panel
+  cierre la sesión del usuario. Tampoco valida el formato del número antes de armar la URL.
+- El aviso de documento repetido solo está en el alta. No avisa al **editar** y poner un documento
+  que ya existe, ni al «Promover a proveedor» desde el cotizador
+  (`AlternativaItemController::promoverAProveedor`, `OpcionHotelController`), que crean directo.
+- El país es texto libre: no hay catálogo. El Registro de Compras de no domiciliados pide el código
+  de país de SUNAT (tabla 35).
+- La base local de agencia-demo tiene un ítem de menú viejo (`suppliers.index`, anterior a T-133) que
+  da error en consola; el seeder ya está bien.
