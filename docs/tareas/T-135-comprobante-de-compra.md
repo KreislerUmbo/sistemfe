@@ -274,9 +274,44 @@ Pantalla, en agencia-demo:
 ---
 
 ## Resultado
-- **Commits:**
+- **Commits** (rama `feat/T-135-comprobante-de-compra`, sin unir):
+  - `5f5ac040` — Parte A, módulos activables.
+  - `af41c7fa` — Parte B, compras.
 - **Tests:**
+  - Por criterio: CA1 `ModulosTenantTest` y `CompraTest::ca1_y_ca9…`; CA2 a CA9 `CompraTest`; CA10
+    `ComprasMigracionesPorGiroTest`; menú sembrado por giro en `MenuGirosTest`.
+  - Suite completa: 2502 en verde y 1 fallo, el intermitente conocido
+    `Fila13Fase1cFacturacionTest::descuento_del_combo…`; su archivo solo pasa (34/34).
+  - `admin-start-kit`: `type-check` y `build` sin errores; Vitest 364 en verde, más los 4 de
+    `compras.test.ts`. `central-panel`: `build` sin errores.
+  - Pantalla en agencia-demo: los 7 pasos de «Cómo verificar», sin errores de página. Los datos de
+    prueba se borraron y el módulo quedó apagado. CA10 además en local: `tenants:migrate-verticales`
+    corrió en los tenants de los tres giros.
 - **Desviaciones de la tarea y por qué:**
+  - `compra_periodos` lleva una columna más, `historial` (decisión del usuario, 26-nov): con
+    `periodo` único (D6) un segundo ciclo pisaba el primero, contra D7.
+  - Ruta que no estaba en la tabla: `GET compras/catalogos` (tipos con `uso_compras` y tipo de
+    cambio de una fecha). Y `GET compras` acepta `referencia_para`, para elegir la compra de una NC/ND.
+  - En los totales del filtro, la nota de crédito (07) **resta** y las anuladas no cuentan.
+  - El tipo de cambio sugerido es el de **venta**.
+  - D5: «completar el RUC» abre un modal propio (razón social y documento), no el formulario
+    completo del proveedor, que vive dentro de `views/cash/proveedores.vue`.
+  - La migración de permisos y la de tablas van separadas; `ArchivoSubido` ganó `pdf()` y `xml()`.
+  - Un proveedor con compras ya no se puede eliminar (422); sin esto la FK daba un 500.
+  - Tests existentes ajustados: el catálogo tiene 17 filas (la 91) y `ProveedoresTablaBaseTest`
+    quita `compras` antes de borrar `proveedores`.
+- **Al desplegar:** lo hace `deploy.sh` en su orden (`migrate`, `tenants:migrate-verticales`,
+  `MenuItemsSeeder`, `roles:sync-propietario`); después, encender «Compras» por tenant en el Panel
+  Superadmin.
 
 ## Hallazgos fuera de alcance
--
+- Se puede anular una compra que tiene una NC/ND vigente que la referencia, o cambiarle el
+  proveedor; la nota queda apuntando a una compra anulada o de otro emisor.
+- Serie y número se comparan como texto: `F001-123` y `F001-0000123` no se detectan como la misma.
+- Quien registre compras sin ser Propietario necesita además `proveedores.ver` (buscador),
+  `proveedores.gestionar` (alta rápida y completar RUC) y `compras.ver` (elegir la compra de una
+  NC/ND). Ningún rol operativo recibe permisos de Compras.
+- Reemplazar un adjunto deja el archivo anterior en el disco `private`.
+- Entorno local: `php artisan migrate` a secas ve pendientes tres migraciones de `menu_items` que
+  ya están aplicadas (quedaron registradas en `db_tenant_central` y el `.env` apunta a
+  `sv_facturacion`); las nuevas se aplicaron con `--path`.
