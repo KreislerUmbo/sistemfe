@@ -70,6 +70,8 @@ use App\Http\Controllers\Central\AerolineaController as CentralAerolineaControll
 use App\Http\Controllers\Central\ProveedorTipoController;
 use App\Http\Controllers\Central\TenantAdminController;
 use App\Http\Controllers\Central\TenantModuloController;
+use App\Http\Controllers\Compras\CompraController;
+use App\Http\Controllers\Compras\CompraPeriodoController;
 use App\Http\Controllers\Central\TenantCorreoController;
 use App\Http\Controllers\Central\TenantBackupController;
 use App\Http\Controllers\Central\TenantPlanController;
@@ -410,6 +412,30 @@ Route::group([
         ->middleware('permission:proveedores.gestionar');
     Route::put("proveedores-base/{id}", [ProveedorBaseController::class, 'update'])
         ->whereNumber('id')->middleware('permission:proveedores.gestionar');
+    // T-135 — Compras (sistema base, módulo activable). No hay borrar: se anula.
+    Route::middleware('modulo:compras')->group(function () {
+        Route::middleware('permission:compras.ver')->group(function () {
+            Route::get('compras', [CompraController::class, 'index']);
+            Route::get('compras/{id}', [CompraController::class, 'show'])->whereNumber('id');
+            Route::get('compras/{id}/adjunto/{archivo}', [CompraController::class, 'adjuntoUrl'])
+                ->whereNumber('id')->whereIn('archivo', ['pdf', 'xml']);
+            Route::get('compra-periodos', [CompraPeriodoController::class, 'index']);
+        });
+        Route::get('compras/catalogos', [CompraController::class, 'catalogos'])
+            ->middleware('permission:compras.ver|compras.registrar');
+        Route::middleware('permission:compras.registrar')->group(function () {
+            Route::post('compras', [CompraController::class, 'store']);
+            // POST y no PUT: el formulario va en multipart, por los adjuntos.
+            Route::post('compras/{id}', [CompraController::class, 'update'])->whereNumber('id');
+        });
+        Route::post('compras/{id}/anular', [CompraController::class, 'anular'])
+            ->whereNumber('id')->middleware('permission:compras.anular');
+        Route::middleware('permission:compras.cerrar_periodo')->group(function () {
+            Route::post('compra-periodos/{periodo}/cerrar', [CompraPeriodoController::class, 'cerrar']);
+            Route::post('compra-periodos/{periodo}/reabrir', [CompraPeriodoController::class, 'reabrir']);
+        });
+    });
+
     Route::resource("cash-concepts", CashConceptController::class)
         ->middlewareFor('store', 'permission:register_cash_concept')
         ->middlewareFor('update', 'permission:edit_cash_concept')
@@ -1465,6 +1491,13 @@ Route::group([
 Route::get("sales-pdf/{id}", [SaleController::class, 'pdf'])
     ->name('sales.pdf')
     ->middleware(['tenant', 'tenant.active', 'tenant.token', 'signed']);
+
+// T-135 — adjuntos de una compra (disco private). Requiere URL firmada (CompraController::adjuntoUrl).
+Route::get('compra-archivo/{id}/{archivo}', [CompraController::class, 'descargar'])
+    ->name('compras.archivo')
+    ->whereNumber('id')
+    ->whereIn('archivo', ['pdf', 'xml'])
+    ->middleware(['tenant', 'tenant.active', 'tenant.token', 'signed', 'modulo:compras']);
 
 // Requiere URL firmada (ver ArchivoSunatController::urlFirmada, arriba, dentro del grupo auth:api)
 Route::get("sunat-archivo/{documento}/{id}/{archivo}", [ArchivoSunatController::class, 'descargar'])

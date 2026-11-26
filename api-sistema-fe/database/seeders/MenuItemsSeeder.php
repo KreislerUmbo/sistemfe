@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Database\Seeders;
 
 use App\Models\Central\MenuItem;
+use App\Models\Central\Modulo;
 use Illuminate\Database\Seeder;
 
 /**
@@ -104,6 +105,13 @@ class MenuItemsSeeder extends Seeder
         $this->item('caja.historial', $caja, null, 'enlace', 'Historial y reportes', null, 'cash.dashboard', 'cash.view_all', 2);
 
         $this->menuAgencia();
+
+        // T-135: Compras, para todos los giros, pero solo donde el módulo está activo (modulo_id).
+        // modulos y menu_items viven las dos en la base central.
+        $moduloCompras = Modulo::where('codigo', 'compras')->firstOrFail()->id;
+        $compras = $this->item('compras', null, null, 'grupo', 'Compras', 'iconoir-shopping-bag', null, null, 5, moduloId: $moduloCompras);
+        $this->item('compras.comprobantes', $compras, null, 'enlace', 'Comprobantes', null, 'compras.index', 'compras.ver', 1, moduloId: $moduloCompras);
+        $this->item('compras.periodos', $compras, null, 'enlace', 'Periodos', null, 'compras.periodos', 'compras.cerrar_periodo', 2, moduloId: $moduloCompras);
 
         // Módulo Créditos (04-frontend "Además"): solo para el giro 'creditos'.
         $creditos = $this->item('creditos', null, 'creditos', 'grupo', 'Créditos', 'iconoir-hand-cash', null, null, 6);
@@ -226,7 +234,8 @@ class MenuItemsSeeder extends Seeder
         ?string $permisoRequerido,
         int $orden,
         ?array $girosExcluidos = null,
-        bool $soloPlataforma = false
+        bool $soloPlataforma = false,
+        ?int $moduloId = null
     ): int {
         $menuItem = MenuItem::updateOrCreate(
             ['codigo' => $codigo],
@@ -235,6 +244,7 @@ class MenuItemsSeeder extends Seeder
                 'giro' => $giro,
                 'giros_excluidos' => $girosExcluidos,
                 'solo_plataforma' => $soloPlataforma,
+                'modulo_id' => $moduloId,
                 'tipo' => $tipo,
                 'label' => $label,
                 'icono' => $icono,

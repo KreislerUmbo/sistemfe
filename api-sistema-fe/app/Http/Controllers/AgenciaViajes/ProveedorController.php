@@ -13,6 +13,7 @@ use App\Models\AgenciaViajes\ProveedorTarifa;
 use App\Models\AgenciaViajes\ProveedorTipo;
 use App\Models\AgenciaViajes\ProveedorTipoConfig;
 use App\Models\Cash\CashMovement;
+use App\Models\Compras\Compra;
 use App\Services\AgenciaViajes\FotoUploadService;
 use App\Services\ProveedorDocumentoService;
 use App\Services\StorageUrl;
@@ -314,6 +315,14 @@ class ProveedorController extends Controller
             return response()->json([
                 'code' => 422,
                 'message' => 'No se puede eliminar: el proveedor tiene movimientos de Caja. Desactívalo en su lugar (campo Estado).',
+            ], 422);
+        }
+
+        // T-135: sus compras (también las anuladas) no se pueden quedar sin proveedor.
+        if (Compra::where('proveedor_id', $proveedor->id)->exists()) {
+            return response()->json([
+                'code' => 422,
+                'message' => 'No se puede eliminar: el proveedor tiene compras registradas. Desactívalo en su lugar (campo Estado).',
             ], 422);
         }
 

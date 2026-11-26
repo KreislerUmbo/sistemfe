@@ -58,6 +58,8 @@ class PermissionsDemoSeeder extends Seeder
         'register_serie_comprobante', 'list_serie_comprobante', 'edit_serie_comprobante',
         // T-133: proveedores del sistema base. Sin rol operativo; el Propietario los recibe al sincronizar.
         'proveedores.ver', 'proveedores.gestionar',
+        // T-135: Compras. Igual: sin rol operativo.
+        'compras.ver', 'compras.registrar', 'compras.anular', 'compras.cerrar_periodo',
         'can_switch_branch', 'emitir_factura', 'emitir_boleta', 'emitir_nota_venta',
         // T-109: ningún rol operativo lo recibe solo; el Propietario, con roles:sync-propietario.
         'cambiar_precio_venta',
