@@ -120,6 +120,16 @@
               </b-col>
             </b-row>
 
+            <!-- T-153: cambiar el stock es un ajuste y queda en el kárdex -->
+            <b-row v-if="pideMotivoStock" class="mt-2">
+              <b-col lg="6">
+                <label for="motivo_stock" class="fw-semibold">Motivo del ajuste de stock <span
+                    class="text-danger">*</span></label>
+                <b-form-input id="motivo_stock" v-model="motivoStock" size="sm" maxlength="255"
+                  placeholder="Ej: conteo físico, merma, ingreso de mercadería" />
+              </b-col>
+            </b-row>
+
             <!-- Imagen -->
             <b-row class="mt-3">
               <b-col lg="6">
@@ -373,6 +383,11 @@
             </b-row>
           </b-tab>
 
+          <!-- T-153: historial de stock -->
+          <b-tab v-if="puedeVerKardex" title="Kárdex">
+            <KardexProducto ref="kardex" :producto-id="String(route.params.id)" />
+          </b-tab>
+
           <!-- Tab Información Adicional -->
           <b-tab title="Información Adicional">
             <b-row class="mt-3">
@@ -403,7 +418,10 @@ import { useRoute, useRouter } from "vue-router";
 const router = useRouter(); //esto es para redireccionar
 const route = useRoute("product.edit");//esto es para redireccionar en la url y poder obtener el id
 
-import { onMounted, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
+import KardexProducto from "@/components/Product/KardexProducto.vue";
+import { controlaStock } from "@/helpers/ventaRetail";
+import { useAuthStore } from "@/stores/auth";
 import { UNITS, type Product, type ProductCategorie, type ProductConfigResponse, type ProductResponse, type ProductUnit } from "@/types/products";
 
 
@@ -427,6 +445,18 @@ const include_igv = ref<number>(0);
 const unidad_medida = ref<string>("NIU");
 const units = ref<ProductUnit[]>(UNITS);
 const stock = ref<number>(0);
+// T-153: el stock solo se envía si se cambió (así guardar la ficha no pisa lo que se vendió
+// mientras estaba abierta) y, si el producto controla stock, el cambio pide motivo.
+const stockCargado = ref<number>(0);
+const motivoStock = ref<string>("");
+const stockCambiado = computed(() => Number(stock.value) !== Number(stockCargado.value));
+const pideMotivoStock = computed(() => stockCambiado.value && controlaStock({
+  tipo_bien_servicio: tipo_bien_servicio.value,
+  disponiblidad: Number(disponiblidad.value),
+  controla_stock: product_selected.value?.controla_stock,
+}));
+const puedeVerKardex = useAuthStore().isPermitedRoute('list_product');
+const kardex = ref<InstanceType<typeof KardexProducto> | null>(null);
 const state = ref<number>(1);
 const FILE_IMAGEN = ref<File | undefined>(undefined);
 const IMAGEN_PREVIZUALIZA = ref<string | null>(null); // readAsDataURL siempre da texto (data URL)
@@ -576,6 +606,8 @@ const show = async () => {
     include_igv.value = product_selected.value?.include_igv ?? 1;
     unidad_medida.value = product_selected.value?.unidad_medida ?? '';
     stock.value = product_selected.value?.stock ?? 0;
+    stockCargado.value = stock.value;
+    motivoStock.value = "";
     state.value = product_selected.value?.state ?? 1;
     IMAGEN_PREVIZUALIZA.value = product_selected.value?.imagen ?? '';
 
@@ -703,7 +735,7 @@ const store = async () => {
       return;
     }
 
-    if (stock.value < 0) {
+    if (String(stock.value).trim() === '' || stock.value < 0) {
       const swal = Swal as TVueSwalInstance;
       await swal.fire('Error', 'El stock del producto es obligatorio.', 'error');
       return;
@@ -726,7 +758,14 @@ const store = async () => {
     formData.append('percentage_isc', percentage_isc.value.toString());
     formData.append('include_igv', include_igv.value.toString());
     formData.append('unidad_medida', unidad_medida.value);
-    formData.append('stock', stock.value.toString());
+    if (pideMotivoStock.value && !motivoStock.value.trim()) {
+      await (Swal as TVueSwalInstance).fire('Error', 'Indica el motivo del ajuste de stock.', 'error');
+      return;
+    }
+    if (stockCambiado.value) {
+      formData.append('stock', stock.value.toString());
+      formData.append('motivo_stock', motivoStock.value.trim());
+    }
     formData.append('state', state.value.toString());
     if (FILE_IMAGEN.value) {
       formData.append('image', FILE_IMAGEN.value);
@@ -755,6 +794,8 @@ const store = async () => {
         resp.data.message,
         "success"
       );
+      await show(); // T-153: stock y kárdex al día
+      kardex.value?.recargar();
     }
     console.log(resp);
 

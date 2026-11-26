@@ -506,6 +506,8 @@ Route::group([
     Route::get("products/config", [ProductController::class, 'config']); //para traer las categorias
 
     Route::get("catalogs/tributarios", [ProductController::class, 'catalogsTributarios']); //para traer las catalogsTributarios
+    Route::get("products/{id}/kardex", [ProductController::class, 'kardex']) // T-153
+        ->middleware('permission:list_product');
     Route::post("products/{id}", [ProductController::class, 'update']) //para editar y tiene imagenes
         ->middleware('permission:edit_product');
     // Fase 0c (§9.1, modo sombra, Bucket B) — reutiliza register_product/

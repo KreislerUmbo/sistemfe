@@ -30,7 +30,7 @@ use App\Services\HoraPeru;
 use App\Services\QrCodeService;
 use App\Services\TipoCambio\TipoCambioSunatResolver;
 use App\Services\Ventas\PrecioVentaValidator;
-use App\Services\Ventas\StockVentaService;
+use App\Services\Stock\StockService;
 use App\Services\Ventas\TotalesVentaValidator;
 use Brick\Math\BigDecimal;
 use App\Services\SerieComprobanteService;
@@ -48,7 +48,7 @@ class SaleController extends Controller
         private SerieComprobanteService $serieComprobanteService,
         private AdvanceApplicationService $advanceApplicationService,
         private CobroVentaService $cobro,
-        private StockVentaService $stock
+        private StockService $stock
     ) {
     }
 
@@ -847,10 +847,6 @@ class SaleController extends Controller
         try {
             DB::beginTransaction();
 
-            // T-113: stock validado y descontado con lock, ANTES de tocar caja o correlativos.
-            // Si no alcanza, 422 y el rollback de abajo no deja nada guardado.
-            $this->stock->descontar($detalles_venta);
-
             // ── Crear cabecera de la venta ────────────────────────────
             $venta = Sale::create([
                 // Identificación
@@ -962,6 +958,11 @@ class SaleController extends Controller
                 // reportado 2026-07-21.
                 "saldo_pendiente" => $request->debt,
             ]);
+
+            // T-113: stock validado y descontado con lock, ANTES de tocar caja o correlativos.
+            // Si no alcanza, 422 y el rollback de abajo no deja nada guardado. Va después de la
+            // cabecera porque el kárdex (T-153) anota la venta de origen.
+            $this->stock->vender($venta, $detalles_venta);
 
             // ── Reservar correlativo de inmediato para documentos no-fiscales ──
             // Nota de venta (y cualquier otro tipo interno futuro) nunca pasa
@@ -1267,7 +1268,8 @@ public function update(Request $request, string $id)
         // mueve solo la diferencia por producto: lo nuevo menos lo que la venta ya tenía. Va
         // antes de tocar nada: si no alcanza, 422 y la venta queda como estaba.
         Sale::whereKey($venta->id)->lockForUpdate()->first();
-        $this->stock->cambiar(
+        $this->stock->cambiarVenta(
+            $venta,
             SaleDetail::where('sale_id', $venta->id)->get(),
             $detalles_nuevos
         );
@@ -1386,7 +1388,7 @@ public function update(Request $request, string $id)
         // Eliminar los que ya no están y devolver su stock
         foreach ($detalles_actuales as $detalle_actual) {
             if (!in_array($detalle_actual->id, $ids_nuevos)) {
-                // El stock ya se ajustó arriba (StockVentaService::cambiar)
+                // El stock ya se ajustó arriba (StockService::cambiarVenta)
                 $detalle_actual->delete();
             }
         }
@@ -1587,7 +1589,7 @@ public function update(Request $request, string $id)
             }
 
             // T-113: la venta eliminada devuelve el stock de sus bienes (antes quedaba descontado).
-            $this->stock->devolver(SaleDetail::where('sale_id', $venta->id)->get());
+            $this->stock->devolverVentaEliminada($venta, SaleDetail::where('sale_id', $venta->id)->get());
 
             // Solo en tenants con reservas (Agencia): en retail la tabla no existe.
             if (\App\Models\AgenciaViajes\ReservaVenta::hayReservasEnEsteTenant()) {

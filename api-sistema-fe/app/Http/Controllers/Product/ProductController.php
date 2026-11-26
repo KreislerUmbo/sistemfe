@@ -9,8 +9,13 @@ use App\Http\Resources\Product\ProductResource;
 use App\Models\Product\Categorie;
 use App\Models\Product\DetractionCode;
 use App\Models\Product\Product;
+use App\Models\Product\StockMovimiento;
+use App\Models\Sale\Note;
+use App\Models\Sale\Sale;
+use App\Services\Stock\StockService;
 use App\Models\Product\TaxConfig;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 class ProductController extends Controller
@@ -33,7 +38,7 @@ class ProductController extends Controller
             'disponiblidad',
             'state',
             'unidad_medida',
-            'stock',
+            // 'stock' no: solo lo mueve StockService (T-153).
             'include_igv',
             'is_icbper',
             'is_ivap',
@@ -51,6 +56,12 @@ class ProductController extends Controller
         ];
     }
 
+
+    // T-153: el stock no se asigna con el resto de la ficha; cambiarlo es un ajuste con motivo.
+    private const REGLAS_STOCK = [
+        'stock' => ['nullable', 'numeric', 'min:0', 'max:999999999'],
+        'motivo_stock' => ['nullable', 'string', 'max:255'],
+    ];
 
     public function index(Request $request)
     {
@@ -142,7 +153,7 @@ class ProductController extends Controller
      */
     public function store(Request $request)
     {
-        $request->validate(['image' => ArchivoSubido::imagen(), 'cantidad_mayorista' => ['nullable', 'numeric', 'min:0', 'max:999999999']], ArchivoSubido::MENSAJES);
+        $request->validate(['image' => ArchivoSubido::imagen(), 'cantidad_mayorista' => ['nullable', 'numeric', 'min:0', 'max:999999999']] + self::REGLAS_STOCK, ArchivoSubido::MENSAJES);
         $is_product_title = Product::where('title', $request->title)->first();
         if ($is_product_title) {
             return response()->json([
@@ -179,7 +190,13 @@ class ProductController extends Controller
             $data['imagen'] = $path;
         }
 
-        $product = Product::create($data);
+        $product = DB::transaction(function () use ($request, $data) {
+            $product = Product::create($data + ['stock' => 0]);
+            // El stock inicial es el primer ajuste del kárdex.
+            app(StockService::class)->ajustar($product->id, (float) $request->input('stock'), 'stock inicial', true);
+
+            return $product->refresh();
+        });
 
         return response()->json([
             "code" => 200,
@@ -213,7 +230,7 @@ class ProductController extends Controller
      */
     public function update(Request $request, string $id)
     {
-        $request->validate(['image' => ArchivoSubido::imagen(), 'cantidad_mayorista' => ['nullable', 'numeric', 'min:0', 'max:999999999']], ArchivoSubido::MENSAJES);
+        $request->validate(['image' => ArchivoSubido::imagen(), 'cantidad_mayorista' => ['nullable', 'numeric', 'min:0', 'max:999999999']] + self::REGLAS_STOCK, ArchivoSubido::MENSAJES);
         $is_product_title = Product::where('id', '<>', $id)
             ->where('title', $request->title)->first();
 
@@ -233,7 +250,7 @@ class ProductController extends Controller
             ]);
         }
 
-        $product = Product::findOrFail($id);
+        Product::findOrFail($id);
         $data = $request->only($this->allowedFields());
         $data['aplica_percepcion'] = $request->boolean('aplica_percepcion') ? 1 : 0;
         $data['is_isc'] = $request->boolean('is_isc') ? 1 : 0;
@@ -249,20 +266,77 @@ class ProductController extends Controller
             }
         }
 
-        if ($request->hasFile('image')) {
-            if ($product->imagen && Storage::disk('public')->exists($product->imagen)) {
-                Storage::disk('public')->delete($product->imagen);
-            }
-            $path = Storage::disk('public')->putFile("products", $request->file("image"));
-            $data['imagen'] = $path;
-        }
+        [$product, $imagenAnterior] = DB::transaction(function () use ($request, $data, $id) {
+            $product = Product::lockForUpdate()->findOrFail($id);
+            $controlaba = $product->controlaStock();
+            $product->update($data);
 
-        $product->update($data);
+            // Si el ajuste da 422, la transacción deshace también el resto de la ficha.
+            $empiezaAControlar = !$controlaba && $product->controlaStock();
+            $stockNuevo = $request->filled('stock') ? (float) $request->input('stock') : (float) $product->stock;
+            app(StockService::class)->ajustar($product->id, $stockNuevo, $request->input('motivo_stock'), $empiezaAControlar);
+
+            // La imagen va después del ajuste: un 422 no debe haber tocado ningún archivo.
+            $imagenAnterior = null;
+            if ($request->hasFile('image')) {
+                $imagenAnterior = $product->imagen;
+                $product->update(['imagen' => Storage::disk('public')->putFile("products", $request->file("image"))]);
+            }
+
+            return [$product->refresh(), $imagenAnterior];
+        });
+
+        if ($imagenAnterior && Storage::disk('public')->exists($imagenAnterior)) {
+            Storage::disk('public')->delete($imagenAnterior);
+        }
 
         return response()->json([
             "code" => 200,
             "message" => "Producto actualizado correctamente",
             "product" => $product,
+        ]);
+    }
+
+    /** T-153: kárdex del producto, del movimiento más nuevo al más viejo. */
+    public function kardex(Request $request, string $id)
+    {
+        $product = Product::findOrFail($id);
+        $perPage = min(100, max(1, (int) $request->get('per_page', 20)));
+        $pagina = StockMovimiento::with('user:id,name,surname')
+            ->where('product_id', $product->id)
+            ->orderByDesc('id')
+            ->paginate($perPage);
+
+        // Documentos de la página, en una consulta por tipo (incluidos los eliminados).
+        $filas = collect($pagina->items());
+        $ids = fn (string $tipo) => $filas->where('documento_tipo', $tipo)->pluck('documento_id')->unique()->values();
+        $documentos = [
+            'venta' => Sale::withTrashed()->whereIn('id', $ids('venta'))->get(['id', 'serie', 'correlativo'])->keyBy('id'),
+            'nota' => Note::withTrashed()->whereIn('id', $ids('nota'))->get(['id', 'serie', 'correlativo'])->keyBy('id'),
+        ];
+
+        return response()->json([
+            'total' => $pagina->total(),
+            'paginate' => $perPage,
+            'movimientos' => $filas->map(function (StockMovimiento $m) use ($documentos) {
+                $documento = null;
+                if ($m->documento_tipo) {
+                    $doc = $documentos[$m->documento_tipo]->get($m->documento_id);
+                    $documento = ($m->documento_tipo === 'nota' ? 'Nota' : 'Venta') . " #{$m->documento_id}"
+                        . ($doc?->correlativo ? " ({$doc->serie}-{$doc->correlativo})" : '');
+                }
+
+                return [
+                    'id' => $m->id,
+                    'created_at' => $m->created_at->toIso8601ZuluString(),
+                    'tipo' => $m->tipo,
+                    'documento' => $documento,
+                    'motivo' => $m->motivo,
+                    'cantidad' => $m->cantidad,
+                    'saldo' => $m->saldo,
+                    'usuario' => $m->user ? trim("{$m->user->name} {$m->user->surname}") : null,
+                ];
+            })->values(),
         ]);
     }
 

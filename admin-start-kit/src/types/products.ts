@@ -49,6 +49,29 @@ export type Products = {
         data:Product[],
     },
 }
+/** T-153: fila del kárdex (GET products/{id}/kardex). `cantidad` con signo: + entra, − sale. */
+export type MovimientoStock = {
+    id:number,
+    created_at:string,
+    tipo:string,
+    documento:string | null,
+    motivo:string | null,
+    cantidad:number,
+    saldo:number,
+    usuario:string | null,
+}
+
+export const TIPOS_MOVIMIENTO: Record<string, string> = {
+    venta: 'Venta',
+    venta_edicion: 'Venta editada',
+    venta_eliminada: 'Venta eliminada',
+    nc_venta: 'Nota de crédito',
+    ajuste: 'Ajuste',
+    compra: 'Compra',
+    compra_anulada: 'Compra anulada',
+    nc_compra: 'Nota de crédito de compra',
+}
+
 export type ProductResponse = {
     code?:number,
     message:string,
