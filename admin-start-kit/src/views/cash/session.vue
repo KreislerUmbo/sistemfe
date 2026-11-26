@@ -361,7 +361,7 @@
                                 style="max-height:220px;overflow-y:auto;box-shadow:0 4px 8px rgba(0,0,0,.1)">
                                 <button type="button" class="list-group-item list-group-item-action"
                                     v-for="s in counterpartySuggestions" :key="s.id" @mousedown.prevent="seleccionarContraparte(s)">
-                                    {{ s.name }} <small class="text-muted">{{ s.document }}</small>
+                                    {{ nombreConCiudad(s.name, s.ciudad) }} <small class="text-muted">{{ s.document }}</small>
                                 </button>
                             </div>
                             <small v-else-if="counterpartySearch.trim().length >= 2" class="text-muted d-block mt-1">
@@ -397,6 +397,7 @@ import httpClient from '@/helpers/http-client';
 import type { AxiosResponse } from 'axios';
 import { ref, computed, onMounted } from 'vue';
 import { formatFechaHora } from '@/helpers/fecha';
+import { nombreConCiudad } from '@/helpers/proveedor';
 
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { useAuthStore } from '@/stores/auth';

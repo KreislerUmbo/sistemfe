@@ -20,9 +20,22 @@
             </div>
             <div class="card-body py-3">
                 <div class="row g-3">
+                    <div class="col-12">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="proveedor-no-domiciliado"
+                                v-model="form.es_no_domiciliado" @change="onCambiarDomicilio">
+                            <label class="form-check-label small" for="proveedor-no-domiciliado">No domiciliado (del extranjero)</label>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3" v-if="form.es_no_domiciliado">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">País *</label>
+                        <input type="text" class="form-control form-control-sm" v-model="form.pais" maxlength="80">
+                    </div>
                     <div class="col-6 col-md-3">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Tipo de Documento</label>
-                        <select class="form-select form-select-sm" v-model="form.tipo_documento">
+                        <input v-if="form.es_no_domiciliado" type="text" class="form-control form-control-sm"
+                            v-model="form.tipo_documento" maxlength="20" placeholder="NIT, CNPJ, Tax ID…">
+                        <select v-else class="form-select form-select-sm" v-model="form.tipo_documento">
                             <option :value="null">—</option>
                             <option value="DNI">DNI</option>
                             <option value="RUC">RUC</option>
@@ -34,14 +47,14 @@
                         <label class="form-label mb-1 small fw-semibold text-secondary">N° Documento</label>
                         <div class="input-group input-group-sm">
                             <input type="text" class="form-control form-control-sm" v-model="form.numero_documento">
-                            <button class="btn btn-outline-primary" type="button" title="Buscar en RENIEC/SUNAT"
+                            <button v-if="!form.es_no_domiciliado" class="btn btn-outline-primary" type="button" title="Buscar en RENIEC/SUNAT"
                                 :disabled="!form.numero_documento || buscandoDocumento || !['DNI', 'RUC'].includes(form.tipo_documento ?? '')"
                                 @click="buscarDocumento">
                                 <span v-if="buscandoDocumento" class="spinner-border spinner-border-sm"></span>
                                 <i v-else class="fas fa-search"></i>
                             </button>
                         </div>
-                        <small class="text-muted" v-if="form.tipo_documento && !['DNI', 'RUC'].includes(form.tipo_documento)">
+                        <small class="text-muted" v-if="!form.es_no_domiciliado && form.tipo_documento && !['DNI', 'RUC'].includes(form.tipo_documento)">
                             La búsqueda automática solo está disponible para DNI/RUC — completa los datos a mano.
                         </small>
                     </div>
@@ -115,6 +128,7 @@
                     <div class="col-6 col-md-3">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Teléfono</label>
                         <input type="text" class="form-control form-control-sm" v-model="form.telefono">
+                        <small v-if="sinTelefono" class="text-warning d-block">Sin teléfono: no habrá cómo escribirle.</small>
                     </div>
                     <div class="col-6 col-md-3">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Celular</label>
@@ -128,8 +142,16 @@
                         <label class="form-label mb-1 small fw-semibold text-secondary">Email</label>
                         <input type="email" class="form-control form-control-sm" v-model="form.email">
                     </div>
+                    <div class="col-12 col-md-9">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Dirección fiscal</label>
+                        <input type="text" class="form-control form-control-sm" v-model="form.direccion_fiscal">
+                    </div>
+                    <div class="col-12 col-md-3">
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Ciudad</label>
+                        <input type="text" class="form-control form-control-sm" v-model="form.ciudad" maxlength="120">
+                    </div>
                     <div class="col-12">
-                        <label class="form-label mb-1 small fw-semibold text-secondary">Dirección</label>
+                        <label class="form-label mb-1 small fw-semibold text-secondary">Dirección del local (si es distinta)</label>
                         <input type="text" class="form-control form-control-sm" v-model="form.direccion">
                     </div>
                 </div>
@@ -260,9 +282,13 @@
             </div>
         </div>
 
+        <div v-if="existentes.length" class="mb-3">
+            <AvisoDocumentoRepetido :existentes="existentes" :guardando="guardando" @usar="irAlExistente" @crear="guardar(true)" />
+        </div>
+
         <div class="d-flex justify-content-end gap-2 mb-4">
             <router-link to="/agencia-viajes/proveedores" class="btn btn-outline-secondary">Cancelar</router-link>
-            <button class="btn btn-primary fw-semibold" @click="guardar" :disabled="guardando">
+            <button class="btn btn-primary fw-semibold" @click="guardar(false)" :disabled="guardando || existentes.length > 0">
                 <span v-if="guardando" class="spinner-border spinner-border-sm me-2"></span>
                 <i v-else class="fas fa-save me-2"></i>
                 {{ esEdicion ? 'Actualizar' : 'Registrar' }}
@@ -273,7 +299,7 @@
 
 <script setup lang="ts">
 import CampoHora from '@/components/CampoHora.vue';
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import RichTextEditor from '@/components/RichTextEditor.vue';
@@ -285,6 +311,9 @@ import { amenidadService } from '@/services/admin/amenidadService';
 import { configuracionAgenciaService } from '@/services/admin/configuracionAgenciaService';
 import type { FotoProveedor, Proveedor, ProveedorTipo, Amenidad, ConfiguracionAgencia } from '@/types/agencia-viajes';
 import GaleriaFotosProveedor from '@/components/AgenciaViajes/GaleriaFotosProveedor.vue';
+import AvisoDocumentoRepetido from '@/components/Proveedores/AvisoDocumentoRepetido.vue';
+import { datosDeConsultaRuc } from '@/helpers/proveedor';
+import type { ProveedorExistente } from '@/types/cash';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 type ArchivoPendiente = { file: File; previewUrl: string };
@@ -321,6 +350,10 @@ const form = ref<
     whatsapp: null,
     email: null,
     direccion: null,
+    direccion_fiscal: null,
+    ciudad: null,
+    es_no_domiciliado: false,
+    pais: null,
     observaciones: null,
     estado: true,
     es_referencial: false,
@@ -456,6 +489,19 @@ const verFotoGrande = (fotos: string[], indexInicial: number) => {
     });
 };
 
+// ── T-134: domicilio, teléfono y documento repetido ──
+const sinTelefono = computed(() => ![form.value.telefono, form.value.celular, form.value.whatsapp].some((t) => t?.trim()));
+const existentes = ref<ProveedorExistente[]>([]);
+watch(() => [form.value.numero_documento, form.value.es_no_domiciliado, form.value.pais], () => (existentes.value = []));
+
+// El documento peruano y el del exterior no comparten tipo.
+const onCambiarDomicilio = () => {
+    form.value.tipo_documento = null;
+    form.value.pais = null;
+};
+
+const irAlExistente = (p: ProveedorExistente) => router.push(`/agencia-viajes/proveedores/${p.id}`);
+
 // ── Búsqueda online DNI/RUC (RENIEC/SUNAT vía apisperu) — opcional, nunca bloquea el guardado ──
 const buscandoDocumento = ref(false);
 const buscarDocumento = async () => {
@@ -475,9 +521,15 @@ const buscarDocumento = async () => {
             form.value.razon_social = nombres || form.value.razon_social;
             form.value.tipo_persona = 'natural';
         } else {
-            form.value.razon_social = res.data.razonSocial || form.value.razon_social;
-            form.value.nombre_comercial = res.data.nombreComercial || form.value.nombre_comercial;
-            form.value.direccion = res.data.direccion || form.value.direccion;
+            const datos = datosDeConsultaRuc(res.data);
+            if (!datos) {
+                (Swal as TVueSwalInstance).fire('Sin resultados', 'No se encontró información para ese documento.', 'warning');
+                return;
+            }
+            form.value.razon_social = datos.razon_social;
+            form.value.nombre_comercial = datos.nombre_comercial || form.value.nombre_comercial;
+            form.value.direccion_fiscal = datos.direccion_fiscal || form.value.direccion_fiscal;
+            form.value.ciudad = datos.ciudad || form.value.ciudad;
             form.value.tipo_persona = 'juridica';
         }
     } catch (error) {
@@ -487,7 +539,7 @@ const buscarDocumento = async () => {
     }
 };
 
-const guardar = async () => {
+const guardar = async (confirmarDuplicado: boolean) => {
     if (!form.value.razon_social?.trim()) {
         (Swal as TVueSwalInstance).fire('Error', 'La razón social es obligatoria.', 'error');
         return;
@@ -521,9 +573,10 @@ const guardar = async () => {
                 fd.append(key, String(value));
             });
             archivosNuevos.value.forEach((item) => fd.append('fotos[]', item.file));
+            if (confirmarDuplicado) fd.append('confirmar_duplicado', '1');
             payload = fd;
         } else {
-            payload = { ...form.value, ...datosAlojamiento };
+            payload = { ...form.value, ...datosAlojamiento, confirmar_duplicado: confirmarDuplicado };
         }
 
         const res = esEdicion.value
@@ -538,6 +591,10 @@ const guardar = async () => {
         }
         router.push(`/agencia-viajes/proveedores/${res.proveedor.id}`);
     } catch (error: any) {
+        if (error.response?.data?.duplicado) {
+            existentes.value = error.response.data.existentes;
+            return;
+        }
         (Swal as TVueSwalInstance).fire('Error', error.response?.data?.message ?? 'No se pudo guardar', 'error');
     } finally {
         guardando.value = false;

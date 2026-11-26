@@ -342,7 +342,7 @@ class CashMovementController extends Controller
                 ->whereRaw("(COALESCE(razon_social, '') || ' ' || COALESCE(nombre_comercial, '') || ' ' || COALESCE(numero_documento, '')) ILIKE ?", ["%{$q}%"])
                 ->orderBy('razon_social')
                 ->limit(15)
-                ->get(['id', 'razon_social as name', 'numero_documento as document']);
+                ->get(['id', 'razon_social as name', 'numero_documento as document', 'ciudad']);
         }
 
         return response()->json(['results' => $resultados]);

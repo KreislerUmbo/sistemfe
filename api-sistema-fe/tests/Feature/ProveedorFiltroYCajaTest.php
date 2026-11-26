@@ -89,7 +89,7 @@ class ProveedorFiltroYCajaTest extends TestCase
             array_column($this->buscarEnCaja('T133'), 'id')
         );
         $this->assertSame(
-            [['id' => $this->sinTipo->id, 'name' => 'T133 Distribuidora de Agua', 'document' => '20222222222']],
+            [['id' => $this->sinTipo->id, 'name' => 'T133 Distribuidora de Agua', 'document' => '20222222222', 'ciudad' => null]],
             $this->buscarEnCaja('20222222')
         );
 

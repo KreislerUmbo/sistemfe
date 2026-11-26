@@ -38,7 +38,7 @@
                 <div class="row g-2 align-items-end">
                     <div class="col-12 col-md-4">
                         <label class="form-label mb-1 small fw-semibold text-secondary">Buscar</label>
-                        <input type="text" class="form-control form-control-sm" placeholder="Razón social o nombre comercial..."
+                        <input type="text" class="form-control form-control-sm" placeholder="Razón social, nombre comercial o ciudad..."
                             v-model="search" @keyup.enter="list">
                     </div>
                     <div class="col-12 col-md-4">
@@ -60,6 +60,13 @@
                             <i class="fas fa-undo"></i>
                         </button>
                     </div>
+                </div>
+                <div class="form-check form-switch mt-2">
+                    <input class="form-check-input" type="checkbox" role="switch" id="proveedores-ver-todos"
+                        v-model="verTodos" @change="cambiarAlcance">
+                    <label class="form-check-label small" for="proveedores-ver-todos">
+                        Ver todos (incluye los generales, sin tipo turístico)
+                    </label>
                 </div>
             </div>
         </div>
@@ -91,8 +98,11 @@
                             </tr>
                             <tr v-for="proveedor in proveedores" :key="proveedor.id">
                                 <td class="ps-3">
-                                    <div class="fw-semibold">{{ proveedor.razon_social }}</div>
+                                    <div class="fw-semibold">{{ nombreConCiudad(proveedor.razon_social, proveedor.ciudad) }}</div>
                                     <small class="text-muted" v-if="proveedor.nombre_comercial">{{ proveedor.nombre_comercial }}</small>
+                                    <span v-if="proveedor.es_no_domiciliado" class="badge bg-info-subtle text-info ms-1">No domiciliado · {{ proveedor.pais }}</span>
+                                    <span v-if="proveedor.datos_faltantes?.length" class="badge bg-warning-subtle text-warning ms-1"
+                                        :title="`Falta: ${proveedor.datos_faltantes.join(', ')}`">Datos incompletos</span>
                                 </td>
                                 <td>{{ nombreTipo(proveedor.tipo_id) }}</td>
                                 <td>
@@ -157,6 +167,7 @@ import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import DestinoTreeSelect from '@/components/AgenciaViajes/DestinoTreeSelect.vue';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import { proveedorService, proveedorTipoService } from '@/services/admin/proveedorService';
+import { nombreConCiudad } from '@/helpers/proveedor';
 import type { Proveedor, ProveedorTipo } from '@/types/agencia-viajes';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
@@ -174,8 +185,15 @@ const totalPages = ref<number>(0);
 const perPageRows = ref<number>(15);
 const loading = ref<boolean>(false);
 const togglingId = ref<number | null>(null);
+const verTodos = ref<boolean>(false);
 
-const nombreTipo = (tipoId: number) => proveedorTipos.value.find((t) => t.id === tipoId)?.nombre ?? '—';
+// Sin tipo turístico = proveedor general (solo aparece con «ver todos»).
+const nombreTipo = (tipoId: number) => proveedorTipos.value.find((t) => t.id === tipoId)?.nombre ?? 'General';
+
+const cambiarAlcance = () => {
+    currentPage.value = 1;
+    list();
+};
 
 const onToggleTipo = async (tipo: ProveedorTipo) => {
     togglingId.value = tipo.id;
@@ -198,6 +216,7 @@ const list = async () => {
             search: search.value || undefined,
             tipo_id: tipoId.value || undefined,
             destino_atractivo_id: destinoAtractivoId.value || undefined,
+            alcance: verTodos.value ? 'todos' : undefined,
         });
         proveedores.value = res.proveedores;
         totalPages.value = res.total;
@@ -213,6 +232,7 @@ const reset = () => {
     search.value = '';
     tipoId.value = null;
     destinoAtractivoId.value = null;
+    verTodos.value = false;
     currentPage.value = 1;
     list();
 };

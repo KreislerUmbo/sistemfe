@@ -26,10 +26,31 @@ export type PaymentMethodResponse = {
 export type ProveedorBase = {
     id: number;
     razon_social: string;
+    nombre_comercial: string | null;
+    tipo_documento: string | null;
     numero_documento: string | null;
+    direccion: string | null;
+    direccion_fiscal: string | null;
+    ciudad: string | null;
+    es_no_domiciliado: boolean;
+    pais: string | null;
     telefono: string | null;
+    celular: string | null;
+    es_referencial: boolean;
+    datos_faltantes: string[];
     estado: boolean;
     created_at: string;
+};
+
+// T-134 — lo que devuelve el aviso de documento repetido (409).
+export type ProveedorExistente = {
+    id: number;
+    razon_social: string;
+    nombre_comercial: string | null;
+    ciudad: string | null;
+    direccion: string | null;
+    direccion_fiscal: string | null;
+    estado: boolean;
 };
 
 export type ProveedoresBase = {

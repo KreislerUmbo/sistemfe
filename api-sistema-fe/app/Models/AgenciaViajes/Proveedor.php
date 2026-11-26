@@ -26,6 +26,10 @@ class Proveedor extends ProveedorBase
         'tipo_documento',
         'numero_documento',
         'direccion',
+        'direccion_fiscal',
+        'ciudad',
+        'es_no_domiciliado',
+        'pais',
         'telefono',
         'celular',
         'whatsapp',
@@ -49,6 +53,7 @@ class Proveedor extends ProveedorBase
         'estado' => 'boolean',
         'margen_default_valor' => 'decimal:2',
         'es_referencial' => 'boolean',
+        'es_no_domiciliado' => 'boolean',
         'fotos' => 'array',
     ];
 

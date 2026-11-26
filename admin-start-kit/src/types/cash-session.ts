@@ -103,6 +103,7 @@ export type CounterpartySearchResult = {
     id: number;
     name: string;
     document: string | null;
+    ciudad?: string | null; // solo proveedores
 };
 
 export type CashSessionDenomination = {

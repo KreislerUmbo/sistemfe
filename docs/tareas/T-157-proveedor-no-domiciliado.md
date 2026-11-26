@@ -1,44 +1,45 @@
-# T-157 — Proveedor no domiciliado: país y documento del exterior
+# T-157 — País del proveedor no domiciliado con el código de SUNAT
 
 | | |
 |---|---|
 | **Módulo** | COM |
-| **Depende de** | T-134 |
+| **Depende de** | — (T-134 ya está en `main`) |
 | **Reglas** | — |
-| **Decisiones** | `plan-tours-venta-simple-costo-real.md` §3.7 (revisión del 24-nov: no domiciliados en el Registro de Compras); sale de T-134 (D8, revisión del 25-nov-2026) |
-| **Rama** | `feat/T-157-proveedor-no-domiciliado` |
+| **Decisiones** | `plan-tours-venta-simple-costo-real.md` §3.7 (no domiciliados en el Registro de Compras); hallazgo de T-134 |
+| **Rama** | `feat/T-157-pais-no-domiciliado` |
 
 ## Contexto
-Un hotel o un operador del extranjero en un paquete internacional es un proveedor sin RUC. El
-Registro de Compras lo pide en su parte de no domiciliados, con su país de residencia y su
-documento del exterior. Se separó de T-134 porque tiene una pregunta tributaria propia y no
-debía frenar lo demás del proveedor.
+T-134 ya dejó al proveedor no domiciliado:
+- `proveedores.es_no_domiciliado` (boolean) y `proveedores.pais` (texto libre, 80);
+- migración `tenant/core/2026_11_26_100000`;
+- el documento del exterior en `tipo_documento` / `numero_documento`, sin validar RUC;
+- `ProveedorDocumentoService::preparar()` exige el país si es no domiciliado y lo borra si no;
+- el aviso de documento repetido compara también el país.
 
-**Pregunta abierta (resolver antes de construir; no está en P13):**
-- **Q1 — Formato del país:** ¿se guarda con el código de la **tabla 35 de SUNAT** (países), que
-  es lo que usa el Registro de Compras de no domiciliados? La propuesta es sí, con un catálogo
-  central de solo lectura.
-- **Q2 — Documento del exterior:** ¿alcanza con reusar `tipo_documento` / `numero_documento`
-  (texto libre, sin validación de RUC) o el Registro pide una tabla de tipos? Si no hay
-  respuesta del contador, la propuesta es reusar las columnas, con `tipo_documento` en un valor
-  nuevo (`DOC_EXT`, «documento del exterior»).
+Falta que el país sea un **código**. El Registro de Compras de no domiciliados pide el país de
+residencia con el código de la tabla 35 de SUNAT, y con texto libre «Chile», «chile» y «CL»
+serían tres países.
+
+**Preguntas abiertas (resolver antes de construir):**
+- **Q1 — Formato del país:** ¿alcanza con el código de la tabla 35 de SUNAT? Propuesta: sí, con
+  un catálogo central de solo lectura.
+- **Q2 — Documento del exterior:** ¿el Registro pide un tipo de documento de una tabla SUNAT, o
+  alcanza con el texto libre de hoy? Propuesta, si no hay respuesta: dejarlo como está.
 
 Si las respuestas cambian el modelo, se actualiza esta tarea antes de empezar.
 
 ## Alcance
-- **Migración** en `tenant/core/`: `no_domiciliado` (boolean, default false) y `pais` (código,
-  nullable) en `proveedores`. Agregar los dos a `CAMPOS_BASICOS` y a la validación de los dos
-  controladores (base y Agencia).
-- **Catálogo de países** (Q1): tabla central (`CentralConnection`) con la tabla 35 de SUNAT,
-  sembrada por seeder. Endpoint de lectura para el selector. Sin FK cross-DB: validar el código en PHP.
-- **Reglas del alta:** si `no_domiciliado`, se pide `pais` y se acepta el documento del exterior
-  sin validar los 11 dígitos. No se ofrece la consulta RUC. El aviso de documento repetido de
-  T-134 sigue aplicando.
-- **«Sin documento» (T-134):** un no domiciliado con su documento del exterior **no** cuenta como
-  sin documento. Sin documento, sí.
-- **«Datos incompletos» (T-134, D5):** para un no domiciliado, la dirección fiscal no se exige; falta solo si no hay país o documento.
-- **Pantallas:** el formulario de Agencia, el alta rápida (`ProveedorAltaRapida.vue`) y Caja →
-  Proveedores muestran «No domiciliado» con el país. En los listados, una marca y el país en vez de la ciudad, si no tiene ciudad.
+- **Catálogo central de países** (`CentralConnection`) con la tabla 35 de SUNAT: código y
+  nombre, sembrado por seeder. Endpoint de lectura para el selector. Sin FK cross-DB: el código
+  se valida en PHP.
+- **`proveedores.pais` pasa a guardar el código.** Migración en `tenant/core/` que convierte los
+  valores existentes: por nombre sin tildes ni mayúsculas, o por código si ya lo es. Lo que no
+  se pueda convertir queda como está y se lista en la salida de la migración, sin perderse. Una
+  migración nueva: no se edita la de T-134.
+- **Validación:** `ProveedorDocumentoService::preparar()` rechaza un país que no está en el
+  catálogo, solo cuando el país cambia, como hace hoy con el RUC.
+- **Pantallas:** selector de país en lugar del texto libre, en `ProveedorAltaRapida.vue` y en
+  `views/agencia-viajes/proveedores/form.vue`. Los listados muestran el nombre del país, no el código.
 
 ## Fuera de alcance
 - El Registro de Compras y su parte de no domiciliados (fase 8 / PLE).
@@ -46,22 +47,24 @@ Si las respuestas cambian el modelo, se actualiza esta tarea antes de empezar.
 - Moneda extranjera de la compra (va con el comprobante, T-135).
 
 ## Dónde tocar
-- `api-sistema-fe/database/migrations/tenant/core/` (columnas) y `database/migrations/` central (catálogo de países) con su seeder.
-- `api-sistema-fe/app/Models/Proveedor.php` — campos, el scope `sinDocumento` y `datos_incompletos`.
-- `api-sistema-fe/app/Http/Controllers/ProveedorController.php` y `AgenciaViajes/ProveedorController.php` — validación.
-- Frontend: `ProveedorAltaRapida.vue`, `views/agencia-viajes/proveedores/form.vue` e `index.vue`, `views/cash/proveedores.vue`.
+- `api-sistema-fe/database/migrations/` central (catálogo) y su seeder;
+  `database/migrations/tenant/core/` (conversión de `pais`).
+- `api-sistema-fe/app/Services/ProveedorDocumentoService.php` — `preparar()`.
+- Frontend: `components/Proveedores/ProveedorAltaRapida.vue`,
+  `views/agencia-viajes/proveedores/form.vue` e `index.vue`, `views/cash/proveedores.vue`.
 
 ## Criterios de aceptación
-- [ ] **CA1** — Un proveedor no domiciliado se crea con país y documento del exterior sin pedir
-  RUC. Un país que no está en el catálogo da 422.
-- [ ] **CA2** — Un no domiciliado con documento no aparece en `?sin_documento=1`. Sin documento, sí aparece.
-- [ ] **CA3** — Un domiciliado con `tipo_documento=RUC` sigue validando los 11 dígitos.
-- [ ] **CA4** — `datos_incompletos` de un no domiciliado no depende de la dirección fiscal.
+- [ ] **CA1** — Un no domiciliado se crea con un código de país del catálogo; un código que no
+  existe da 422.
+- [ ] **CA2** — La migración convierte «Chile» y «chile» al mismo código, y deja sin tocar un
+  valor que no reconoce (y lo informa).
+- [ ] **CA3** — Editar otro dato de un proveedor con un país viejo sin convertir no da error.
+- [ ] **CA4** — Los listados muestran el nombre del país.
 
 ## Seguridad y correctitud
 - [ ] Permisos / Policy: los mismos de T-134 (`proveedores.gestionar`).
-- [ ] Entrada: código de país validado contra el catálogo central.
-- [ ] Migraciones nuevas + `tenants:migrate-verticales`: sí (tenant). La central, con `migrate` de la central.
+- [ ] Entrada: el código de país se valida contra el catálogo central.
+- [ ] Migraciones nuevas: la central con `migrate` de la central; la de tenant con `tenants:migrate-verticales`.
 - [ ] Tributario: Q1 y Q2 confirmadas antes de construir.
 - [ ] Aislamiento de tenant, concurrencia, dinero, fechas, `v-html`: no aplica.
 
@@ -69,7 +72,7 @@ Si las respuestas cambian el modelo, se actualiza esta tarea antes de empezar.
 ```
 php artisan test --filter=Proveedor
 ```
-Pantalla: alta de un hotel del extranjero en agencia-demo; verificar que no aparece en «sin documento».
+Pantalla: alta de un hotel del extranjero en agencia-demo con el selector de país.
 
 ---
 
