@@ -20,6 +20,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Clientes, todos los giros. Las respuestas de negocio mantienen el formato histórico
@@ -117,9 +118,15 @@ class ClientController extends Controller
                 'message' => 'No se pudo obtener la información',
             ], $response->status());
         } catch (\Exception $e) {
+            // El mensaje de la excepción trae la URL con el token: no sale del servidor.
+            Log::error('Falló la consulta de documento', [
+                'tipo' => $endpoint,
+                'error' => str_replace($token, '***', $e->getMessage()),
+            ]);
+
             return response()->json([
                 'success' => false,
-                'message' => 'Error al consultar el documento: ' . $e->getMessage(),
+                'message' => 'No se pudo consultar el documento. Inténtalo de nuevo o completa los datos a mano.',
             ], 500);
         }
     }

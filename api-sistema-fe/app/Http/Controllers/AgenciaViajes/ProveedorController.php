@@ -14,6 +14,7 @@ use App\Models\AgenciaViajes\ProveedorTipo;
 use App\Models\AgenciaViajes\ProveedorTipoConfig;
 use App\Models\Cash\CashMovement;
 use App\Services\AgenciaViajes\FotoUploadService;
+use App\Services\ProveedorDocumentoService;
 use App\Services\StorageUrl;
 use App\Services\TextoFormatoService;
 use Illuminate\Http\JsonResponse;
@@ -50,7 +51,8 @@ class ProveedorController extends Controller
             $search = $request->get('search');
             $query->where(function ($q) use ($search) {
                 $q->where('razon_social', 'ilike', "%{$search}%")
-                    ->orWhere('nombre_comercial', 'ilike', "%{$search}%");
+                    ->orWhere('nombre_comercial', 'ilike', "%{$search}%")
+                    ->orWhere('ciudad', 'ilike', "%{$search}%");
             });
         }
 
@@ -73,6 +75,7 @@ class ProveedorController extends Controller
 
         $proveedores->getCollection()->transform(function (Proveedor $proveedor) {
             $proveedor->setAttribute('fotos', Proveedor::fotosResueltas($proveedor->fotos ?? []));
+            $proveedor->setAttribute('datos_faltantes', $proveedor->datosFaltantes());
 
             return $proveedor;
         });
@@ -90,6 +93,10 @@ class ProveedorController extends Controller
         $validado = $this->validarPayload($request);
         if ($validado instanceof JsonResponse) {
             return $validado;
+        }
+        // Antes de subir archivos: un alta sin confirmar no debe dejar nada en el disco.
+        if ($aviso = ProveedorDocumentoService::avisoDuplicado($request, $validado)) {
+            return $aviso;
         }
 
         if ($request->hasFile('logo')) {
@@ -173,7 +180,7 @@ class ProveedorController extends Controller
         $request->validate(['logo' => ArchivoSubido::imagen()], ArchivoSubido::MENSAJES);
         $proveedor = Proveedor::findOrFail($id);
 
-        $validado = $this->validarPayload($request);
+        $validado = $this->validarPayload($request, $proveedor);
         if ($validado instanceof JsonResponse) {
             return $validado;
         }
@@ -401,7 +408,7 @@ class ProveedorController extends Controller
             && ProveedorTipo::where('id', $proveedor->tipo_id)->where('slug', 'alojamiento-hoteles')->exists());
     }
 
-    private function validarPayload(Request $request): array|JsonResponse
+    private function validarPayload(Request $request, ?Proveedor $actual = null): array|JsonResponse
     {
         $validator = Validator::make($request->all(), [
             'razon_social' => 'required|string|max:250',
@@ -412,6 +419,10 @@ class ProveedorController extends Controller
             'tipo_documento' => 'nullable|string|max:20',
             'numero_documento' => 'nullable|string|max:30',
             'direccion' => 'nullable|string',
+            'direccion_fiscal' => 'nullable|string',
+            'ciudad' => 'nullable|string|max:120',
+            'es_no_domiciliado' => 'nullable|boolean',
+            'pais' => 'nullable|string|max:80',
             'telefono' => 'nullable|string|max:50',
             'celular' => 'nullable|string|max:50',
             'whatsapp' => 'nullable|string|max:50',
@@ -482,6 +493,10 @@ class ProveedorController extends Controller
         // sin que el frontend lo haya tocado).
         if (array_key_exists('nombre_comercial', $validado)) {
             $validado['nombre_comercial'] = TextoFormatoService::capitalizarNombrePropio($validado['nombre_comercial']);
+        }
+
+        if ($error = ProveedorDocumentoService::preparar($validado, $actual)) {
+            return response()->json(['code' => 422, 'message' => $error], 422);
         }
 
         return $validado;

@@ -26,7 +26,11 @@ class Proveedor extends Model
         'tipo_persona',
         'tipo_documento',
         'numero_documento',
-        'direccion',
+        'direccion', // del local
+        'direccion_fiscal',
+        'ciudad',
+        'es_no_domiciliado',
+        'pais',
         'telefono',
         'celular',
         'email',
@@ -39,6 +43,7 @@ class Proveedor extends Model
     protected $casts = [
         'estado' => 'boolean',
         'es_referencial' => 'boolean',
+        'es_no_domiciliado' => 'boolean',
     ];
 
     /**
@@ -56,5 +61,32 @@ class Proveedor extends Model
             'tipo_id',
             ProveedorTipo::where('giro', self::GIRO_TIPO_TURISTICO)->pluck('id')
         );
+    }
+
+    // T-134 — pendientes de limpieza. Un referencial (solo para costear) no cuenta, y un no
+    // domiciliado con su documento del exterior tiene numero_documento, así que tampoco.
+    public function scopeSinDocumento(Builder $query): Builder
+    {
+        return $query->where('es_referencial', false)
+            ->whereRaw("trim(coalesce(numero_documento, '')) = ''");
+    }
+
+    /**
+     * T-134 — «datos incompletos» se calcula, no se guarda: así vale para un proveedor creado
+     * desde cualquier lado y desaparece solo al completar los datos.
+     *
+     * @return list<string> lo que falta
+     */
+    public function datosFaltantes(): array
+    {
+        if ($this->es_referencial) {
+            return [];
+        }
+
+        return array_keys(array_filter([
+            'documento' => blank($this->numero_documento),
+            'teléfono' => blank($this->telefono) && blank($this->celular) && blank($this->whatsapp),
+            'dirección' => blank($this->direccion) && blank($this->direccion_fiscal),
+        ]));
     }
 }

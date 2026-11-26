@@ -148,6 +148,26 @@ class ProveedorBaseTest extends TestCase
         $this->assertSame(0, $this->tenant->run(fn () => Proveedor::count()));
     }
 
+    // T-134 (CA5) — el alta rápida es POST proveedores-base: sin gestionar no se puede llamar.
+    // De paso, el alta rápida completa (aviso de RUC incluido) en un tenant recién creado.
+    public function test_t134_ca5_el_alta_rapida_pide_gestionar(): void
+    {
+        $alta = ['razon_social' => 'Hotel del Valle SAC', 'tipo_documento' => 'RUC', 'numero_documento' => '20134000005',
+            'direccion_fiscal' => 'Av. Fiscal 1', 'ciudad' => 'Tarapoto'];
+
+        $soloVer = $this->token(['proveedores.ver']);
+        $this->api($soloVer, 'POST', 'proveedores-base', $alta)->assertStatus(403);
+        $this->api($soloVer, 'POST', 'proveedores-base', $alta + ['confirmar_duplicado' => true])->assertStatus(403);
+
+        $gestiona = $this->token(['proveedores.gestionar']);
+        $this->api($gestiona, 'POST', 'proveedores-base', $alta)->assertOk()
+            ->assertJsonPath('proveedor.direccion_fiscal', 'Av. Fiscal 1')
+            ->assertJsonPath('proveedor.es_no_domiciliado', false)
+            ->assertJsonPath('proveedor.datos_faltantes', ['teléfono']);
+        $this->api($gestiona, 'POST', 'proveedores-base', $alta)->assertStatus(409)
+            ->assertJsonPath('existentes.0.ciudad', 'Tarapoto');
+    }
+
     public function test_ca6_las_rutas_turisticas_siguen_pidiendo_agencia_proveedores(): void
     {
         $token = $this->token(['proveedores.ver', 'proveedores.gestionar']);

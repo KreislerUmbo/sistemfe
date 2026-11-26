@@ -21,6 +21,9 @@ class ProveedoresTablaBaseTest extends TestCase
 {
     private const MIGRACION_CORE = '2026_11_24_200000_create_proveedores_table_core';
 
+    // T-134: altera la tabla desde core/; en una agencia anterior corre después del vertical.
+    private const MIGRACION_COLUMNAS = '2026_11_26_100000_add_direcciones_y_no_domiciliado_to_proveedores';
+
     /** @var Tenant[] */
     private array $tenantsCreados = [];
 
@@ -106,7 +109,7 @@ class ProveedoresTablaBaseTest extends TestCase
 
         $tenant->run(function () {
             Schema::drop('proveedores');
-            DB::table('migrations')->where('migration', self::MIGRACION_CORE)->delete();
+            DB::table('migrations')->whereIn('migration', [self::MIGRACION_CORE, self::MIGRACION_COLUMNAS])->delete();
         });
 
         (new ReflectionMethod(TenantProvisioningService::class, 'migrarVertical'))
@@ -152,6 +155,7 @@ class ProveedoresTablaBaseTest extends TestCase
     {
         $nueva = $this->provisionar('agencia_viajes');
         $anterior = $this->agenciaAnterior();
+        $anterior->run(fn () => (require database_path('migrations/tenant/core/'.self::MIGRACION_COLUMNAS.'.php'))->up());
 
         // El vertical corrió completo en las dos.
         foreach ([$nueva, $anterior] as $tenant) {
