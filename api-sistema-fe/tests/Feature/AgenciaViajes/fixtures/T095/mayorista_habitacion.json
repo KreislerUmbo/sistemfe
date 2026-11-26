@@ -97,7 +97,11 @@
                     "updated_at": "<ts>",
                     "es_referencial": false,
                     "descripcion": null,
-                    "fotos": null
+                    "fotos": null,
+                    "direccion_fiscal": null,
+                    "ciudad": null,
+                    "es_no_domiciliado": false,
+                    "pais": null
                 },
                 "tours": []
             },
