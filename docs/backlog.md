@@ -8,7 +8,7 @@
 
 Cada línea: ID · qué · estado · depende de · rama o commit. El detalle está en
 `docs/tareas/T-…md` (se borra al cerrar; para una tarea hecha, el commit es la referencia).
-Próximo ID libre: **T-158**.
+Próximo ID libre: **T-162**.
 
 ## Orden de construcción (27-oct-2026)
 
@@ -67,6 +67,10 @@ Compras** (fase 5) y el motor de pendientes automáticos (11f). Se desglosan cua
 | T-150 | AGE | **«Opera sus propios tours»** y columnas nuevas del Reporte Operativo (§3.6b del plan) | por hacer | T-143 | — |
 | T-155 | AGE | **Opción de mayorista: alta corta y botones por tema** (Hoteles, Vuelos, Incluye / No incluye, Tours, Opcionales): `docs/requerimientos/agencia-opcion-mayorista.md` §3 | por hacer | — | — |
 | T-156 | AGE | **Condiciones del paquete por opción de mayorista**, impresas en el PDF de cotización y conservadas en la reserva: mismo requerimiento §4 | por hacer | T-155 | — |
+| T-158 | AGE | **Ficha del hotel: tipos de habitación propios, temporadas y niños** (Proveedores): cada hotel con su lista de tipos (nombre del hotel, categoría, capacidad, cama), precios por temporada y política de niños por franjas de edad; la lista fija de hoy pasa a ser la categoría, sin tocar precios. `docs/requerimientos/agencia-servicio-agencia.md` §2 «El mismo hotel, dos formas de venderlo» | por hacer | — | — |
+| T-159 | AGE | **«Servicio de la agencia» en panel lateral** (maqueta `docs/maquetas/servicio-agencia.html`): desde «+ Agregar al día N», filtros por tipo (el pasaje aéreo sigue aparte), detalle al costado, agregar varios sin cerrar, usados recientemente, ficha de hotel con precio por noche según temporada y niños según el hotel, aviso de cobro doble; lienzo «Por día / Por tipo» con encabezados de resumen y resumen financiero fijo. `docs/requerimientos/agencia-servicio-agencia.md` §2 | por hacer | T-158 | — |
+| T-160 | AGE | **Paquete de la agencia:** programa propio (Cusco, Alto Mayo) con el panel de T-155; tabla hotel × tipo de habitación × temporada (por fecha de salida) × niños en el catálogo de paquetes, copiada a la cotización; tours, traslados y vuelo sin precio. `docs/requerimientos/agencia-servicio-agencia.md` §2 | por hacer | T-155, T-158 | — |
+| T-161 | AGE | **El vuelo después de la venta:** vuelo de la reserva por tramos para los tres orígenes (agencia, mayorista, propio) con localizador, boleto y asiento por pasajero; pasa `reserva_item_vuelo_pasajero` a tramos sin perder datos; check-in del vuelo (lo hace la agencia) con «horas antes» por aerolínea (48 h por defecto); lista «Check-ins por hacer» con permiso propio y contador en el menú; tarjeta de embarque privada (una para varios pasajeros) y envío por WhatsApp registrado. `docs/requerimientos/agencia-vuelo-despues-de-la-venta.md` | por hacer | — | — |
 
 ## Por analizar
 
@@ -81,7 +85,7 @@ Compras** (fase 5) y el motor de pendientes automáticos (11f). Se desglosan cua
 | CAJ | Las filas de permisos `*_supplier` siguen en las bases de los tenants (las crea una migración vieja); desde T-133 no gobiernan ninguna ruta ni se ven en Roles. Borrarlas en una migración aparte | hallazgo de T-133, 25-nov-2026 |
 | PLA | `TenantProvisioningService::eliminarSiVacio()` no cuenta `proveedores` en tiendas ni créditos (tampoco contaba `suppliers`) | hallazgo de T-133, 25-nov-2026 |
 | TRA | `VentaDirectaLineasTest::test_ca1_dos_lineas_en_dias_distintos…` intermitente: en una corrida de la suite completa las dos fechas llegaron invertidas (pasa solo) | hallazgo de T-133, 25-nov-2026 |
-| AGE | **Rediseño de «Servicio de la agencia» en el cotizador**, alineado con el panel del mayorista (`docs/requerimientos/agencia-opcion-mayorista.md`, maqueta `docs/maquetas/paquete-mayorista.html`). Hoy (`cotizador/DrawerBiblioteca.vue`) es un modal centrado que cambia de pantalla por pasos (lista → matriz de hotel → modo de precio → manual), mezcla en el mismo nivel servicios, paquete de mayorista y guías, el hotel local carga fotos y precios distinto del mayorista, y hay que reabrirlo por cada servicio. Propuesta: panel lateral abierto desde «+ Agregar al día N»; filtros por tipo con íconos (tours, traslados, hoteles, guías, otro); detalle al costado sin cambiar de pantalla; agregar varios sin cerrar; usados recientemente; la misma ficha de hotel que el mayorista. **Decidir antes:** el precio del hotel Local/Nacional (hoy por noche; los documentos reales de Cusco y Alto Mayo usan paquete por persona, como el mayorista) y el riesgo de cobrar dos veces hotel con tours incluidos más tours sueltos | Conversación con el usuario, 25-nov-2026 |
+| AGE | **Leer un vuelo pegado** en el pasaje aéreo suelto (texto del sistema de reservas, Amadeus/Sabre): leerlo por su formato o con un servicio externo; decidir privacidad (nombres y códigos de reserva) y costo. Visto en otra herramienta de agencias | conversación con el usuario, 26-nov-2026 |
 | VEN | Cliente genérico «Clientes varios» por tenant (backend + migración) para vender sin identificar al cliente: hoy la venta exige un cliente con documento. La maqueta de T-106 lo suponía | hallazgo de T-106, 19-nov-2026 |
 | VEN | Destino por defecto (`amazonia`/`nacional`) configurable por empresa: hoy está fijo en `amazonia` en `register.vue` | hallazgo de T-106, 19-nov-2026 |
 | CLI | Marcar un cliente como mayorista (precio menor en todas sus compras) queda con el permiso de editar clientes. Decisión del 20-nov: así por ahora; revisar si hace falta un permiso propio | revisión de T-115, 20-nov-2026 |

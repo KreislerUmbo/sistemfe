@@ -1,0 +1,679 @@
+<title>Servicio de la agencia</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap">
+<style>
+/* Maqueta del rediseño de «Servicio de la agencia» (docs/requerimientos/agencia-servicio-agencia.md).
+   Mismo sistema visual que docs/maquetas/paquete-mayorista.html: cotizador de fondo, panel lateral en
+   dos columnas (lista a la izquierda, detalle a la derecha). Datos de ejemplo, sin conexión al sistema. */
+:root {
+  --bg: #f7f9fb; --card: #ffffff; --fg: #1e293b; --muted: #64748b; --line: #e5e9ef; --soft: #f1f5f9;
+  --accent: #2563eb; --accent-fg: #ffffff; --accent-soft: #e8efff;
+  --ok: #15803d; --ok-soft: #e7f6ec; --warn: #b45309; --warn-soft: #fef3c7;
+  --danger: #dc2626; --danger-soft: #fde8e8; --info: #0369a1; --info-soft: #e0f2fe; --star: #d97706;
+  --font: "Be Vietnam Pro", system-ui, -apple-system, "Segoe UI", sans-serif; --r: 8px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f1419; --card: #171d24; --fg: #e5ebf1; --muted: #94a3b8; --line: #2a333d; --soft: #1e262f;
+  --accent: #60a5fa; --accent-fg: #0b1b33; --accent-soft: #15243a;
+  --ok: #4ade80; --ok-soft: #12301d; --warn: #fbbf24; --warn-soft: #3a2a0a;
+  --danger: #f87171; --danger-soft: #3a1414; --info: #7dd3fc; --info-soft: #0c2a3a; --star: #fbbf24; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0f1419; --card: #171d24; --fg: #e5ebf1; --muted: #94a3b8; --line: #2a333d; --soft: #1e262f;
+  --accent: #60a5fa; --accent-fg: #0b1b33; --accent-soft: #15243a;
+  --ok: #4ade80; --ok-soft: #12301d; --warn: #fbbf24; --warn-soft: #3a2a0a;
+  --danger: #f87171; --danger-soft: #3a1414; --info: #7dd3fc; --info-soft: #0c2a3a; --star: #fbbf24; color-scheme: dark }
+* { box-sizing: border-box }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 14px; }
+button, input, select, textarea { font: inherit; color: inherit }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+.wrap { max-width: 1240px; margin: 0 auto; padding-block: 16px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.muted { color: var(--muted) } .small { font-size: 12px } .num { font-variant-numeric: tabular-nums }
+.aviso { background: var(--info-soft); color: var(--info); border-radius: var(--r); padding: 8px 12px; font-size: 12.5px; margin-bottom: 14px; display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center }
+.head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-bottom: 12px; }
+.head h1 { font-size: 18px; margin: 0; }
+.chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--card); border-radius: 999px; padding: 3px 10px; font-size: 12px; }
+.chip.activo { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); font-weight: 600 }
+.grid { display: grid; grid-template-columns: 1fr 300px; gap: 14px; align-items: start; }
+@media (max-width: 900px) { .grid { grid-template-columns: 1fr } }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); }
+.card-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; padding: 10px 14px; border-bottom: 1px solid var(--line); font-weight: 600; }
+.card-body { padding: 14px; }
+.btn { border: 1px solid var(--line); background: var(--card); border-radius: 6px; padding: 5px 11px; font-size: 13px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center }
+.btn:hover { background: var(--soft) }
+.btn.primario { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+.btn.primario:hover { filter: brightness(1.05); background: var(--accent) }
+.btn.aviso-btn { background: var(--warn-soft); border-color: var(--warn); color: var(--warn) }
+.btn.link { border: 0; background: none; color: var(--accent); padding: 2px 4px; }
+.btn.chico { padding: 3px 8px; font-size: 12px }
+.btn[disabled] { opacity: .5; cursor: not-allowed }
+.badge { display: inline-block; border-radius: 999px; padding: 1px 8px; font-size: 11px; font-weight: 600; white-space: nowrap }
+.b-ok { background: var(--ok-soft); color: var(--ok) } .b-warn { background: var(--warn-soft); color: var(--warn) }
+.b-muted { background: var(--soft); color: var(--muted) } .b-info { background: var(--info-soft); color: var(--info) }
+.item { border: 1px solid var(--line); border-radius: var(--r); padding: 8px 12px; margin-bottom: 6px; display: flex; justify-content: space-between; gap: 10px; align-items: center }
+.item.nuevo { border-color: var(--ok); box-shadow: 0 0 0 2px var(--ok-soft) }
+.bloque { border: 1px solid var(--accent); border-radius: var(--r); overflow: hidden; margin-bottom: 12px }
+.bloque-head { background: var(--accent-soft); padding: 8px 12px; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; align-items: center }
+.bloque-body { padding: 8px 12px; font-size: 13px }
+.dia { margin-bottom: 14px }
+.dia-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap }
+.dia-head b { font-size: 13px }
+.dia-vacio { border: 1px dashed var(--line); border-radius: var(--r); padding: 10px; font-size: 12px; color: var(--muted); text-align: center; margin-bottom: 6px }
+.precio-linea { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; font-size: 13px }
+.total { display: flex; justify-content: space-between; font-weight: 700; font-size: 16px; border-top: 1px solid var(--line); margin-top: 8px; padding-top: 8px }
+.marca-doble { color: var(--warn); font-size: 11.5px }
+
+/* Panel lateral */
+.fondo { position: fixed; inset: 0; background: rgba(15, 23, 42, .45); z-index: 10 }
+.panel { position: absolute; top: 0; right: 0; bottom: 0; width: min(1120px, 100vw); background: var(--bg);
+  display: flex; flex-direction: column; box-shadow: -8px 0 24px rgba(0,0,0,.15);
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) 0 }
+.panel-head { display: flex; justify-content: space-between; align-items: center; gap: 8px 14px; flex-wrap: wrap; padding: 10px 16px; background: var(--card); border-bottom: 1px solid var(--line) }
+.panel-head h2 { font-size: 16px; margin: 0 }
+.dias-sel { display: flex; gap: 4px; align-items: center; flex-wrap: wrap }
+.dia-btn { border: 1px solid var(--line); background: var(--card); border-radius: 6px; padding: 3px 9px; font-size: 12px; cursor: pointer }
+.dia-btn.activo { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); font-weight: 600 }
+.panel-cuerpo { flex: 1; display: grid; grid-template-columns: 360px 1fr; min-height: 0 }
+@media (max-width: 820px) { .panel-cuerpo { grid-template-columns: 1fr; grid-template-rows: minmax(0, 45%) 1fr } }
+.lista { border-right: 1px solid var(--line); overflow: auto; padding: 12px; background: var(--card); min-width: 0 }
+.detalle { overflow: auto; padding: 16px; min-width: 0 }
+.panel-foot { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; align-items: center; padding: 10px 16px; border-top: 1px solid var(--line); background: var(--card) }
+
+.ctrl { width: 100%; border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; background: var(--card); font-size: 13px }
+textarea.ctrl { min-height: 90px; resize: vertical }
+label.lbl { display: block; font-size: 12px; color: var(--muted); margin-bottom: 3px }
+.campo { margin-bottom: 12px }
+.ayuda { font-size: 11.5px; color: var(--muted); margin-top: 3px }
+.dos { display: grid; grid-template-columns: 1fr 1fr; gap: 14px } @media (max-width: 700px) { .dos { grid-template-columns: 1fr } }
+.filtros { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin: 8px 0 }
+.filtro { border: 1px solid var(--line); background: var(--card); border-radius: 6px; padding: 6px 4px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 12px; color: var(--muted) }
+.filtro:hover { border-color: var(--accent) }
+.filtro.activo { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600 }
+.filtro .n { font-size: 10.5px; opacity: .8 }
+.sec-tit { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; margin: 12px 0 6px }
+.fila-serv { width: 100%; border: 1px solid var(--line); background: var(--card); border-radius: var(--r); padding: 8px 10px; margin-bottom: 6px; cursor: pointer; display: flex; gap: 10px; align-items: center; text-align: left }
+.fila-serv:hover { border-color: var(--accent) }
+.fila-serv.sel { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft) }
+.fila-serv .ic { width: 30px; height: 30px; border-radius: 6px; background: var(--soft); color: var(--muted); display: flex; align-items: center; justify-content: center; flex: none }
+.fila-serv.sel .ic { background: var(--accent-soft); color: var(--accent) }
+.fila-serv .txt { flex: 1; min-width: 0 }
+.fila-serv .nom { font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.fila-serv .sub { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.fila-serv .pr { text-align: right; font-size: 12.5px; white-space: nowrap }
+.fila-serv .pr small { display: block; color: var(--muted); font-size: 10.5px }
+.recientes { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin }
+.rec { flex: none; border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; font-size: 12px; background: var(--card); cursor: pointer; display: inline-flex; gap: 5px; align-items: center }
+.rec:hover { border-color: var(--accent); color: var(--accent) }
+.filtro-activo { display: inline-flex; gap: 6px; align-items: center; background: var(--accent-soft); color: var(--accent); border-radius: 999px; padding: 2px 4px 2px 10px; font-size: 12px }
+.alerta { border-radius: var(--r); padding: 8px 12px; font-size: 12.5px; margin-bottom: 12px }
+.alerta.warn { background: var(--warn-soft); color: var(--warn) }
+.alerta.info { background: var(--info-soft); color: var(--info) }
+.alerta.ok { background: var(--ok-soft); color: var(--ok) }
+.vacio { border: 1px dashed var(--line); border-radius: var(--r); padding: 22px; text-align: center; color: var(--muted) }
+table { border-collapse: collapse; width: 100% }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); font-size: 13px; vertical-align: middle }
+th { font-size: 11.5px; color: var(--muted); font-weight: 600 }
+.tabla-scroll { overflow-x: auto }
+.paso { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden }
+.paso button { border: 0; background: var(--soft); width: 26px; cursor: pointer }
+.paso span { min-width: 30px; text-align: center; padding: 3px 4px; font-size: 13px }
+.estrellas { color: var(--star); letter-spacing: 1px; font-size: 12px }
+.fotos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; max-width: 480px; margin-bottom: 12px }
+.foto { aspect-ratio: 4 / 3; max-width: 100%; border: 1px dashed var(--line); border-radius: 6px; display: flex; align-items: flex-end; padding: 5px; font-size: 11px; color: var(--muted) }
+.foto.llena { border-style: solid; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.5) }
+.det-tit { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: flex-start; margin-bottom: 12px }
+.det-tit h3 { margin: 0; font-size: 17px; text-wrap: balance }
+.desc { font-size: 13px; line-height: 1.55; max-width: 65ch; margin: 0 0 12px }
+.incl { margin: 0 0 12px; padding-left: 18px; font-size: 13px } .incl li { margin-bottom: 2px }
+.resumen-agregar { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; border-top: 1px solid var(--line); padding-top: 12px; margin-top: 4px }
+.resumen-agregar .tot { font-size: 15px; font-weight: 700 }
+.bandeja { border: 1px solid var(--accent); background: var(--accent-soft); border-radius: var(--r); padding: 8px 12px; margin-bottom: 14px; font-size: 12.5px }
+.bandeja .h { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; align-items: center }
+.bandeja ul { margin: 6px 0 0; padding-left: 18px }
+.opciones-precio { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px }
+.opciones-precio label { flex: 1; min-width: 150px; border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; cursor: pointer; font-size: 13px }
+.opciones-precio label:has(input:checked) { border-color: var(--accent); background: var(--accent-soft) }
+.opciones-precio input { margin-right: 6px }
+details.trib { border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; margin-bottom: 12px; font-size: 12.5px }
+details.trib summary { cursor: pointer; color: var(--muted) }
+.pax { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; font-size: 13px }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(18px + env(safe-area-inset-bottom, 0px)); background: var(--fg); color: var(--bg); padding: 8px 14px; border-radius: 6px; font-size: 13px; z-index: 30; max-width: calc(100vw - 32px) }
+.notas { margin-top: 18px } .notas summary { cursor: pointer; font-weight: 600 } .notas li { margin-bottom: 4px }
+.decision { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 10px }
+@media (max-width: 800px) { .decision { grid-template-columns: 1fr } }
+.decision > div { border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px; font-size: 12.5px; min-width: 0 }
+.decision > div.reco { border-color: var(--ok); background: var(--ok-soft) }
+.decision h4 { margin: 0 0 4px; font-size: 13px }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important } }
+</style>
+
+<div class="wrap">
+  <div class="aviso">
+    <span>Maqueta del rediseño de <b>Servicio de la agencia</b>: datos de ejemplo, no se conecta al sistema. Prueba: <b>+ Agregar al día 2</b> → agrega un tour y un traslado sin cerrar → cambia al día 3 → compara dos hoteles → <b>Listo</b>.</span>
+    <label style="display:inline-flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" id="con-paquete" data-act="con-paquete"> Simular que Cusco ya tiene un paquete de la agencia (para ver el aviso de cobro doble)</label>
+  </div>
+
+  <div class="head">
+    <h1>CDKM-1125-0000018 · Familia Quispe</h1>
+    <span class="chip">2 adultos + 1 niño</span>
+    <span class="chip">12 – 16 dic 2026</span>
+    <span class="chip activo">Cusco · 5D/4N</span>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="card-header">
+        <span>Alternativa 1 · Cusco a medida</span>
+        <span style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn" data-act="abrir" data-dia="activo">+ Servicio de la agencia</button>
+          <button class="btn" title="Panel de T-155">+ Paquete</button>
+        </span>
+      </div>
+      <div class="card-body" id="lienzo"></div>
+    </div>
+    <div class="card">
+      <div class="card-header">Precio</div>
+      <div class="card-body" id="precio"></div>
+    </div>
+  </div>
+
+  <details class="notas card card-body" open>
+    <summary>Precio del hotel Local/Nacional: propuesta</summary>
+    <p class="small" style="max-width:80ch">En los documentos de Cusco y Alto Mayo, el precio «por persona según el hotel» es el del <b>programa completo</b> (noches, tours, traslados y, en Cusco, el vuelo), igual que un paquete de mayorista. No es el precio del hotel.</p>
+    <div class="decision">
+      <div><h4>A · Cambiar el hotel a precio por persona</h4>El mismo campo cambia de significado: las cotizaciones guardadas (precio por noche × noches) quedarían mal, y armar un viaje a medida necesita el precio por noche.</div>
+      <div><h4>B · Hotel con dos modos</h4>Un hotel «paquete» y tours sueltos con precio en el mismo día, sin nada que los relacione: es la puerta al cobro doble.</div>
+      <div class="reco"><h4>C · Dos cosas distintas (recomendada)</h4>Aquí el hotel sigue <b>por noche</b>. El programa propio es un <b>paquete de la agencia</b> en el panel de T-155: precio por persona y ocupación; tours, traslados y vuelo sin precio. Las cotizaciones guardadas no cambian.</div>
+    </div>
+    <p class="small" style="max-width:80ch;margin-top:12px"><b>El mismo hotel, dos formas de venderlo.</b> La ficha del hotel es una sola: sus tipos de habitación (con el nombre que usa el hotel), sus temporadas y su política de niños por edad. Lo que decide cómo se cobra es por dónde se agrega: aquí, por noche; en el paquete de la agencia, por persona con todo el programa incluido.</p>
+  </details>
+
+  <details class="notas card card-body">
+    <summary>Vista previa: tabla de precios del paquete de la agencia</summary>
+    <p class="small" style="max-width:80ch">«Cusco Maravilloso 5D/4N» en el catálogo de paquetes. Precio <b>por persona</b> del programa completo (4 noches, Valle Sagrado, Machu Picchu, City Tour, traslados). Las filas son los tipos de habitación de <b>cada</b> hotel: no hay columnas fijas. La temporada del paquete la da la fecha de salida del viaje.</p>
+    <div class="tabla-scroll"><table>
+      <thead><tr><th>Hotel</th><th>Habitación</th><th>Regular</th><th>Alta (15-dic a 5-ene)</th><th>Niños</th></tr></thead>
+      <tbody>
+        <tr><td rowspan="4"><b>Xima Cusco Kenamari</b><div class="small muted">3 estrellas · 8.4/10 Booking</div></td><td>Estándar simple</td><td class="num">USD 989</td><td class="num">USD 1,079</td>
+          <td rowspan="4" class="small">0 a 5: gratis<br>6 a 11: USD 520<br>12 o más: adulto</td></tr>
+        <tr><td>Superior matrimonial</td><td class="num">USD 779</td><td class="num">USD 849</td></tr>
+        <tr><td>Superior twin</td><td class="num">USD 769</td><td class="num">USD 839</td></tr>
+        <tr><td>Triple</td><td class="num">USD 739</td><td class="num">USD 805</td></tr>
+        <tr><td rowspan="2"><b>Monasterio San Pedro</b><div class="small muted">3 estrellas</div></td><td>Doble colonial</td><td class="num">USD 829</td><td class="num">USD 899</td>
+          <td rowspan="2" class="small">0 a 3: gratis<br>4 a 11: USD 560<br>4 a 11 en la familiar: USD 410<br>12 o más: adulto</td></tr>
+        <tr><td>Familiar (2 + 2)</td><td class="num">USD 799</td><td class="num">USD 869</td></tr>
+      </tbody></table></div>
+    <ul class="small">
+      <li>En la cotización se copia la tabla de la temporada que corresponde; los precios se ajustan ahí sin tocar el catálogo.</li>
+      <li>Con la edad de cada pasajero se elige la fila de niños del hotel. Sin edad, lo pide antes de calcular.</li>
+      <li>El cliente compara hoteles con la casilla «Ofrecer», como en el paquete de mayorista.</li>
+    </ul>
+  </details>
+
+  <details class="notas card card-body">
+    <summary>Qué cambia respecto de hoy</summary>
+    <ul class="small">
+      <li><b>Panel lateral</b> abierto desde <b>+ Agregar al día N</b>: la lista queda siempre a la izquierda y el detalle a la derecha. Hoy un modal centrado reemplaza la lista con cada paso (matriz de hotel, «¿cómo se cobra?», manual).</li>
+      <li><b>Agregar varios sin cerrar</b>, también tours y paquetes del catálogo (hoy cierran el modal). La barra de abajo cuenta lo agregado y permite deshacer el último.</li>
+      <li><b>Día visible y cambiable</b> arriba del panel.</li>
+      <li><b>Filtros por tipo con íconos</b> y conteo. Guías es un tipo más, y el paquete de mayorista tiene su propia entrada (T-155). Servicio y proveedor van en «Más filtros» y avisan cuando ocultan tours.</li>
+      <li>Cada fila muestra el <b>nombre del servicio</b> y el precio con su unidad (por persona, por noche, por servicio, por día), y marca lo que ya está en el día.</li>
+      <li><b>Usados recientemente</b> en este destino.</li>
+      <li><b>Hotel:</b> la misma ficha que el mayorista (estrellas, régimen, calificación, descripción, 3 fotos) y precio <b>por noche</b> por habitación. <b>Comparar hoteles</b> con una bandeja que no se pierde al elegir el siguiente.</li>
+      <li>El modo de precio de un traslado se elige <b>en el detalle</b>, sin paso aparte. El tratamiento tributario sale del valor por defecto y queda plegado.</li>
+      <li>Aviso de <b>cobro doble</b> si el servicio ya está incluido en un paquete del destino (no bloquea).</li>
+    </ul>
+  </details>
+</div>
+
+<div class="fondo" id="fondo" hidden>
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="panel-titulo">
+    <div class="panel-head">
+      <div><h2 id="panel-titulo">Servicio de la agencia · Cusco</h2><div class="small muted">CDKM-1125-0000018 · Alternativa 1</div></div>
+      <div class="dias-sel" id="dias-sel"></div>
+      <button class="btn" data-act="cerrar" title="Cerrar" aria-label="Cerrar">✕</button>
+    </div>
+    <div class="panel-cuerpo">
+      <div class="lista" id="lista"></div>
+      <div class="detalle" id="detalle"></div>
+    </div>
+    <div class="panel-foot" id="panel-foot"></div>
+  </div>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+const PAX = [{ id: 'a1', nombre: 'Rosa Quispe', tipo: 'Adulto' }, { id: 'a2', nombre: 'Luis Quispe', tipo: 'Adulto' }, { id: 'n1', nombre: 'Ana Quispe (7)', tipo: 'Niño', edad: 7 }];
+/* Temporadas del ejemplo: las noches del 12, 13 y 14-dic son Regular; desde el 15-dic, Alta (fiestas). */
+const NOCHES_REGULAR = 3;
+const DIAS = [
+  { n: 1, fecha: 'Sáb 12 dic', titulo: 'Arribo a Cusco' }, { n: 2, fecha: 'Dom 13 dic', titulo: '' },
+  { n: 3, fecha: 'Lun 14 dic', titulo: '' }, { n: 4, fecha: 'Mar 15 dic', titulo: '' }, { n: 5, fecha: 'Mié 16 dic', titulo: 'Retorno' }];
+const NOCHES = 4;
+const PAQUETE = { nombre: 'Cusco Maravilloso 5D/4N', incluidos: { 'city-tour': 4, 'valle': 2 } };
+
+const svg = (d, s = 16) => `<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const ICONOS = {
+  todos: svg('<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>'),
+  tour: svg('<circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/>'),
+  traslado: svg('<path d="M3 17V7a2 2 0 0 1 2-2h10l4 5h1a1 1 0 0 1 1 1v6h-2"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/><path d="M9 17h6M3 10h16"/>'),
+  hotel: svg('<path d="M3 21h18M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16M9 7h1M14 7h1M9 11h1M14 11h1M10 21v-4h4v4"/>'),
+  guia: svg('<circle cx="12" cy="7" r="4"/><path d="M5 21v-2a7 7 0 0 1 14 0v2"/>'),
+  otro: svg('<circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>'),
+  reloj: svg('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', 13),
+  mas: svg('<path d="M12 5v14M5 12h14"/>'),
+};
+const FILTROS = [['todos', 'Todos'], ['tour', 'Tours'], ['traslado', 'Traslados'], ['hotel', 'Hoteles'], ['guia', 'Guías'], ['otro', 'Otro']];
+const UNIDAD = { pp: 'por persona', servicio: 'por servicio', noche: 'por noche', dia: 'por día' };
+
+const CATALOGO = [
+  { id: 'city-tour', tipo: 'tour', nombre: 'City Tour Cusco', proveedor: 'Catálogo de tours', precio: 25, precioNino: 18, unidad: 'pp', dias: 1,
+    desc: 'Qoricancha, Saqsayhuamán, Qenqo, Puca Pucara y Tambomachay con guía bilingüe. Termina cerca de la Plaza de Armas. Duración: 4 a 5 horas.',
+    incluye: ['Recojo del hotel', 'Transporte turístico', 'Guía profesional bilingüe'], noIncluye: ['Boleto Turístico del Cusco', 'Entrada al Qoricancha'] },
+  { id: 'valle', tipo: 'tour', nombre: 'Valle Sagrado con almuerzo buffet', proveedor: 'Catálogo de tours', precio: 55, precioNino: 45, unidad: 'pp', dias: 1,
+    desc: 'Mirador de Taray, Pisaq, almuerzo buffet en Urubamba y fortaleza de Ollantaytambo.',
+    incluye: ['Transporte turístico', 'Guía bilingüe', 'Almuerzo buffet'], noIncluye: ['Boleto Turístico del Cusco'] },
+  { id: 'machu', tipo: 'tour', nombre: 'Machu Picchu full day en tren', proveedor: 'Catálogo de tours', precio: 320, precioNino: 250, unidad: 'pp', dias: 1,
+    desc: 'Tren Ollantaytambo – Aguas Calientes, bus de subida y bajada, ingreso a la ciudadela con guía de 2 horas y almuerzo.',
+    incluye: ['Tren turístico ida y vuelta', 'Bus Consettur', 'Ingreso a Machu Picchu', 'Guía 2 horas', 'Almuerzo'], noIncluye: ['Propinas'] },
+  { id: 'humantay', tipo: 'tour', nombre: 'Laguna Humantay', proveedor: 'Catálogo de tours', precio: 45, precioNino: 45, unidad: 'pp', dias: 1,
+    desc: 'Caminata a la laguna turquesa al pie del nevado Humantay. Desayuno y almuerzo en Mollepata. Salida 4:30 a. m.',
+    incluye: ['Transporte', 'Desayuno y almuerzo', 'Guía'], noIncluye: ['Entrada a la comunidad (S/ 20)', 'Caballo'] },
+  { id: 'esencial', tipo: 'tour', nombre: 'Combo Cusco esencial (3 días)', proveedor: 'Paquete del catálogo', precio: 380, precioNino: 300, unidad: 'pp', dias: 3, combo: true,
+    desc: 'Valle Sagrado, Machu Picchu y City Tour en días seguidos. Se cargan los tres tours, uno por día, desde el día elegido.',
+    incluye: ['Valle Sagrado con almuerzo', 'Machu Picchu full day', 'City Tour'], noIncluye: ['Boleto Turístico del Cusco'] },
+  { id: 'tr-aero', tipo: 'traslado', nombre: 'Traslado aeropuerto – hotel', proveedor: 'Transportes Inka Express', precio: 15, precioPp: 6, unidad: 'servicio',
+    desc: 'Recojo en el aeropuerto Velasco Astete con cartel y traslado al hotel en Cusco. Servicio compartido.' },
+  { id: 'tr-hotel-aero', tipo: 'traslado', nombre: 'Traslado hotel – aeropuerto', proveedor: 'Transportes Inka Express', precio: 15, precioPp: 6, unidad: 'servicio',
+    desc: 'Recojo en el hotel y traslado al aeropuerto. Servicio compartido.' },
+  { id: 'tr-ollanta', tipo: 'traslado', nombre: 'Traslado Cusco – estación Ollantaytambo', proveedor: 'Transportes Inka Express', precio: 40, precioPp: 15, unidad: 'servicio',
+    desc: 'Movilidad privada hasta la estación de tren. 1 h 45 min aprox.' },
+  /* Cada hotel define sus propios tipos de habitación (n = nombre del hotel, c = categoría para ordenar y comparar),
+     su temporada alta (factor sobre el precio regular) y su política de niños por edad. */
+  { id: 'xima', tipo: 'hotel', nombre: 'Xima Cusco Kenamari', proveedor: 'Proveedores', estrellas: 3, regimen: 'Desayuno', puntaje: '8.4/10 Booking',
+    desc: 'A cuatro cuadras de la Plaza de Armas. Habitaciones con calefacción, desayuno buffet y mate de coca de bienvenida.', fotos: 3, alta: 1.25,
+    habs: [{ n: 'Estándar simple', c: 'Simple', cap: '1 adulto', p: 55 }, { n: 'Superior matrimonial', c: 'Doble', cap: '2 adultos · cama queen', p: 70 },
+      { n: 'Superior twin', c: 'Doble', cap: '2 adultos · 2 camas', p: 68 }, { n: 'Triple', c: 'Triple', cap: '3 adultos', p: 85 }],
+    ninos: [{ de: 0, a: 5, como: 'Gratis, comparte cama', p: 0 }, { de: 6, a: 11, como: 'Cama adicional', p: 20 }, { de: 12, a: 99, como: 'Paga como adulto', p: null }] },
+  { id: 'sanfrancisco', tipo: 'hotel', nombre: 'San Francisco Plaza', proveedor: 'Proveedores', estrellas: 3, regimen: 'Desayuno', puntaje: '8.1/10 Booking',
+    desc: 'Frente a la plaza San Francisco, en el centro histórico. Check-in 14:00, check-out 12:00.', fotos: 3, alta: 1.2,
+    habs: [{ n: 'Simple', c: 'Simple', cap: '1 adulto', p: 50 }, { n: 'Doble matrimonial', c: 'Doble', cap: '2 adultos · cama 2 plazas', p: 62 },
+      { n: 'Doble twin', c: 'Doble', cap: '2 adultos · 2 camas', p: 60 }, { n: 'Triple', c: 'Triple', cap: '3 adultos', p: 80 }],
+    ninos: [{ de: 0, a: 2, como: 'Gratis, comparte cama', p: 0 }, { de: 3, a: 9, como: 'Cama adicional', p: 15 }, { de: 10, a: 99, como: 'Paga como adulto', p: null }] },
+  { id: 'monasterio', tipo: 'hotel', nombre: 'Monasterio San Pedro', proveedor: 'Proveedores', estrellas: 3, regimen: 'Desayuno', puntaje: '',
+    desc: '', fotos: 1, alta: 1.2,
+    habs: [{ n: 'Doble colonial', c: 'Doble', cap: '2 adultos', p: 74 }, { n: 'Familiar', c: 'Familiar', cap: '2 adultos + 2 niños hasta 11 años', p: 110 }],
+    ninos: [{ de: 0, a: 3, como: 'Gratis, comparte cama', p: 0 }, { de: 4, a: 11, como: 'Cama adicional (o gratis en la familiar)', p: 25 }, { de: 12, a: 99, como: 'Paga como adulto', p: null }] },
+  { id: 'matara', tipo: 'hotel', nombre: 'Matara Greens', proveedor: 'Proveedores', estrellas: 2, regimen: 'Desayuno', puntaje: '7.9/10 Booking',
+    desc: 'Hotel sencillo en San Blas, con terraza y vista a la ciudad.', fotos: 2, alta: 1.2,
+    habs: [{ n: 'Matrimonial', c: 'Doble', cap: '2 adultos', p: 48 }, { n: 'Twin', c: 'Doble', cap: '2 adultos · 2 camas', p: 46 }, { n: 'Triple', c: 'Triple', cap: '3 adultos', p: 63 }],
+    ninos: [{ de: 0, a: 6, como: 'Gratis, comparte cama', p: 0 }, { de: 7, a: 99, como: 'Paga como adulto', p: null }] },
+  { id: 'guia-juan', tipo: 'guia', nombre: 'Juan Huamán · día local', proveedor: 'Guía · Cusco', precio: 60, unidad: 'dia',
+    desc: 'Guía oficial bilingüe (español, inglés). Tarifa por día de 8 horas dentro de Cusco y alrededores.' },
+  { id: 'guia-mery', tipo: 'guia', nombre: 'Mery Ccahuana · grupo multidía', proveedor: 'Guía · Cusco', precio: 80, unidad: 'dia',
+    desc: 'Guía oficial bilingüe para circuitos de varios días. Incluye viáticos dentro del Valle Sagrado.' },
+  { id: 'almuerzo', tipo: 'otro', nombre: 'Almuerzo buffet en Urubamba', proveedor: 'Restaurante Tunupa', precio: 18, precioNino: 12, unidad: 'pp',
+    desc: 'Buffet de comida novoandina con show folclórico.' },
+  { id: 'coricancha', tipo: 'otro', nombre: 'Entrada al Qoricancha', proveedor: 'Entradas', precio: 6, precioNino: 3, unidad: 'pp',
+    desc: 'Entrada al templo del Sol (S/ 20 adulto). No está en el Boleto Turístico.' },
+];
+const RECIENTES_INICIO = ['tr-aero', 'city-tour', 'xima', 'guia-juan'];
+
+let estado = {
+  abierto: false, dia: 2, filtro: 'todos', q: '', sel: 'city-tour', masFiltros: false, filtroDestino: true, filtroProveedor: '',
+  conPaquete: false, sesion: [], comparar: [],
+  lienzo: { 1: [{ id: 'tr-aero', nombre: 'Traslado aeropuerto – hotel', detalle: 'Por servicio · 3 pasajeros', total: 15 }],
+            2: [], 3: [], 4: [], 5: [] },
+  form: {},
+  recientes: leerRecientes(),
+};
+function leerRecientes() { try { const r = JSON.parse(localStorage.getItem('sa-recientes') || 'null'); return Array.isArray(r) ? r : [...RECIENTES_INICIO]; } catch { return [...RECIENTES_INICIO]; } }
+function guardarRecientes() { try { localStorage.setItem('sa-recientes', JSON.stringify(estado.recientes)); } catch { /* sin almacenamiento */ } }
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const usd = (n) => `USD ${Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
+const estrellas = (n) => n ? '★'.repeat(n) : '';
+const color = (s, j) => { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) % 360; const a = (h + j * 47) % 360;
+  return `linear-gradient(135deg, hsl(${a} 40% 58%), hsl(${(a + 40) % 360} 45% 36%))`; };
+const serv = (id) => CATALOGO.find((s) => s.id === id);
+const precioDesde = (s) => s.tipo === 'hotel' ? Math.min(...s.habs.map((h) => h.p)) : s.precio;
+const precioAlta = (s, h) => Math.round(h.p * s.alta);
+const reparto = (noches) => ({ reg: Math.min(noches, NOCHES_REGULAR), alta: Math.max(0, noches - NOCHES_REGULAR) });
+const subtotalHab = (s, h, q, noches) => { const r = reparto(noches); return q * (h.p * r.reg + precioAlta(s, h) * r.alta); };
+const franjaDe = (s, edad) => s.ninos.find((x) => edad >= x.de && edad <= x.a);
+const ninosDe = (f) => PAX.filter((p) => p.edad != null && f.pax.includes(p.id));
+function extraNinos(s, f) {
+  return ninosDe(f).reduce((t, p) => { const fr = franjaDe(s, p.edad); return t + (fr && fr.p && f.camaNino[p.id] ? fr.p * f.noches : 0); }, 0);
+}
+const descHabs = (s, f) => s.habs.filter((h) => f.habs[h.n]).map((h) => `${f.habs[h.n]} ${h.n.toLowerCase()}`).join(' + ');
+const unidadDe = (s) => s.tipo === 'hotel' ? 'noche' : s.unidad;
+const enDia = (id, dia) => (estado.lienzo[dia] || []).some((x) => x.id === id);
+let tToast;
+function toast(t) { const el = $('toast'); el.textContent = t; el.hidden = false; clearTimeout(tToast); tToast = setTimeout(() => { el.hidden = true; }, 2600); }
+
+function formDe(s) {
+  if (!estado.form[s.id]) {
+    estado.form[s.id] = { pax: PAX.map((p) => p.id), modo: s.precioPp ? 'servicio' : null, cantidad: 1, dias: 1,
+      noches: NOCHES, habs: Object.fromEntries((s.habs || []).map((h, i) => [h.n, i === s.habs.findIndex((x) => x.c === 'Doble') ? 1 : 0])),
+      camaNino: Object.fromEntries(PAX.filter((p) => p.edad != null).map((p) => [p.id, true])),
+      trib: 'Gravado · Nacional' };
+  }
+  return estado.form[s.id];
+}
+function totalDe(s, f) {
+  if (s.tipo === 'hotel') return s.habs.reduce((t, h) => t + subtotalHab(s, h, f.habs[h.n] || 0, f.noches), 0) + extraNinos(s, f);
+  if (s.unidad === 'pp') return f.pax.reduce((t, id) => t + (id.startsWith('n') ? (s.precioNino ?? s.precio) : s.precio), 0);
+  if (s.tipo === 'traslado') return f.modo === 'pp' ? s.precioPp * f.pax.length : s.precio * f.cantidad;
+  if (s.unidad === 'dia') return s.precio * f.dias;
+  return s.precio * f.cantidad;
+}
+function avisoDoble(s) {
+  if (!estado.conPaquete) return '';
+  if (s.tipo === 'hotel') return `El paquete «${PAQUETE.nombre}» ya incluye hotel en Cusco: este hotel se cobra aparte.`;
+  const d = PAQUETE.incluidos[s.id];
+  return d ? `Ya está incluido en el paquete «${PAQUETE.nombre}» (día ${d}). Si lo agregas, se cobra dos veces.` : '';
+}
+
+/* ---------- Cotizador de fondo ---------- */
+function renderLienzo() {
+  let h = '';
+  if (estado.conPaquete) {
+    h += `<div class="bloque"><div class="bloque-head"><b>Paquete: ${PAQUETE.nombre}</b><span class="badge b-info">Paquete de la agencia</span></div>
+      <div class="bloque-body"><div class="small muted">Hotel a elegir · Xima Cusco Kenamari o San Francisco Plaza · USD 779 por adulto en doble</div>
+      <div class="small muted">Incluye: Valle Sagrado (día 2), Machu Picchu (día 3), City Tour (día 4), traslados</div></div></div>`;
+  }
+  for (const d of DIAS) {
+    const items = estado.lienzo[d.n];
+    h += `<div class="dia"><div class="dia-head"><b>Día ${d.n} · ${d.fecha}${d.titulo ? ` · ${d.titulo}` : ''}</b>
+      <button class="btn chico" data-act="abrir" data-dia="${d.n}">${ICONOS.mas.replace('width="16" height="16"', 'width="13" height="13"')} Agregar al día ${d.n}</button></div>`;
+    h += items.length ? items.map((x) => {
+      const s = serv(x.id); const doble = s && avisoDoble(s) && s.tipo !== 'hotel';
+      return `<div class="item ${x.nuevo ? 'nuevo' : ''}"><div><b>${esc(x.nombre)}</b><div class="small muted">${esc(x.detalle)}</div>
+        ${doble ? '<div class="marca-doble">⚠ También incluido en el paquete</div>' : ''}</div><div class="num">${usd(x.total)}</div></div>`;
+    }).join('') : '<div class="dia-vacio">Sin servicios</div>';
+    h += '</div>';
+  }
+  $('lienzo').innerHTML = h;
+  const total = Object.values(estado.lienzo).flat().reduce((t, x) => t + x.total, 0) + (estado.conPaquete ? 779 * 2 : 0);
+  $('precio').innerHTML = (estado.conPaquete ? `<div class="precio-linea"><span>Paquete × 2 adultos</span><span class="num">${usd(1558)}</span></div>` : '')
+    + DIAS.map((d) => { const t = estado.lienzo[d.n].reduce((a, x) => a + x.total, 0); return t ? `<div class="precio-linea"><span>Día ${d.n}</span><span class="num">${usd(t)}</span></div>` : ''; }).join('')
+    + `<div class="total"><span>Total</span><span class="num">${usd(total)}</span></div>`;
+}
+
+/* ---------- Panel ---------- */
+function visibles() {
+  const q = norm(estado.q);
+  return CATALOGO.filter((s) => (estado.filtro === 'todos' || s.tipo === estado.filtro)
+    && (!q || norm(s.nombre + ' ' + s.proveedor + ' ' + (s.desc || '')).includes(q))
+    && (!estado.filtroProveedor || (s.proveedor === estado.filtroProveedor)));
+}
+function filaServ(s) {
+  const marca = enDia(s.id, estado.dia) ? `<span class="badge b-ok">✓ en el día ${estado.dia}</span> ` : '';
+  const doble = avisoDoble(s) && s.tipo !== 'hotel' ? '<span class="badge b-warn">En el paquete</span> ' : '';
+  return `<button type="button" class="fila-serv ${estado.sel === s.id ? 'sel' : ''}" data-act="sel" data-id="${s.id}">
+    <span class="ic">${ICONOS[s.tipo]}</span>
+    <span class="txt"><span class="nom">${esc(s.nombre)}${s.estrellas ? ` <span class="estrellas">${estrellas(s.estrellas)}</span>` : ''}</span>
+      <span class="sub">${marca}${doble}${esc(s.proveedor)}${s.dias > 1 ? ` · ${s.dias} días` : ''}</span></span>
+    <span class="pr num">${s.tipo === 'hotel' ? 'desde ' : ''}${usd(precioDesde(s))}<small>${UNIDAD[unidadDe(s)]}</small></span></button>`;
+}
+function renderLista() {
+  const base = CATALOGO.filter((s) => !estado.filtroProveedor || s.proveedor === estado.filtroProveedor);
+  const cuenta = (k) => k === 'todos' ? base.length : base.filter((s) => s.tipo === k).length;
+  const lista = visibles();
+  const proveedores = [...new Set(CATALOGO.map((s) => s.proveedor))];
+  let h = `<label class="lbl" for="buscar">Buscar</label>
+    <input class="ctrl" id="buscar" data-act="buscar" placeholder="Tour, hotel, traslado, proveedor…" value="${esc(estado.q)}" autocomplete="off">
+    <div class="filtros" role="tablist">${FILTROS.map(([k, t]) => `<button type="button" class="filtro ${estado.filtro === k ? 'activo' : ''}" data-act="filtro" data-f="${k}" aria-pressed="${estado.filtro === k}">
+      ${ICONOS[k]}<span>${t}</span><span class="n num">${cuenta(k)}</span></button>`).join('')}</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+      ${estado.filtroDestino ? `<span class="filtro-activo">Cusco y sus lugares <button class="btn link chico" data-act="quitar-destino" aria-label="Quitar filtro de destino">✕</button></span>` : '<button class="btn link chico" data-act="poner-destino">+ Solo Cusco</button>'}
+      <button class="btn link chico" data-act="mas-filtros">${estado.masFiltros ? '▾' : '▸'} Más filtros</button>
+    </div>`;
+  if (estado.masFiltros) {
+    h += `<div class="campo" style="margin-top:8px"><label class="lbl" for="f-prov">Proveedor</label>
+      <select class="ctrl" id="f-prov" data-act="f-prov"><option value="">Cualquiera</option>${proveedores.map((p) => `<option ${estado.filtroProveedor === p ? 'selected' : ''}>${esc(p)}</option>`).join('')}</select></div>`;
+  }
+  if (estado.filtroProveedor) h += `<div class="alerta info" style="margin-top:8px">Filtrando por «${esc(estado.filtroProveedor)}»: solo aparecen sus servicios.</div>`;
+  if (!estado.q && estado.filtro === 'todos' && estado.recientes.length) {
+    h += `<div class="sec-tit">Usados recientemente</div><div class="recientes">${estado.recientes.slice(0, 8).map(serv).filter(Boolean).map((s) =>
+      `<button type="button" class="rec" data-act="sel" data-id="${s.id}">${ICONOS.reloj}${esc(s.nombre)}</button>`).join('')}</div>`;
+  }
+  h += `<div class="sec-tit">${lista.length} ${lista.length === 1 ? 'servicio' : 'servicios'}</div>`;
+  h += lista.length ? lista.map(filaServ).join('') : `<div class="vacio small">Sin resultados para «${esc(estado.q)}».</div>`;
+  h += `<div class="sec-tit">¿No está en el catálogo?</div>
+    <button type="button" class="fila-serv ${estado.sel === 'manual' ? 'sel' : ''}" data-act="sel" data-id="manual"><span class="ic">${ICONOS.mas}</span><span class="txt"><span class="nom">Servicio sin catálogo</span><span class="sub">Nombre, precio y cómo se cobra</span></span></button>
+    <button type="button" class="fila-serv ${estado.sel === 'hotel-nuevo' ? 'sel' : ''}" data-act="sel" data-id="hotel-nuevo"><span class="ic">${ICONOS.hotel}</span><span class="txt"><span class="nom">Hotel nuevo</span><span class="sub">Ficha de hotel y precio por noche</span></span></button>`;
+  const foco = document.activeElement?.id === 'buscar'; const pos = foco ? document.activeElement.selectionStart : 0;
+  $('lista').innerHTML = h;
+  if (foco) { const b = $('buscar'); b.focus(); b.setSelectionRange(pos, pos); }
+}
+
+function htmlPax(f) {
+  return `<label class="lbl">Pasajeros</label><div class="pax">${PAX.map((p) => `<label style="display:inline-flex;gap:5px;align-items:center;cursor:pointer">
+    <input type="checkbox" data-act="pax" data-p="${p.id}" ${f.pax.includes(p.id) ? 'checked' : ''}>${esc(p.nombre)} <span class="muted small">${p.tipo}</span></label>`).join('')}</div>`;
+}
+const paso = (campo, v) => `<span class="paso"><button type="button" data-act="paso" data-c="${campo}" data-d="-1" aria-label="Menos">−</button><span class="num">${v}</span><button type="button" data-act="paso" data-c="${campo}" data-d="1" aria-label="Más">+</button></span>`;
+const htmlTrib = (f) => `<details class="trib"><summary>Tributario: ${f.trib} (por defecto de la agencia)</summary>
+  <div class="dos" style="margin-top:8px"><div><label class="lbl">Tratamiento</label><select class="ctrl"><option>Gravado</option><option>Exonerado</option><option>Inafecto</option></select></div>
+  <div><label class="lbl">Destino</label><select class="ctrl"><option>Nacional</option><option>Amazonía</option><option>Extranjero</option></select></div></div></details>`;
+function htmlFotos(nombre, n, etiquetas) {
+  return `<div class="fotos">${etiquetas.map((t, j) => `<div class="foto ${j < n ? 'llena' : ''}" style="${j < n ? `background:${color(nombre, j)}` : ''}">${j < n ? t : `Sin foto de ${t.toLowerCase()}`}</div>`).join('')}</div>`;
+}
+
+function renderDetalle() {
+  const det = $('detalle');
+  let bandeja = '';
+  if (estado.comparar.length) {
+    bandeja = `<div class="bandeja"><div class="h"><b>Comparando ${estado.comparar.length} ${estado.comparar.length === 1 ? 'hotel' : 'hoteles'} para el día ${estado.dia}</b>
+      <span style="display:flex;gap:6px"><button class="btn link chico" data-act="vaciar-comparar">Vaciar</button>
+      <button class="btn primario chico" data-act="agregar-comparar" ${estado.comparar.length < 2 ? 'disabled title="Elige al menos 2 hoteles"' : ''}>Agregar comparación (${estado.comparar.length})</button></span></div>
+      <ul>${estado.comparar.map((c) => `<li>${esc(c.nombre)} · ${esc(c.detalle)} · <span class="num">${usd(c.total)}</span></li>`).join('')}</ul>
+      <div class="small muted">${estado.comparar.length < 2 ? 'Elige otro hotel en la lista y usa «Comparar».' : 'El cliente elige uno; el lienzo lo deja «sin resolver» hasta entonces.'}</div></div>`;
+  }
+  if (estado.sel === 'manual') { det.innerHTML = bandeja + htmlManual(); return; }
+  if (estado.sel === 'hotel-nuevo') { det.innerHTML = bandeja + htmlHotelNuevo(); return; }
+  const s = serv(estado.sel);
+  if (!s) { det.innerHTML = bandeja + '<div class="vacio">Elige un servicio de la lista.</div>'; return; }
+  const f = formDe(s), total = totalDe(s, f), aviso = avisoDoble(s);
+  let h = bandeja + `<div class="det-tit"><div><div class="small muted" style="display:flex;gap:6px;align-items:center">${ICONOS[s.tipo]} ${esc(s.proveedor)}</div>
+    <h3>${esc(s.nombre)} ${s.estrellas ? `<span class="estrellas">${estrellas(s.estrellas)}</span>` : ''}</h3>
+    ${s.tipo === 'hotel' ? `<div class="small muted">${esc(s.regimen)}${s.puntaje ? ` · Calificación de los viajeros: ${esc(s.puntaje)}` : ''}</div>` : ''}</div>
+    ${enDia(s.id, estado.dia) ? `<span class="badge b-ok">Ya está en el día ${estado.dia}</span>` : ''}</div>`;
+  if (aviso) h += `<div class="alerta warn">⚠ ${esc(aviso)}</div>`;
+
+  if (s.tipo === 'hotel') {
+    h += htmlFotos(s.nombre, s.fotos, ['Fachada', 'Habitación', 'Habitación']);
+    h += s.desc ? `<p class="desc">${esc(s.desc)}</p>` : `<div class="alerta info">Este hotel no tiene descripción para el cliente. <button class="btn link chico">Completar en Proveedores</button></div>`;
+    const r = reparto(f.noches);
+    h += `<label class="lbl">Habitaciones de este hotel · precio por noche</label><div class="tabla-scroll"><table><thead><tr><th>Habitación</th><th>Regular</th><th>Alta</th><th>Cantidad</th><th style="text-align:right">Subtotal</th></tr></thead><tbody>
+      ${s.habs.map((hb) => `<tr><td><b>${esc(hb.n)}</b><div class="small muted">${esc(hb.c)} · ${esc(hb.cap)}</div></td><td class="num">${usd(hb.p)}</td><td class="num">${usd(precioAlta(s, hb))}</td>
+        <td>${paso('hab:' + hb.n, f.habs[hb.n] || 0)}</td><td class="num" style="text-align:right">${usd(subtotalHab(s, hb, f.habs[hb.n] || 0, f.noches))}</td></tr>`).join('')}
+      </tbody></table></div>
+      <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin:10px 0 4px"><span class="lbl" style="margin:0">Noches</span>${paso('noches', f.noches)}
+      <span class="small muted">${f.noches === NOCHES ? '4 noches del destino (12/12 – 16/12)' : 'Distinto de las noches del destino (4)'}</span></div>
+      <div class="ayuda" style="margin-bottom:12px">Temporada por noche: ${r.reg} ${r.reg === 1 ? 'noche' : 'noches'} en Regular${r.alta ? ` y ${r.alta} en Alta (desde el 15-dic)` : ''}. La saca sola de la fecha de cada noche.</div>`;
+    const ninos = ninosDe(f);
+    if (ninos.length) {
+      h += `<label class="lbl">Niños según este hotel</label><div class="small muted" style="margin-bottom:6px">${s.ninos.map((x) => `${x.de}${x.a >= 99 ? ' años o más' : ` a ${x.a} años`}: ${esc(x.como)}${x.p ? ` ${usd(x.p)} por noche` : ''}`).join(' · ')}</div>`;
+      h += ninos.map((p) => {
+        const fr = franjaDe(s, p.edad);
+        if (!fr) return `<div class="alerta warn">Falta la edad de ${esc(p.nombre)}.</div>`;
+        if (fr.p === null) return `<div class="alerta warn">${esc(p.nombre)} paga como adulto en este hotel: elige una habitación con lugar para ${f.pax.length}.</div>`;
+        if (!fr.p) return `<div class="alerta info">${esc(p.nombre)}: ${esc(fr.como.toLowerCase())}, sin costo.</div>`;
+        return `<label class="small" style="display:flex;gap:6px;align-items:center;margin-bottom:10px;cursor:pointer"><input type="checkbox" data-act="cama-nino" data-p="${p.id}" ${f.camaNino[p.id] ? 'checked' : ''}>
+          ${esc(p.nombre)}: cama adicional · ${usd(fr.p)} × ${f.noches} noches = <b class="num">${usd(fr.p * f.noches)}</b></label>`;
+      }).join('');
+    }
+    h += htmlTrib(f);
+    const det2 = descHabs(s, f);
+    h += `<div class="resumen-agregar"><div><div class="tot num">${usd(total)}</div><div class="small muted">${det2 || 'Elige al menos una habitación'} · ${f.noches} noches</div></div>
+      <span style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" data-act="comparar" ${!total || estado.comparar.some((c) => c.id === s.id) ? 'disabled' : ''}>${estado.comparar.some((c) => c.id === s.id) ? 'En la comparación' : 'Comparar con otro hotel'}</button>
+        <button class="btn ${aviso ? 'aviso-btn' : 'primario'}" data-act="agregar" ${!total ? 'disabled' : ''}>${aviso ? 'Agregar igual' : `Agregar al día ${estado.dia}`}</button></span></div>`;
+  } else {
+    h += `<p class="desc">${esc(s.desc)}</p>`;
+    if (s.incluye) h += `<div class="dos"><div><label class="lbl">Incluye</label><ul class="incl">${s.incluye.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>
+      <div><label class="lbl">No incluye</label><ul class="incl">${(s.noIncluye || []).map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div></div>`;
+    if (s.combo) h += `<div class="alerta info">Ocupa los días ${estado.dia} a ${Math.min(estado.dia + s.dias - 1, 5)}: se carga un tour por día.</div>`;
+    if (s.tipo === 'traslado') {
+      h += `<label class="lbl">Cómo se cobra</label><div class="opciones-precio">
+        <label><input type="radio" name="modo" data-act="modo" value="servicio" ${f.modo === 'servicio' ? 'checked' : ''}>Por servicio · <span class="num">${usd(s.precio)}</span></label>
+        <label><input type="radio" name="modo" data-act="modo" value="pp" ${f.modo === 'pp' ? 'checked' : ''}>Por persona · <span class="num">${usd(s.precioPp)}</span></label></div>`;
+      h += f.modo === 'pp' ? htmlPax(f) : `<div style="display:flex;gap:10px;align-items:center;margin-bottom:12px"><span class="lbl" style="margin:0">Cantidad</span>${paso('cantidad', f.cantidad)}</div>`;
+    } else if (s.unidad === 'dia') {
+      h += `<div style="display:flex;gap:10px;align-items:center;margin-bottom:12px"><span class="lbl" style="margin:0">Días</span>${paso('dias', f.dias)}<span class="small muted">${usd(s.precio)} por día</span></div>`;
+    } else {
+      h += `<div class="small muted" style="margin-bottom:6px">${usd(s.precio)} adulto${s.precioNino != null && s.precioNino !== s.precio ? ` · ${usd(s.precioNino)} niño` : ''}</div>` + htmlPax(f);
+    }
+    h += htmlTrib(f);
+    h += `<div class="resumen-agregar"><div><div class="tot num">${usd(total)}</div><div class="small muted">${resumenCobro(s, f)}</div></div>
+      <button class="btn ${aviso ? 'aviso-btn' : 'primario'}" data-act="agregar" ${!total ? 'disabled' : ''}>${aviso ? 'Agregar igual' : `Agregar al día ${estado.dia}`}</button></div>`;
+  }
+  det.innerHTML = h;
+}
+function resumenCobro(s, f) {
+  if (s.tipo === 'traslado') return f.modo === 'pp' ? `Por persona · ${f.pax.length} pasajeros` : `Por servicio · ${f.cantidad}`;
+  if (s.unidad === 'dia') return `${f.dias} ${f.dias === 1 ? 'día' : 'días'}`;
+  return `Por persona · ${f.pax.length} pasajeros`;
+}
+function htmlManual() {
+  return `<div class="det-tit"><h3>Servicio sin catálogo</h3></div>
+    <div class="dos"><div class="campo"><label class="lbl" for="m-nombre">Nombre para el cliente</label><input class="ctrl" id="m-nombre" placeholder="Cena show en Aguas Calientes"></div>
+    <div class="campo"><label class="lbl" for="m-precio">Precio de venta (USD)</label><input class="ctrl num" id="m-precio" type="number" min="0" placeholder="0"></div></div>
+    <label class="lbl">Cómo se cobra</label><div class="opciones-precio"><label><input type="radio" name="m-modo" checked>Por persona</label><label><input type="radio" name="m-modo">Por servicio</label></div>
+    <div class="campo"><label class="lbl" for="m-costo">Costo (opcional, interno)</label><input class="ctrl num" id="m-costo" type="number" min="0" placeholder="0"></div>
+    ${htmlTrib({ trib: 'Gravado · Nacional' })}
+    <div class="resumen-agregar"><span class="small muted">Se guarda solo en esta cotización.</span><button class="btn primario" data-act="agregar-manual">Agregar al día ${estado.dia}</button></div>`;
+}
+function htmlHotelNuevo() {
+  return `<div class="det-tit"><h3>Hotel nuevo</h3><span class="small muted">Misma ficha que el paquete de mayorista</span></div>
+    <div class="dos"><div>
+      <div class="campo"><label class="lbl" for="h-nombre">Nombre del hotel</label><input class="ctrl" id="h-nombre" placeholder="Escribe y se busca en Proveedores"><div class="ayuda">Si ya existe, aparece aquí para no duplicarlo.</div></div>
+      <div class="dos" style="gap:10px"><div class="campo"><label class="lbl" for="h-cat">Categoría</label><select class="ctrl" id="h-cat"><option>Sin categoría</option><option>2 estrellas</option><option selected>3 estrellas</option><option>4 estrellas</option></select></div>
+        <div class="campo"><label class="lbl" for="h-reg">Régimen</label><input class="ctrl" id="h-reg" value="Desayuno"></div></div>
+      <div class="campo"><label class="lbl" for="h-cal">Calificación de los viajeros (opcional)</label><input class="ctrl" id="h-cal" placeholder="8.6/10 Booking"></div>
+    </div><div class="campo"><label class="lbl" for="h-desc">Descripción para el cliente</label><textarea class="ctrl" id="h-desc" style="min-height:150px" placeholder="Ubicación, servicios, horarios de check-in…"></textarea></div></div>
+    <label class="lbl">Fotos: 1 de fachada y 2 de habitación</label>${htmlFotos('nuevo', 0, ['Fachada', 'Habitación', 'Habitación'])}
+    <label class="lbl">Tipos de habitación de este hotel · precio por noche (USD)</label><div class="tabla-scroll"><table><thead><tr><th>Nombre que usa el hotel</th><th>Categoría</th><th>Capacidad</th><th>Costo</th><th>Venta</th></tr></thead><tbody>
+      ${[['Superior matrimonial', 'Doble', '2'], ['Superior twin', 'Doble', '2'], ['', 'Triple', '3']].map(([n, c, cap]) => `<tr><td><input class="ctrl" style="min-width:150px" value="${n}" placeholder="Junior suite, Familiar…"></td>
+        <td><select class="ctrl">${['Simple', 'Doble', 'Triple', 'Familiar', 'Suite'].map((o) => `<option ${o === c ? 'selected' : ''}>${o}</option>`).join('')}</select></td>
+        <td><input class="ctrl num" type="number" min="1" style="width:64px" value="${cap}"></td>
+        <td><input class="ctrl num" type="number" min="0" style="width:80px" placeholder="—"></td><td><input class="ctrl num" type="number" min="0" style="width:80px" placeholder="—"></td></tr>`).join('')}
+    </tbody></table></div>
+    <div class="ayuda" style="margin-bottom:6px">El nombre es el del hotel y sale en el PDF; la categoría sirve para ordenar y comparar hoteles entre sí. El tratamiento tributario es uno para todo el hotel.</div>
+    <button class="btn link chico" style="margin-bottom:12px">+ Tipo de habitación</button>
+    <label class="lbl">Temporadas</label>
+    <div class="small" style="margin-bottom:6px">Regular (todo el año) · <button class="btn link chico">+ Temporada con fechas</button> <span class="muted">(p. ej. Alta 15-dic a 5-ene: abre otra columna de precios)</span></div>
+    <label class="lbl" style="margin-top:10px">Niños en este hotel</label><div class="tabla-scroll"><table><thead><tr><th>Edad</th><th>Cómo</th><th>Por noche</th></tr></thead><tbody>
+      ${[['0 a 5', 'Gratis, comparte cama', '0'], ['6 a 11', 'Cama adicional', ''], ['12 o más', 'Paga como adulto', '—']].map(([e, c, p]) => `<tr><td><input class="ctrl" style="width:80px" value="${e}"></td>
+        <td><select class="ctrl">${['Gratis, comparte cama', 'Cama adicional', 'Precio de niño en la habitación', 'Paga como adulto'].map((o) => `<option ${o === c ? 'selected' : ''}>${o}</option>`).join('')}</select></td>
+        <td><input class="ctrl num" style="width:80px" value="${p}" placeholder="USD"></td></tr>`).join('')}
+    </tbody></table></div><div class="ayuda" style="margin-bottom:12px">Viene con las edades por defecto de la agencia; cada hotel las cambia. Con la edad de cada pasajero, el sistema elige la fila.</div>
+    ${htmlTrib({ trib: 'Gravado · Nacional' })}
+    <div class="resumen-agregar"><label class="small" style="display:inline-flex;gap:6px;align-items:center"><input type="checkbox" checked> Registrar en Proveedores para reutilizarlo</label>
+      <button class="btn primario" data-act="guardar-hotel">Guardar y elegir habitaciones</button></div>`;
+}
+
+function renderPie() {
+  const n = estado.sesion.length, t = estado.sesion.reduce((a, x) => a + x.total, 0);
+  $('panel-foot').innerHTML = `<span class="small">${n ? `<b>${n} ${n === 1 ? 'agregado' : 'agregados'}</b> en esta sesión · <span class="num">${usd(t)}</span> <button class="btn link chico" data-act="deshacer">Deshacer el último</button>` : '<span class="muted">Lo que agregues aparece en el lienzo al instante. El panel queda abierto.</span>'}</span>
+    <button class="btn primario" data-act="cerrar">Listo</button>`;
+  $('dias-sel').innerHTML = `<span class="small muted">Agregando al</span>${DIAS.map((d) => `<button type="button" class="dia-btn ${estado.dia === d.n ? 'activo' : ''}" data-act="dia" data-dia="${d.n}" title="${d.fecha}">Día ${d.n}${estado.lienzo[d.n].length ? ` · ${estado.lienzo[d.n].length}` : ''}</button>`).join('')}`;
+}
+function renderPanel() { renderLista(); renderDetalle(); renderPie(); }
+function renderTodo() { renderLienzo(); if (estado.abierto) renderPanel(); }
+
+function agregarAlLienzo(dia, entrada) {
+  Object.values(estado.lienzo).flat().forEach((x) => { x.nuevo = false; });
+  const it = { ...entrada, nuevo: true, dia };
+  estado.lienzo[dia].push(it); estado.sesion.push(it);
+  estado.recientes = [entrada.id, ...estado.recientes.filter((r) => r !== entrada.id)].slice(0, 8); guardarRecientes();
+}
+function agregar() {
+  const s = serv(estado.sel); if (!s) return;
+  const f = formDe(s), total = totalDe(s, f);
+  if (s.combo) {
+    const partes = [['valle', 'Valle Sagrado con almuerzo buffet'], ['machu', 'Machu Picchu full day en tren'], ['city-tour', 'City Tour Cusco']];
+    const ult = Math.min(estado.dia + s.dias - 1, 5); let k = 0;
+    for (let d = estado.dia; d <= ult; d++, k++) agregarAlLienzo(d, { id: partes[k][0], nombre: partes[k][1], detalle: `Del combo «${s.nombre}» · ${f.pax.length} pasajeros`, total: Math.round(total / s.dias) });
+    toast(`Combo agregado: ocupa los días ${estado.dia} a ${ult}. El panel sigue abierto.`);
+  } else {
+    let detalle = s.tipo === 'hotel' ? `${descHabs(s, f)} · ${f.noches} noches${extraNinos(s, f) ? ' · cama adicional niño' : ''}` : resumenCobro(s, f);
+    agregarAlLienzo(estado.dia, { id: s.id, nombre: s.nombre, detalle, total });
+    toast(`${s.nombre} agregado al día ${estado.dia}`);
+  }
+  renderTodo();
+}
+
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-act]'); if (!el) return;
+  const act = el.dataset.act;
+  if (['buscar', 'f-prov', 'pax', 'modo', 'con-paquete', 'cama-nino'].includes(act)) return;
+  switch (act) {
+    case 'abrir':
+      estado.abierto = true; if (el.dataset.dia !== 'activo') estado.dia = Number(el.dataset.dia);
+      estado.sesion = []; $('fondo').hidden = false; renderPanel(); setTimeout(() => $('buscar')?.focus(), 0); break;
+    case 'cerrar':
+      estado.abierto = false; $('fondo').hidden = true;
+      Object.values(estado.lienzo).flat().forEach((x) => { x.nuevo = false; });
+      if (estado.sesion.length) toast(`${estado.sesion.length} ${estado.sesion.length === 1 ? 'servicio agregado' : 'servicios agregados'}`);
+      renderLienzo(); break;
+    case 'dia': estado.dia = Number(el.dataset.dia); estado.comparar = []; renderPanel(); break;
+    case 'filtro': estado.filtro = el.dataset.f; renderLista(); break;
+    case 'sel': estado.sel = el.dataset.id; renderLista(); renderDetalle(); break;
+    case 'quitar-destino': estado.filtroDestino = false; renderLista(); break;
+    case 'poner-destino': estado.filtroDestino = true; renderLista(); break;
+    case 'mas-filtros': estado.masFiltros = !estado.masFiltros; renderLista(); break;
+    case 'paso': {
+      const s = serv(estado.sel), f = formDe(s), c = el.dataset.c, d = Number(el.dataset.d);
+      if (c.startsWith('hab:')) { const t = c.slice(4); f.habs[t] = Math.max(0, (f.habs[t] || 0) + d); }
+      else f[c] = Math.max(1, f[c] + d);
+      renderDetalle(); break;
+    }
+    case 'agregar': agregar(); break;
+    case 'comparar': {
+      const s = serv(estado.sel), f = formDe(s);
+      estado.comparar.push({ id: s.id, nombre: s.nombre, detalle: `${descHabs(s, f)} · ${f.noches} noches`, total: totalDe(s, f) });
+      estado.filtro = 'hotel'; renderLista(); renderDetalle(); break;
+    }
+    case 'vaciar-comparar': estado.comparar = []; renderDetalle(); break;
+    case 'agregar-comparar': {
+      const n = estado.comparar.length;
+      Object.values(estado.lienzo).flat().forEach((x) => { x.nuevo = false; });
+      const it = { id: 'grupo', nombre: `Hotel a elegir (${n} opciones)`, detalle: estado.comparar.map((c) => `${c.nombre} ${usd(c.total)}`).join(' · '), total: Math.min(...estado.comparar.map((c) => c.total)), nuevo: true, dia: estado.dia };
+      estado.lienzo[estado.dia].push(it); estado.sesion.push(it); estado.comparar = [];
+      toast(`Comparación de ${n} hoteles agregada al día ${estado.dia}`); renderTodo(); break;
+    }
+    case 'agregar-manual': {
+      const nombre = $('m-nombre').value.trim() || 'Servicio sin catálogo', precio = Number($('m-precio').value) || 0;
+      if (!precio) { toast('Escribe el precio de venta'); $('m-precio').focus(); break; }
+      Object.values(estado.lienzo).flat().forEach((x) => { x.nuevo = false; });
+      const it = { id: 'manual', nombre, detalle: 'Sin catálogo · por persona · 3 pasajeros', total: precio * 3, nuevo: true, dia: estado.dia };
+      estado.lienzo[estado.dia].push(it); estado.sesion.push(it); toast(`${nombre} agregado al día ${estado.dia}`); renderTodo(); break;
+    }
+    case 'guardar-hotel': toast('En el sistema: se guarda la ficha y se eligen las habitaciones aquí mismo'); break;
+    case 'deshacer': {
+      const it = estado.sesion.pop(); if (!it) break;
+      const l = estado.lienzo[it.dia ?? estado.dia]; const i = l.lastIndexOf(it); if (i >= 0) l.splice(i, 1);
+      toast(`Quitado: ${it.nombre}`); renderTodo(); break;
+    }
+  }
+});
+document.addEventListener('input', (e) => {
+  if (e.target.id === 'buscar') { estado.q = e.target.value; renderLista(); }
+});
+document.addEventListener('change', (e) => {
+  const act = e.target.dataset.act;
+  if (act === 'f-prov') { estado.filtroProveedor = e.target.value; renderLista(); }
+  if (act === 'pax') { const f = formDe(serv(estado.sel)); const p = e.target.dataset.p; f.pax = e.target.checked ? [...f.pax, p] : f.pax.filter((x) => x !== p); renderDetalle(); }
+  if (act === 'modo') { formDe(serv(estado.sel)).modo = e.target.value; renderDetalle(); }
+  if (act === 'cama-nino') { formDe(serv(estado.sel)).camaNino[e.target.dataset.p] = e.target.checked; renderDetalle(); }
+  if (act === 'con-paquete') { estado.conPaquete = e.target.checked; renderTodo(); }
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && estado.abierto) document.querySelector('[data-act="cerrar"]').click(); });
+$('fondo').addEventListener('click', (e) => { if (e.target.id === 'fondo') document.querySelector('.panel [data-act="cerrar"]').click(); });
+
+renderLienzo();
+</script>
