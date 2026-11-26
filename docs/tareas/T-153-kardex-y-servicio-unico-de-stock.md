@@ -72,8 +72,29 @@ Tenant de tienda (market en local): vender, editar, NC y ajuste; revisar el kár
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
+- **Commits:** `feat(ventas): kárdex y servicio único de stock (T-153)` en `feat/T-153-kardex-stock`.
+  `StockVentaService` pasa a ser `App\Services\Stock\StockService` (lo usará también T-154).
+- **Tests:** `Ventas/KardexStockTest` (CA1, CA2, CA3, CA5) y `Ventas/KardexConcurrenciaTest` (CA4:
+  dos procesos PHP contra Postgres; sin el `lockForUpdate` falla con saldos 7 y 8). La NC de CA1
+  pasa por `enviarNotaSunat()` con SUNAT simulado. `type-check` y `build` sin errores.
+  Migración corrida en los 7 tenants locales: saldos iniciales iguales a `products.stock`.
+- **Sin hacer:** la prueba en pantalla (ficha del producto y kárdex). La sesión no tenía permiso
+  para crear un usuario de prueba. Queda para la revisión.
 - **Desviaciones de la tarea y por qué:**
+  - La venta descuenta stock después de crear la cabecera (antes, antes): el kárdex necesita su id.
+    Sigue en la misma transacción y antes del correlativo y la caja.
+  - El servicio abre su propia transacción: la reposición por NC se llamaba sin ninguna y el
+    `lockForUpdate` no protegía nada.
+  - La pantalla solo envía `stock` si se cambió, para que guardar la ficha no pise lo vendido
+    mientras estaba abierta.
+  - Un producto que **empieza** a controlar stock deja una fila `ajuste` automática («empieza a
+    controlar stock») aunque la cantidad no cambie; si no, el último saldo no cuadraría.
+  - El «saldo inicial» incluye los productos eliminados (una venta suya aún puede devolverles stock).
+  - La base de tests (`sistemafe_test_migrations`) necesita la migración nueva, aplicada por archivo.
 
 ## Hallazgos fuera de alcance
+- La reposición de stock de la NC corre después de marcar la nota como `aceptado` y fuera de una
+  transacción común: si fallara, la nota queda aceptada sin reponer y no hay reintento.
+- Los adelantos y la facturación de reservas crean `sale_details` sin pasar por el stock, pero
+  eliminar esas ventas o su NC sí «devuelve». Hoy no tiene efecto porque usan productos que no
+  controlan stock.

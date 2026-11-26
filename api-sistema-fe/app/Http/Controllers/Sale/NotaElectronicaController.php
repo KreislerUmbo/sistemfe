@@ -442,7 +442,8 @@ class NotaElectronicaController extends Controller
             // repuesto stock por un documento que nunca llegó a existir)
             if ($nota->reponer_stock) {
                 // T-113: solo devuelve a los productos que controlan stock (mismo criterio que la venta).
-                app(\App\Services\Ventas\StockVentaService::class)->devolver(
+                app(\App\Services\Stock\StockService::class)->devolverPorNota(
+                    $nota,
                     $nota->note_details->filter(fn ($d) => $d->sale_detail_id)
                 );
             }

@@ -8,7 +8,7 @@ use Illuminate\Http\Request;
 
 /**
  * T-121: rutas retiradas. store()/destroy() agregaban o quitaban una línea y cambiaban el total, la
- * deuda y el stock de la venta sin movimiento de caja ni StockVentaService. Las líneas se editan con
+ * deuda y el stock de la venta sin movimiento de caja ni StockService. Las líneas se editan con
  * PATCH sales/{id} (SaleController::update()) y nadie llamaba a estas rutas (logs de producción
  * revisados el 23-nov-2026). Las rutas y sus permisos se conservan: un cliente viejo recibe un 410.
  */

@@ -136,6 +136,7 @@ declare module 'vue' {
     ItemManualForm: typeof import('./src/components/AgenciaViajes/ItemManualForm.vue')['default']
     JsVectorMap: typeof import('./src/components/JsVectorMap.vue')['default']
     JustGage: typeof import('./src/components/JustGage.vue')['default']
+    KardexProducto: typeof import('./src/components/Product/KardexProducto.vue')['default']
     LienzoCotizador: typeof import('./src/components/AgenciaViajes/cotizador/LienzoCotizador.vue')['default']
     LineaTiempoCliente: typeof import('./src/components/Clientes/LineaTiempoCliente.vue')['default']
     ListaPendientes: typeof import('./src/components/Clientes/ListaPendientes.vue')['default']
