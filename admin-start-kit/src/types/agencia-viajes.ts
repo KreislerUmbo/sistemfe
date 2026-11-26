@@ -22,6 +22,12 @@ export type Proveedor = {
   tipo_documento?: string | null;
   numero_documento?: string | null;
   direccion?: string | null;
+  // T-134
+  direccion_fiscal?: string | null;
+  ciudad?: string | null;
+  es_no_domiciliado?: boolean;
+  pais?: string | null;
+  datos_faltantes?: string[];
   telefono?: string | null;
   celular?: string | null;
   whatsapp?: string | null;

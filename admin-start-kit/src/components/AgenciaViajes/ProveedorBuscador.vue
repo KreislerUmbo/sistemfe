@@ -28,6 +28,7 @@
 import { ref, watch } from 'vue';
 import { useListaFlotante } from '@/composables/agencia-viajes/useListaFlotante';
 import { proveedorService } from '@/services/admin/proveedorService';
+import { nombreConCiudad } from '@/helpers/proveedor';
 import type { Proveedor } from '@/types/agencia-viajes';
 
 const props = withDefaults(defineProps<{
@@ -43,7 +44,7 @@ const emit = defineEmits<{
     (e: 'elegido', proveedor: Proveedor | null): void;
 }>();
 
-const nombreDe = (p: Proveedor) => p.nombre_comercial || p.razon_social;
+const nombreDe = (p: Proveedor) => nombreConCiudad(p.nombre_comercial || p.razon_social, p.ciudad);
 
 // Nombre del proveedor elegido: lo que se vuelve a mostrar al salir sin elegir.
 const nombreElegido = ref(props.nombreActual ?? '');
