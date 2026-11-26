@@ -36,6 +36,8 @@ return Application::configure(basePath: dirname(__DIR__))
             // Panel superadmin — usar junto a auth:central en rutas /api/central/*
             // (Fase A), orden: auth:central → central.token.
             'central.token' => \App\Http\Middleware\EnsureTokenIsCentralGuard::class,
+            // T-135 — módulos activables por tenant: `modulo:compras`, después de 'tenant'.
+            'modulo' => \App\Http\Middleware\EnsureModuloActivo::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

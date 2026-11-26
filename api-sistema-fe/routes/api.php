@@ -69,6 +69,7 @@ use App\Http\Controllers\Central\CentralAuthController;
 use App\Http\Controllers\Central\AerolineaController as CentralAerolineaController;
 use App\Http\Controllers\Central\ProveedorTipoController;
 use App\Http\Controllers\Central\TenantAdminController;
+use App\Http\Controllers\Central\TenantModuloController;
 use App\Http\Controllers\Central\TenantCorreoController;
 use App\Http\Controllers\Central\TenantBackupController;
 use App\Http\Controllers\Central\TenantPlanController;
@@ -224,6 +225,9 @@ Route::prefix('central')->group(function () {
         // razón que reset-admin-password): decisión de modelo de negocio, propia
         // acción de auditoría en central_audit_logs.
         Route::put('tenants/{id}/facturacion-habilitada', [TenantAdminController::class, 'updateFacturacionHabilitada']);
+        // T-135 — módulos activables por tenant.
+        Route::get('tenants/{id}/modulos', [TenantModuloController::class, 'index']);
+        Route::put('tenants/{id}/modulos/{codigo}', [TenantModuloController::class, 'update']);
         // Envío de cotizaciones por correo (plan-modulo-envio-correo-cotizacion.md §3.1).
         Route::get('tenants/{id}/correo', [TenantCorreoController::class, 'show']);
         Route::put('tenants/{id}/correo', [TenantCorreoController::class, 'update']);
