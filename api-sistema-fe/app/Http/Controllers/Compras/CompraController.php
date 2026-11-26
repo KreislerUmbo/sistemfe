@@ -113,10 +113,11 @@ class CompraController extends Controller
             abort(404, 'El archivo ya no está en el servidor.');
         }
 
-        return Storage::disk('private')->download(
-            $ruta,
-            "{$compra->tipo_comprobante_codigo}-{$compra->serie}-{$compra->numero}.{$archivo}"
-        );
+        // Symfony no acepta «/» ni «\» en el nombre de la descarga (500), y una factura del
+        // exterior suele numerarse «INV/2026/001»: solo el nombre del archivo los cambia por «-».
+        $nombre = str_replace(['/', '\\'], '-', "{$compra->tipo_comprobante_codigo}-{$compra->serie}-{$compra->numero}");
+
+        return Storage::disk('private')->download($ruta, "{$nombre}.{$archivo}");
     }
 
     private function filtrar(Builder $query, Request $request): void

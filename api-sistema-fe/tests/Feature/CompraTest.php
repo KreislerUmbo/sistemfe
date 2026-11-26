@@ -353,6 +353,10 @@ class CompraTest extends TestCase
             'numero' => '1', 'compra_referencia_id' => $factura]);
         $this->assertSame($factura, Compra::findOrFail($id)->compra_referencia_id);
 
+        // Una nota no modifica otra nota, aunque llegue directo por la API.
+        $this->rechazada(['tipo_comprobante_codigo' => '08', 'serie' => 'FD01', 'numero' => '1',
+            'compra_referencia_id' => $id], 'no puede ser otra nota');
+
         $opciones = $this->listar(['referencia_para' => $sucursal->id]);
         $this->assertSame([$factura], array_column($opciones['compras'], 'id'));
     }
@@ -391,6 +395,13 @@ class CompraTest extends TestCase
             Request::create($direccion), fn () => app(CompraController::class)->descargar((string) $compra->id, 'pdf')
         );
         $this->assertSame(200, $abrir($url)->getStatusCode());
+
+        // Una factura del exterior numerada con «/» también se descarga (antes daba 500).
+        $exterior = Compra::findOrFail($compra->id);
+        $exterior->forceFill(['serie' => 'INV/2026', 'numero' => '001\\A'])->save();
+        $descarga = app(CompraController::class)->descargar((string) $compra->id, 'pdf');
+        $this->assertSame(200, $descarga->getStatusCode());
+        $this->assertStringContainsString('01-INV-2026-001-A.pdf', $descarga->headers->get('Content-Disposition'));
 
         $prohibida = function (string $direccion) use ($abrir) {
             try {

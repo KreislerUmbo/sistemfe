@@ -262,6 +262,10 @@ class CompraService
         if (! $referencia || $referencia->id === $compra->id) {
             throw new CompraException('La compra de referencia no es válida.');
         }
+        // Una nota modifica un comprobante, no otra nota (la pantalla tampoco las ofrece).
+        if (in_array($referencia->tipo_comprobante_codigo, Compra::TIPOS_NOTA, true)) {
+            throw new CompraException('La compra de referencia no puede ser otra nota.');
+        }
         if ($referencia->clave_proveedor !== $datos['clave_proveedor']) {
             throw new CompraException('La compra de referencia es de otro proveedor.');
         }
