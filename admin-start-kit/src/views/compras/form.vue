@@ -136,8 +136,8 @@
                 </div>
             </div>
 
-            <LineasCompra v-if="muestraProductos" v-model="lineas" :comprobante="form" :es-nota="esNotaCredito"
-                :bloqueado="conProductos" />
+            <LineasCompra v-if="muestraDetalle" v-model="lineas" :comprobante="form" :es-nota="esNotaCredito"
+                :bloqueado="conLineas" :admite-productos="admiteProductos" />
 
             <div class="card">
                 <div class="card-header"><h5 class="card-title mb-0">Adjuntos y observaciones</h5></div>
@@ -188,14 +188,14 @@ import ProveedorSelector from '@/components/Compras/ProveedorSelector.vue';
 import ProveedorAltaRapida from '@/components/Proveedores/ProveedorAltaRapida.vue';
 import httpClient from '@/helpers/http-client';
 import {
-    enCentimos, formatMonto, montosDeLinea, pasaDeDoceMeses, periodoDe, sumaDeMontos, TIPOS_CON_CREDITO_FISCAL, TIPOS_CON_LINEAS,
-    TIPOS_NOTA,
+    enCentimos, formatMonto, lineasParaEnviar, pasaDeDoceMeses, periodoDe, sumaDeMontos, TIPOS_CON_CREDITO_FISCAL, TIPOS_CON_LINEAS,
+    TIPOS_CON_LINEAS_SIN_PRODUCTO, TIPOS_NOTA,
 } from '@/helpers/compras';
 import { formatFecha, hoyPeru } from '@/helpers/fecha';
 import { nombreConCiudad } from '@/helpers/proveedor';
 import { useAuthStore } from '@/stores/auth';
 import type {
-    Compra, CompraCatalogos, CompraExistente, CompraProveedor, LineaCompraForm, TipoComprobanteCompra,
+    Compra, CompraCatalogos, CompraExistente, CompraLinea, CompraProveedor, LineaCompraForm, TipoComprobanteCompra,
 } from '@/types/compras';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
@@ -255,24 +255,42 @@ let sugerido = '';
 
 const esNota = computed(() => TIPOS_NOTA.includes(form.tipo_comprobante_codigo));
 
-// T-154 — productos de la compra. `conProductos`: ya registrada con ellos, así que quedan fijos (D2).
+// T-154/T-162 — líneas de la compra. Ya registrada, las líneas quedan fijas (D2); si tiene
+// productos (movieron stock), también lo que afecta al stock.
 const lineas = ref<LineaCompraForm[]>([]);
 const creditoFiscal = ref(true);
+const conLineas = ref(false);
 const conProductos = ref(false);
 const esNotaCredito = computed(() => form.tipo_comprobante_codigo === '07');
-const muestraProductos = computed(() =>
-    conProductos.value || (!compraId && TIPOS_CON_LINEAS.includes(form.tipo_comprobante_codigo)));
+const admiteProductos = computed(() => TIPOS_CON_LINEAS.includes(form.tipo_comprobante_codigo));
+const muestraDetalle = computed(() => conLineas.value
+    || (!compraId && (admiteProductos.value || TIPOS_CON_LINEAS_SIN_PRODUCTO.includes(form.tipo_comprobante_codigo))));
 
 watch(() => form.tipo_comprobante_codigo, (tipo, antes) => {
     if (cargando.value) return;
     creditoFiscal.value = TIPOS_CON_CREDITO_FISCAL.includes(tipo);
     // Las líneas de una nota salen de su compra: no se mezclan con las de una compra.
     if (tipo === '07' || antes === '07') lineas.value = [];
+    else if (TIPOS_CON_LINEAS_SIN_PRODUCTO.includes(tipo)) lineas.value = lineas.value.filter((l) => l.product_id === null);
     // De 08 a 07 la referencia no cambia, así que su watch no carga los productos: se cargan acá.
     if (tipo === '07' && form.compra_referencia_id && !compraId) cargarLineasDeReferencia();
 });
 
-// En una nota de crédito, los productos salen de la compra que modifica, con su máximo (D3).
+const lineaDeCompra = (l: CompraLinea): LineaCompraForm => ({
+    product_id: l.product_id,
+    titulo: l.producto?.title ?? '',
+    sku: l.producto?.sku ?? null,
+    descripcion: l.descripcion,
+    unidad_medida: l.unidad_medida,
+    codigo_proveedor: l.codigo_proveedor ?? '',
+    tipo_afectacion_igv: l.tipo_afectacion_igv ?? '',
+    factor: String(Number(l.factor)),
+    cantidad: Number(l.cantidad),
+    valor_unitario: Number(l.valor_unitario),
+    igv: l.igv,
+});
+
+// En una nota de crédito, las líneas salen de la compra que modifica, con su máximo (D3).
 const cargarLineasDeReferencia = async () => {
     const id = form.compra_referencia_id;
     lineas.value = [];
@@ -283,18 +301,15 @@ const cargarLineasDeReferencia = async () => {
         const maximos = new Map((data.compra.devolvible ?? []).map((d) => [d.product_id, d.maximo]));
         lineas.value = (data.compra.lineas ?? [])
             .map((l) => ({
-                product_id: l.product_id,
-                titulo: l.producto?.title ?? '',
-                sku: l.producto?.sku ?? null,
-                factor: String(Number(l.factor)),
+                ...lineaDeCompra(l),
                 cantidad: '',
-                valor_unitario: Number(l.valor_unitario),
                 igv: null,
-                maximo: maximos.get(l.product_id) ?? 0,
+                // Sin producto no hay unidades que contar: la nota se limita por monto.
+                maximo: l.product_id === null ? undefined : (maximos.get(l.product_id) ?? 0),
             }))
-            .filter((l) => l.maximo > 0);
+            .filter((l) => l.maximo === undefined || l.maximo > 0);
     } catch (e: any) {
-        error.value = e.response?.data?.message ?? 'No se pudieron cargar los productos de esa compra.';
+        error.value = e.response?.data?.message ?? 'No se pudieron cargar las líneas de esa compra.';
     }
 };
 watch(() => form.compra_referencia_id, () => {
@@ -399,19 +414,10 @@ const guardar = async () => {
     }
     datos.append('con_credito_fiscal', creditoFiscal.value ? '1' : '0');
     // Al editar no se mandan: quedan las guardadas. En una nota, solo las que tienen cantidad.
-    if (!compraId && muestraProductos.value) {
+    if (!compraId && muestraDetalle.value) {
         const llenas = lineas.value.filter((l) => !esNotaCredito.value || Number(l.cantidad) > 0);
-        llenas.forEach((l, i) => {
-            const campos = {
-                product_id: l.product_id,
-                factor: l.factor,
-                cantidad: l.cantidad,
-                // Vacío viaja vacío: el backend lo rechaza (un 0 bajaría el costo promedio sin aviso).
-                valor_unitario: l.valor_unitario,
-                ...montosDeLinea(l, form),
-            };
-            for (const [campo, valor] of Object.entries(campos)) datos.append(`lineas[${i}][${campo}]`, String(valor));
-        });
+        // Un solo campo de texto: campo por campo, 100 líneas pasarían de max_input_vars de PHP.
+        if (llenas.length) datos.append('lineas', JSON.stringify(lineasParaEnviar(llenas, form)));
     }
     if (archivos.adjunto_pdf) datos.append('adjunto_pdf', archivos.adjunto_pdf);
     if (archivos.adjunto_xml) datos.append('adjunto_xml', archivos.adjunto_xml);
@@ -466,16 +472,9 @@ const cargarCompra = async () => {
     totalEscrito.value = enCentimos(c.total) !== enCentimos(sumaDeMontos(c));
     proveedor.value = c.proveedor;
     creditoFiscal.value = c.con_credito_fiscal;
-    conProductos.value = !!c.lineas?.length;
-    lineas.value = (c.lineas ?? []).map((l) => ({
-        product_id: l.product_id,
-        titulo: l.producto?.title ?? '',
-        sku: l.producto?.sku ?? null,
-        factor: String(Number(l.factor)),
-        cantidad: Number(l.cantidad),
-        valor_unitario: Number(l.valor_unitario),
-        igv: l.igv,
-    }));
+    conLineas.value = !!c.lineas?.length;
+    conProductos.value = !!c.lineas?.some((l) => l.product_id !== null);
+    lineas.value = (c.lineas ?? []).map(lineaDeCompra);
     tienePdf.value = c.tiene_pdf;
     tieneXml.value = c.tiene_xml;
     if (c.anulada_at) error.value = 'Esta compra está anulada: no se puede editar.';

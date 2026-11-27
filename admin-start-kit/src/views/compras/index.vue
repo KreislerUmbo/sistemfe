@@ -167,26 +167,36 @@
                     <table class="table table-sm small mb-0">
                         <thead class="table-light">
                             <tr>
-                                <th>Producto</th>
+                                <th>Descripción</th>
                                 <th class="text-end">Cantidad</th>
                                 <th class="text-end">Valor unit.</th>
                                 <th class="text-end">IGV</th>
                                 <th class="text-end">Total</th>
-                                <th class="text-end">Costo base (S/)</th>
+                                <th v-if="tieneProductos" class="text-end">Costo base (S/)</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr v-for="l in detalle.lineas" :key="l.id">
-                                <td>{{ l.producto?.title }}</td>
-                                <td class="text-end">{{ Number(l.cantidad) }}{{ Number(l.factor) !== 1 ? ` × ${Number(l.factor)}` : '' }}</td>
+                                <td>
+                                    {{ l.descripcion }}
+                                    <small class="text-muted d-block">
+                                        {{ nombreAfectacion(l.tipo_afectacion_igv) }}{{ l.codigo_proveedor ? ` · cód. ${l.codigo_proveedor}` : '' }}{{
+                                            l.producto && l.producto.title !== l.descripcion ? ` · producto: ${l.producto.title}` : '' }}
+                                    </small>
+                                </td>
+                                <td class="text-end">
+                                    {{ Number(l.cantidad) }}{{ Number(l.factor) !== 1 ? ` × ${Number(l.factor)}` : '' }} {{ l.unidad_medida }}
+                                </td>
                                 <td class="text-end">{{ Number(l.valor_unitario) }}</td>
                                 <td class="text-end">{{ formatMonto(l.igv, detalle.moneda) }}</td>
                                 <td class="text-end">{{ formatMonto(l.total, detalle.moneda) }}</td>
-                                <td class="text-end">{{ Number(l.costo_unitario_base) }}</td>
+                                <td v-if="tieneProductos" class="text-end">
+                                    {{ l.costo_unitario_base === null ? '—' : Number(l.costo_unitario_base) }}
+                                </td>
                             </tr>
                         </tbody>
                     </table>
-                    <small class="text-muted">
+                    <small v-if="tieneProductos" class="text-muted">
                         {{ detalle.con_credito_fiscal ? 'El IGV va a crédito fiscal: el costo es sin IGV.' : 'Sin crédito fiscal: el costo incluye el IGV.' }}
                     </small>
                     <div v-if="aviso" class="text-warning small">{{ aviso }}</div>
@@ -239,7 +249,7 @@ import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import ProveedorSelector from '@/components/Compras/ProveedorSelector.vue';
 import AsignarCompra from '@/components/Compras/AsignarCompra.vue';
 import httpClient from '@/helpers/http-client';
-import { estaVencida, formatMonto } from '@/helpers/compras';
+import { AFECTACIONES_COMPRA, estaVencida, formatMonto } from '@/helpers/compras';
 import { formatFecha, formatFechaHora, hoyPeru } from '@/helpers/fecha';
 import { nombreConCiudad } from '@/helpers/proveedor';
 import { useAuthStore } from '@/stores/auth';
@@ -276,6 +286,10 @@ const error = ref('');
 const detalle = ref<Compra | null>(null);
 const aviso = ref('');
 const modalDetalle = ref(false);
+// T-162: el costo solo existe en las líneas con producto.
+const tieneProductos = computed(() => !!detalle.value?.lineas?.some((l) => l.product_id !== null));
+const nombreAfectacion = (codigo: string | null) =>
+    AFECTACIONES_COMPRA.find(([c]) => c === codigo)?.[1] ?? 'Sin afectación';
 
 // T-152
 const permiteAsignar = ref(false);

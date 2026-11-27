@@ -74,6 +74,7 @@ class CompraLineasTest extends TestCase
 
         return $cambios + [
             'product_id' => $producto->id,
+            'tipo_afectacion_igv' => '10',
             'cantidad' => $cantidad,
             'factor' => '1',
             'valor_unitario' => $valorUnitario,
@@ -319,7 +320,8 @@ class CompraLineasTest extends TestCase
 
         // D8: primero la nota con líneas; una nota sin líneas no estorba.
         $nota = $this->nota($id, [$this->linea($producto, '1', '6')], ['serie' => 'FC01'])->getData(true)['compra'];
-        $this->assertSame(200, $this->nota($id, [])->getStatusCode());
+        // T-162: las notas de una compra, juntas, ya no pasan de su total.
+        $this->assertSame(200, $this->nota($id, [], ['base_gravada' => '10', 'igv' => '1.80', 'total' => '11.80'])->getStatusCode());
         $this->assertRechazo($this->anular($id), "Anula primero la nota de crédito FC01-{$nota['numero']}");
         $this->assertSame(200, $this->anular($nota['id'])->getStatusCode());
         $this->assertSame(200, $this->anular($id)->getStatusCode());
