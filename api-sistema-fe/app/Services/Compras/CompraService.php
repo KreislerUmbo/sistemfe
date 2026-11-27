@@ -211,7 +211,7 @@ class CompraService
         if (is_string($entrada['lineas'] ?? null)) {
             // Si no es una lista válida, queda el texto y lo rechaza la regla `array`.
             $lineas = json_decode($entrada['lineas'], true);
-            $entrada['lineas'] = is_array($lineas) ? $lineas : $entrada['lineas'];
+            $entrada['lineas'] = is_array($lineas) ? $this->comoFormulario($lineas) : $entrada['lineas'];
         }
         foreach (['serie', 'numero'] as $campo) {
             if (isset($entrada[$campo])) {
@@ -329,6 +329,20 @@ class CompraService
         $datos['lineas'] = array_values($datos['lineas'] ?? []);
 
         return $datos;
+    }
+
+    // El texto JSON no pasa por TrimStrings ni ConvertEmptyStringsToNull: se hace aquí, para que un
+    // `product_id: ""` sea una línea sin producto y no «el producto no existe».
+    private function comoFormulario(array $lineas): array
+    {
+        return array_map(fn ($linea) => is_array($linea) ? array_map(function ($valor) {
+            if (! is_string($valor)) {
+                return $valor;
+            }
+            $valor = trim($valor);
+
+            return $valor === '' ? null : $valor;
+        }, $linea) : $linea, $lineas);
     }
 
     // T-152 (Q5, Q13): el reparto suma el total en la moneda de la compra. Solo Agencia tiene la
@@ -460,7 +474,9 @@ class CompraService
                 throw new CompraException("«{$descripcion}»: el valor de venta debe ser cantidad × valor unitario ({$valorVenta}).");
             }
 
-            if ($linea['tipo_afectacion_igv'] !== CompraLinea::AFECTACION_GRAVADA
+            // `in` de la validación acepta el número 10: aquí se compara como texto.
+            $afectacion = (string) $linea['tipo_afectacion_igv'];
+            if ($afectacion !== CompraLinea::AFECTACION_GRAVADA
                 && ! BigDecimal::of((string) $linea['igv'])->isZero()) {
                 throw new CompraException("«{$descripcion}»: una línea exonerada, inafecta o de exportación no lleva IGV.");
             }
@@ -491,7 +507,7 @@ class CompraService
                 'descripcion' => $descripcion,
                 'unidad_medida' => $unidad,
                 'codigo_proveedor' => trim((string) ($linea['codigo_proveedor'] ?? '')) ?: null,
-                'tipo_afectacion_igv' => $linea['tipo_afectacion_igv'],
+                'tipo_afectacion_igv' => $afectacion,
                 'factor' => (string) $factor,
                 'cantidad' => (string) $cantidad,
                 'valor_unitario' => (string) $linea['valor_unitario'],

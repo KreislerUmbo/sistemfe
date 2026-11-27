@@ -154,6 +154,13 @@ una de mercadería mezclando una línea de producto y una de flete sin producto.
 - **Al desplegar:** `tenants:migrate-verticales` y revisar si la migración informa líneas sin
   afectación.
 - **No se corrieron** `/code-review` ni `/security-review`.
+- **Revisión del diff (27-nov):** corregido que las líneas en texto JSON no pasaban por el recorte
+  de espacios ni por «vacío = null» de Laravel (un `product_id: ""` daba «el producto no existe»), y
+  que la afectación como número (`10`) se tomaba por no gravada. Test:
+  `test_texto_json_con_producto_vacio_y_afectacion_numerica`. Quedan, menores y sin decidir: al
+  editar una compra con solo líneas sin producto, cambiar a o desde `07` vacía las líneas en
+  pantalla (el backend las conserva), y `firma()` no compara descripción ni afectación, así que
+  líneas distintas enviadas al editar se descartan sin aviso.
 
 ## Hallazgos fuera de alcance
 - Una nota de débito (08) no amplía lo que se puede acreditar: el tope es el total de la compra

@@ -240,6 +240,23 @@ class CompraDetalleComprobanteTest extends TestCase
         $this->assertRechazo($this->enviar(['lineas' => json_encode($lineas)] + $this->datos($lineas)), 'hasta 100 líneas');
     }
 
+    // Revisión: en el texto JSON, `""` es «sin producto» y la afectación puede venir como número.
+    public function test_texto_json_con_producto_vacio_y_afectacion_numerica(): void
+    {
+        $lineas = [['product_id' => '', 'codigo_proveedor' => '  '] + $this->linea('  Guía local  ', '1', '50')];
+        $enviadas = $lineas;
+        $enviadas[0]['tipo_afectacion_igv'] = 10;
+
+        $respuesta = $this->enviar(['lineas' => json_encode($enviadas)] + $this->datos($lineas));
+
+        $this->assertSame(200, $respuesta->getStatusCode(), $respuesta->getContent());
+        $linea = CompraLinea::where('compra_id', $respuesta->getData(true)['compra']['id'])->sole();
+        $this->assertNull($linea->product_id);
+        $this->assertNull($linea->codigo_proveedor);
+        $this->assertSame('Guía local', $linea->descripcion);
+        $this->assertSame('10', $linea->tipo_afectacion_igv);
+    }
+
     public function test_los_tipos_nuevos_solo_admiten_lineas_sin_producto(): void
     {
         $producto = $this->producto();
