@@ -148,6 +148,45 @@ class PagoProveedorService
         return $this->sumar($pago->aplicaciones()->activas()->pluck('monto'));
     }
 
+    /**
+     * T-137 — por proveedor y moneda, en una sola consulta: lo «a cuenta» (monto de los pagos
+     * vigentes menos lo aplicado) y lo que espera aprobación en Caja (aplicado o no).
+     *
+     * @param  array<int, int>|null  $proveedorIds  null = todos
+     * @return array<int, array<string, array{a_cuenta: BigDecimal, por_aprobar: BigDecimal}>>
+     */
+    public function sinAplicarPorProveedor(?array $proveedorIds = null): array
+    {
+        $aplicado = DB::table('aplicaciones_pago_proveedor')
+            ->whereNull('desaplicada_at')
+            ->groupBy('pago_proveedor_id')
+            ->selectRaw('pago_proveedor_id, sum(monto) as monto');
+
+        $filas = DB::table('pagos_proveedor as p')
+            ->leftJoinSub($aplicado, 'a', 'a.pago_proveedor_id', '=', 'p.id')
+            ->where('p.estado', '<>', PagoProveedor::ANULADO)
+            ->when($proveedorIds !== null, fn ($q) => $q->whereIn('p.proveedor_id', $proveedorIds))
+            ->groupBy('p.proveedor_id', 'p.moneda', 'p.estado')
+            ->selectRaw('p.proveedor_id, p.moneda, p.estado, sum(p.monto) as monto, sum(coalesce(a.monto, 0)) as aplicado')
+            ->get();
+
+        $cero = BigDecimal::of('0.00');
+        $resultado = [];
+        foreach ($filas as $fila) {
+            $resultado[$fila->proveedor_id][$fila->moneda] ??= ['a_cuenta' => $cero, 'por_aprobar' => $cero];
+            $monto = BigDecimal::of((string) $fila->monto);
+            $parte = &$resultado[$fila->proveedor_id][$fila->moneda];
+            if ($fila->estado === PagoProveedor::VIGENTE) {
+                $parte['a_cuenta'] = $monto->minus((string) $fila->aplicado);
+            } else {
+                $parte['por_aprobar'] = $monto;
+            }
+            unset($parte);
+        }
+
+        return $resultado;
+    }
+
     /** Registra el pago y, si vienen, sus aplicaciones, todo en una transacción. */
     public function registrar(array $entrada, User $usuario): PagoProveedor
     {
