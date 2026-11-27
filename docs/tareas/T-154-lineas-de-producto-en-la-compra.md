@@ -180,8 +180,39 @@ Pantalla, en un tenant de tienda (encender «Compras» en el Panel Superadmin y 
 ---
 
 ## Resultado
-- **Commits:**
+- **Commits:** `0b32ca92` (código y tests), en `feat/T-154-lineas-producto-compra`. Sin push.
 - **Tests:**
+  - Nuevos: `CompraLineasTest` (CA1-CA5, CA7-CA9) y `Ventas/CompraConcurrenciaTest` (CA6, dos procesos).
+  - Suite completa (26-nov): 2510 pasan y 4 fallan. Las 4 eran de tests que borraban `compras` para
+    simular un tenant antiguo y chocaban con la FK de `compra_lineas`. Se corrigieron solo esos dos
+    tests y el filtro `Compra|Stock|Kardex|ProveedoresTablaBase` quedó en verde (42). La suite
+    completa no se volvió a correr después de ese cambio.
+  - Frontend: `type-check` y `build` sin errores; Vitest de `helpers/compras.test.ts` (6).
+- **Prueba en pantalla** (tenant `sandbox`, retail, con Playwright): compra de 10 a S/ 6 → venta de 1
+  → NC de compra de 2 → anular la compra (422, D8) → editar la compra (campos fijos) → anular la NC y
+  la compra → kárdex con costo y ficha (stock 9, costo 4.944444, que es D7 con la venta en medio).
+  «Compras» se encendió y apagó con `ModulosTenant::cambiar()` desde tinker, no desde el Panel
+  Superadmin. Quedan en `sandbox`: producto `PRUEBA-T154`, su proveedor, dos compras anuladas, una
+  boleta de S/ 10 sin enviar a SUNAT y una sesión de caja cerrada.
+- **Al desplegar:** `tenants:migrate-verticales`.
 - **Desviaciones de la tarea y por qué:**
+  1. En D2 también queda fija **la compra que modifica** una NC con productos: no estaba en la lista
+     de campos editables, y de ella salen los máximos de D3.
+  2. **Máximo 100 líneas por compra.** Cada línea son 7 campos del multipart y PHP corta pasados 1000
+     (`max_input_vars`) sin error: con más de ~140 líneas se habrían perdido en silencio.
+  3. Anular solo revierte los productos que **de verdad movieron** stock (según el kárdex). Si un
+     producto empezó a controlar stock después de la compra, no se le resta lo que nunca entró.
+  4. `costo_promedio` sale solo en `products/{id}`, no en `ProductResource`: el listado lo usa
+     también quien vende.
+  5. `GET compras/{id}` devuelve además `devolvible` (máximo por producto), para la pantalla de la NC.
+  6. El IGV de cada línea se propone en la proporción IGV / base del comprobante (sin tasa fija; 0 si
+     no hay IGV) y se puede cambiar.
+  7. Buscador de productos propio dentro de `LineasCompra.vue`: el de ventas muestra el precio de
+     venta y ofrece crear productos.
 
 ## Hallazgos fuera de alcance
+- El `total` de una línea no se compara con `valor_venta + igv` (la tarea no lo pide). La pantalla lo
+  calcula, pero por la API se puede mandar otro, y sin crédito fiscal ese total es el costo.
+- Quien registre compras necesita además `list_product` para buscar productos (se suma al hallazgo de
+  permisos de T-135).
+- El costo se ve en el kárdex y la ficha con `list_product`: no hay un permiso aparte para ver costos.
