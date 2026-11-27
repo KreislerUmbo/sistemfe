@@ -114,10 +114,9 @@ class PagoProveedorService
             }
 
             $fila = $saldos[$compra->id];
-            $vencimiento = ($compra->fecha_vencimiento ?? $compra->fecha_emision)->toDateString();
             $estado = match (true) {
                 ! $fila['saldo']->isPositive() => 'pagado', // saldo negativo: a favor (T-140)
-                $vencimiento < $hoy => 'vencido',
+                $this->vencimiento($compra) < $hoy => 'vencido',
                 $fila['aplicado']->isPositive() => 'parcial',
                 default => 'pendiente',
             };
@@ -130,6 +129,12 @@ class PagoProveedorService
         }
 
         return $estados;
+    }
+
+    /** Cuándo vence una compra (`Y-m-d`): su fecha de vencimiento, o la emisión si es al contado. */
+    public function vencimiento(Compra $compra): string
+    {
+        return ($compra->fecha_vencimiento ?? $compra->fecha_emision)->toDateString();
     }
 
     public function sePaga(Compra $compra): bool

@@ -835,9 +835,7 @@ class CompraService
 
     private function clave(Proveedor $proveedor): string
     {
-        $documento = $this->normalizar($proveedor->numero_documento);
-
-        return $documento === '' ? "id:{$proveedor->id}" : $documento;
+        return $proveedor->claveDocumento();
     }
 
     // Mayúsculas y sin espacios.
