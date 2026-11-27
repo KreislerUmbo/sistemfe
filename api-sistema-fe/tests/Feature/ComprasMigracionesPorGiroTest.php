@@ -27,6 +27,8 @@ class ComprasMigracionesPorGiroTest extends TestCase
         '2026_11_30_200000_add_detalle_comprobante_to_compra_lineas',
         // T-136: compras.pagar.
         '2026_12_01_100200_add_pagos_proveedor_permissions',
+        // T-136: pagos y aplicaciones, con FK a compras.
+        '2026_12_01_100300_create_pagos_proveedor_tables',
     ];
 
     /** @var Tenant[] */
@@ -77,6 +79,8 @@ class ComprasMigracionesPorGiroTest extends TestCase
 
             // Como un tenant anterior a T-135: le faltan y se las trae el comando del deploy.
             $tenant->run(function () {
+                Schema::drop('aplicaciones_pago_proveedor');
+                Schema::drop('pagos_proveedor');
                 Schema::dropIfExists('compra_asignaciones');
                 Schema::drop('compra_periodos');
                 Schema::drop('compra_lineas');
@@ -98,6 +102,9 @@ class ComprasMigracionesPorGiroTest extends TestCase
         $tenant->run(function () use ($giro) {
             $this->assertTrue(Schema::hasTable('compras'), $giro);
             $this->assertTrue(Schema::hasTable('compra_periodos'), $giro);
+            // T-136
+            $this->assertTrue(Schema::hasTable('pagos_proveedor'), $giro);
+            $this->assertTrue(Schema::hasTable('aplicaciones_pago_proveedor'), $giro);
             // T-154
             $this->assertTrue(Schema::hasTable('compra_lineas'), $giro);
             // T-152 (Q1): el reparto es propio de Agencia.

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Compras\PagoProveedor;
 use App\Models\CuentaBancaria;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -64,7 +65,17 @@ class CuentaBancariaController extends Controller
 
     public function destroy(string $id)
     {
-        CuentaBancaria::findOrFail($id)->delete();
+        $cuenta = CuentaBancaria::findOrFail($id);
+
+        // T-136: sus pagos (también los anulados) dicen de qué cuenta salió el dinero.
+        if (PagoProveedor::where('cuenta_bancaria_id', $cuenta->id)->exists()) {
+            return response()->json([
+                'code' => 422,
+                'message' => 'No se puede eliminar: la cuenta tiene pagos a proveedores. Desactívala en su lugar.',
+            ], 422);
+        }
+
+        $cuenta->delete();
 
         return response()->json(['code' => 200, 'message' => 'Cuenta bancaria eliminada']);
     }

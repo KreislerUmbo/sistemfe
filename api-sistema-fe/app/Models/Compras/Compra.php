@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 // T-135 — comprobante recibido. Nunca se borra: se anula (D8).
@@ -58,6 +59,19 @@ class Compra extends Model
     public function lineas(): HasMany
     {
         return $this->hasMany(CompraLinea::class)->orderBy('id');
+    }
+
+    // T-136: todas, también las desaplicadas.
+    public function aplicaciones(): HasMany
+    {
+        return $this->hasMany(AplicacionPagoProveedor::class)->orderBy('id');
+    }
+
+    // T-136: los pagos que hoy le están aplicados.
+    public function pagos(): BelongsToMany
+    {
+        return $this->belongsToMany(PagoProveedor::class, 'aplicaciones_pago_proveedor', 'compra_id', 'pago_proveedor_id')
+            ->withPivot(['id', 'monto'])->wherePivotNull('desaplicada_at');
     }
 
     public function referencia(): BelongsTo
