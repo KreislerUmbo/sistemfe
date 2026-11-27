@@ -18,6 +18,7 @@ use Brick\Math\RoundingMode;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
@@ -163,10 +164,12 @@ class CompraService
                         $this->exigirDevolvible($this->conProducto($lineas), $datos['compra_referencia_id']);
                     }
                 }
+                // Primero lo de la compra que se edita (si otras notas la modifican), luego lo de la nota.
+                if ($actual->exists) {
+                    $this->exigirQueCubraSusNotas($actual, $datos);
+                }
                 if ($esNotaCredito) {
                     $this->exigirDentroDelOriginal($datos, $actual->id);
-                } elseif ($actual->exists) {
-                    $this->exigirQueCubraSusNotas($actual, $datos);
                 }
 
                 $actual->fill($datos);
@@ -211,7 +214,8 @@ class CompraService
         if (is_string($entrada['lineas'] ?? null)) {
             // Si no es una lista válida, queda el texto y lo rechaza la regla `array`.
             $lineas = json_decode($entrada['lineas'], true);
-            $entrada['lineas'] = is_array($lineas) ? $this->comoFormulario($lineas) : $entrada['lineas'];
+            // Un objeto JSON (`{"a": {...}}`) no es una lista de líneas.
+            $entrada['lineas'] = is_array($lineas) && array_is_list($lineas) ? $this->comoFormulario($lineas) : $entrada['lineas'];
         }
         foreach (['serie', 'numero'] as $campo) {
             if (isset($entrada[$campo])) {
@@ -374,7 +378,7 @@ class CompraService
         // T-162: sin productos no hubo stock: la cabecera se edita como la de una compra sin líneas.
         if ($guardadas->whereNotNull('product_id')->isEmpty()) {
             $this->exigirTipoConLineas($datos['tipo_comprobante_codigo'], $guardadas->toArray());
-            if ($lineas && $this->firma($lineas) !== $this->firma($guardadas->all())) {
+            if ($lineas && ! $this->mismasLineas($lineas, $guardadas)) {
                 throw new CompraException(self::FIJAS_LAS_LINEAS);
             }
 
@@ -393,7 +397,7 @@ class CompraService
             || ! $mismoCambio
             || $datos['con_credito_fiscal'] !== $compra->con_credito_fiscal
             || $referencia !== (int) $compra->compra_referencia_id
-            || ($lineas && $this->firma($lineas) !== $this->firma($guardadas->all()));
+            || ($lineas && ! $this->mismasLineas($lineas, $guardadas));
 
         if ($cambia) {
             throw new CompraException(self::FIJA_CON_PRODUCTOS);
@@ -401,13 +405,40 @@ class CompraService
     }
 
     /** Las líneas en una forma comparable, venga cada número como venga escrito. */
+    // T-162: las líneas enviadas al editar, comparables con las guardadas. Un texto que no se envía
+    // (un cliente de T-154 no los conoce) se toma de la guardada; uno enviado y distinto no cuadra.
+    private function mismasLineas(array $enviadas, Collection $guardadas): bool
+    {
+        $guardadas = $guardadas->values()->all();
+        $completas = array_map(function (array $linea, int $i) use ($guardadas) {
+            foreach (['descripcion', 'unidad_medida', 'codigo_proveedor', 'tipo_afectacion_igv'] as $campo) {
+                if (! array_key_exists($campo, $linea) && isset($guardadas[$i])) {
+                    $linea[$campo] = $guardadas[$i][$campo];
+                }
+            }
+
+            return $linea;
+        }, $enviadas, array_keys($enviadas));
+
+        return $this->firma($completas) === $this->firma($guardadas);
+    }
+
+    // Números con la misma escala y textos sin espacios, venga cada uno como venga escrito.
     private function firma(array $lineas): array
     {
-        return array_map(fn ($linea) => implode('|', array_map(
-            fn (string $campo) => (string) BigDecimal::of((string) ($linea[$campo] ?? ($campo === 'factor' ? 1 : 0)))
-                ->toScale(6, RoundingMode::HALF_UP),
-            ['product_id', 'factor', 'cantidad', 'valor_unitario', 'valor_venta', 'igv', 'total'],
-        )), $lineas);
+        return array_map(function ($linea) {
+            $numeros = array_map(
+                fn (string $campo) => (string) BigDecimal::of((string) ($linea[$campo] ?? ($campo === 'factor' ? 1 : 0)))
+                    ->toScale(6, RoundingMode::HALF_UP),
+                ['product_id', 'factor', 'cantidad', 'valor_unitario', 'valor_venta', 'igv', 'total'],
+            );
+            $textos = array_map(
+                fn (string $campo) => trim((string) ($linea[$campo] ?? '')),
+                ['descripcion', 'unidad_medida', 'codigo_proveedor', 'tipo_afectacion_igv'],
+            );
+
+            return implode('|', [...$numeros, ...$textos]);
+        }, $lineas);
     }
 
     // Las líneas con producto son de los tipos de T-154; T-162 suma otros solo para las demás.
@@ -536,8 +567,24 @@ class CompraService
     }
 
     // Lo mismo visto desde la compra: al editarla no puede quedar por debajo de sus notas.
+    // Revisión de T-162: con notas que la modifican, tampoco puede volverse nota (una nota no
+    // modifica otra nota) ni cambiar de proveedor (la nota es del mismo proveedor que su compra).
     private function exigirQueCubraSusNotas(Compra $compra, array $datos): void
     {
+        $tieneNotas = Compra::vigentes()
+            ->where('compra_referencia_id', $compra->id)
+            ->whereIn('tipo_comprobante_codigo', Compra::TIPOS_NOTA)
+            ->exists();
+        if (! $tieneNotas) {
+            return;
+        }
+        if (in_array($datos['tipo_comprobante_codigo'], Compra::TIPOS_NOTA, true)) {
+            throw new CompraException('Esta compra tiene notas que la modifican: no puede pasar a ser una nota.');
+        }
+        if ($datos['clave_proveedor'] !== $compra->clave_proveedor) {
+            throw new CompraException('Esta compra tiene notas que la modifican: no se puede cambiar su proveedor.');
+        }
+
         $acreditado = $this->acreditado($compra->id, null);
         if ($acreditado->isZero()) {
             return;

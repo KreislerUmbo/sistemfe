@@ -157,10 +157,28 @@ una de mercadería mezclando una línea de producto y una de flete sin producto.
 - **Revisión del diff (27-nov):** corregido que las líneas en texto JSON no pasaban por el recorte
   de espacios ni por «vacío = null» de Laravel (un `product_id: ""` daba «el producto no existe»), y
   que la afectación como número (`10`) se tomaba por no gravada. Test:
-  `test_texto_json_con_producto_vacio_y_afectacion_numerica`. Quedan, menores y sin decidir: al
-  editar una compra con solo líneas sin producto, cambiar a o desde `07` vacía las líneas en
-  pantalla (el backend las conserva), y `firma()` no compara descripción ni afectación, así que
-  líneas distintas enviadas al editar se descartan sin aviso.
+  `test_texto_json_con_producto_vacio_y_afectacion_numerica`.
+- **`/code-review` (27-nov), 8 hallazgos.** Corregidos:
+  1. `CompraLinea::UNIDADES` tenía 64 códigos y la pantalla ofrece los 161 de `UNITS`: «KG», «GAL»…
+     daban 422. Ahora son los mismos; `tests/Unit/CompraUnidadesTest` falla si se separan.
+  2. Una compra con notas que la modifican no puede pasar a ser nota ni cambiar de proveedor (el
+     hueco existía también antes, en compras sin líneas).
+  4. `lineas` como objeto JSON da 422 «no se pudieron leer» (probablemente nunca dio 500:
+     `validar()` ya hacía `array_values`).
+  6. Al editar, cambiar el tipo ya no vacía en pantalla las líneas guardadas.
+  7. `firma()` compara también descripción, unidad, código y afectación; un texto no enviado se
+     toma de la línea guardada (`mismasLineas()`).
+  Tests: `test_al_editar_los_textos_de_la_linea_tambien_cuentan`,
+  `test_unidades_de_la_pantalla_y_lineas_que_no_son_lista`,
+  `test_compra_con_notas_no_se_vuelve_nota_ni_cambia_de_proveedor`.
+  **Sin decidir (usuario):**
+  3. Anular la original con una NC vigente sin productos se permite, y esa NC queda sin poder
+     editarse («la compra de referencia está anulada»). ¿Prohibirlo con cualquier NC vigente?
+  5. `exigirDentroDelOriginal()` corre en toda edición de una NC: una NC anterior a T-162 en otra
+     moneda o que pase del total no se puede editar ni para adjuntar el XML. ¿Revisar solo si
+     cambian total, moneda o referencia, o revisar los datos de producción antes de desplegar?
+  8. El aviso de cuadre queda oculto con el bloque cerrado. ¿Mostrarlo en el encabezado?
+- **Falta** `/security-review`.
 
 ## Hallazgos fuera de alcance
 - Una nota de débito (08) no amplía lo que se puede acreditar: el tope es el total de la compra

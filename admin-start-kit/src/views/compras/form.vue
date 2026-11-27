@@ -269,6 +269,8 @@ const muestraDetalle = computed(() => conLineas.value
 watch(() => form.tipo_comprobante_codigo, (tipo, antes) => {
     if (cargando.value) return;
     creditoFiscal.value = TIPOS_CON_CREDITO_FISCAL.includes(tipo);
+    // Al editar, las líneas son las guardadas y no cambian (D2): no se tocan en pantalla.
+    if (compraId) return;
     // Las líneas de una nota salen de su compra: no se mezclan con las de una compra.
     if (tipo === '07' || antes === '07') lineas.value = [];
     else if (TIPOS_CON_LINEAS_SIN_PRODUCTO.includes(tipo)) lineas.value = lineas.value.filter((l) => l.product_id === null);

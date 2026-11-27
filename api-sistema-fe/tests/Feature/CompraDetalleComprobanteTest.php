@@ -289,6 +289,54 @@ class CompraDetalleComprobanteTest extends TestCase
         $this->assertSame(['Transporte'], CompraLinea::where('compra_id', $id)->pluck('descripcion')->all());
     }
 
+    // Revisión (/code-review 7): cambiar un texto de la línea al editar se rechaza, no se descarta.
+    public function test_al_editar_los_textos_de_la_linea_tambien_cuentan(): void
+    {
+        $linea = $this->linea('Transporte', '1', '100');
+        $datos = $this->datos([$linea]);
+        $id = $this->enviar($datos)->getData(true)['compra']['id'];
+        $sinLineas = collect($datos)->except('lineas')->all();
+
+        // Las mismas líneas pasan. `$linea` no trae unidad ni código: se toman de la guardada (ZZ, null).
+        $this->assertSame(200, $this->enviar(['lineas' => [$linea]] + $sinLineas, $id)->getStatusCode());
+
+        foreach ([['descripcion' => 'Otro'], ['unidad_medida' => 'NIU'], ['codigo_proveedor' => 'X1']] as $cambio) {
+            $this->assertRechazo($this->enviar(['lineas' => [$cambio + $linea]] + $sinLineas, $id), 'anúlala');
+        }
+        $this->assertSame('Transporte', CompraLinea::where('compra_id', $id)->sole()->descripcion);
+    }
+
+    // Revisión (/code-review 1 y 4): toda unidad que ofrece la pantalla se acepta; un objeto JSON no es una lista.
+    public function test_unidades_de_la_pantalla_y_lineas_que_no_son_lista(): void
+    {
+        foreach (['KG', 'GAL', 'CAJ', 'L 6'] as $unidad) {
+            $this->comprar([$this->linea('Flete', '1', '10', '10', ['unidad_medida' => $unidad])]);
+        }
+        $this->assertRechazo($this->enviar($this->datos([$this->linea('Flete', '1', '10', '10', ['unidad_medida' => 'XXX'])])),
+            'no existe');
+
+        $lineas = [$this->linea('Flete', '1', '10')];
+        $this->assertRechazo($this->enviar(['lineas' => json_encode(['a' => $lineas[0]])] + $this->datos($lineas)),
+            'no se pudieron leer');
+    }
+
+    // Revisión (/code-review 2): con notas que la modifican, la compra no se vuelve nota ni cambia de proveedor.
+    public function test_compra_con_notas_no_se_vuelve_nota_ni_cambia_de_proveedor(): void
+    {
+        $compra = $this->comprar([$this->linea('Transporte', '1', '100')])['compra']['id'];
+        $this->assertSame(200, $this->nota($compra, [$this->linea('Descuento', '1', '10')], ['serie' => 'FC01'])->getStatusCode());
+        $otra = $this->comprar([], ['base_gravada' => 50, 'igv' => 9])['compra']['id'];
+
+        $original = collect($this->datos([], ['base_gravada' => 100, 'igv' => 18]))->except('lineas')->all();
+        $original['numero'] = Compra::findOrFail($compra)->numero;
+        $this->assertRechazo($this->enviar(['tipo_comprobante_codigo' => '07', 'compra_referencia_id' => $otra] + $original, $compra),
+            'no puede pasar a ser una nota');
+        $otro = Proveedor::create(['razon_social' => 'T162 Otro', 'tipo_documento' => 'RUC', 'numero_documento' => '20162000002']);
+        $this->assertRechazo($this->enviar(['proveedor_id' => $otro->id] + $original, $compra), 'proveedor');
+        $this->assertSame(200, $this->enviar($original, $compra)->getStatusCode());
+        $this->assertSame('01', Compra::findOrFail($compra)->tipo_comprobante_codigo);
+    }
+
     // CA6
     public function test_las_notas_de_credito_no_pasan_del_monto_de_la_compra(): void
     {
