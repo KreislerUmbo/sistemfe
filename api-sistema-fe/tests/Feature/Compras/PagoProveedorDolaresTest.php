@@ -57,7 +57,7 @@ class PagoProveedorDolaresTest extends ComprasT140TestCase
         $pago = $this->porBanco('3752.30', [[$compra, '1000.00', '3.7523']]);
 
         $aplicacion = $pago->aplicaciones()->sole();
-        $this->assertSame(['3752.30', '1000.00', '3.7523'], [$aplicacion->monto, $aplicacion->monto_compra, $aplicacion->tipo_cambio]);
+        $this->assertSame(['3752.30', '1000.00', '3.752300'], [$aplicacion->monto, $aplicacion->monto_compra, $aplicacion->tipo_cambio]);
         $this->assertEstado($compra, 'pagado', '0.00');
 
         $ficha = $this->fichaPago($pago->id);
@@ -72,10 +72,28 @@ class PagoProveedorDolaresTest extends ComprasT140TestCase
         $pago = $this->porBanco('100.00', [[$compra, '375.00', '3.7500']], ['moneda' => 'USD', 'tipo_cambio' => '3.7500']);
 
         $aplicacion = $pago->aplicaciones()->sole();
-        $this->assertSame(['100.00', '375.00', '3.7500'], [$aplicacion->monto, $aplicacion->monto_compra, $aplicacion->tipo_cambio]);
+        $this->assertSame(['100.00', '375.00', '3.750000'], [$aplicacion->monto, $aplicacion->monto_compra, $aplicacion->tipo_cambio]);
         $this->assertEstado($compra, 'pagado', '0.00');
         $this->assertNull($this->fichaPago($pago->id)['aplicaciones'][0]['diferencia_cambio']);
         $this->assertNull($this->ficha($compra->id)['diferencia_cambio_total']);
+    }
+
+    public function test_seis_decimales_cancelan_exacto(): void // revisión de T-140, opción (b)
+    {
+        // Con 4 decimales no hay T.C. exacto: 3.7260 da 4,599.97 y 3.7261 da 4,600.09.
+        $compra = $this->compraUsd('1234.56', '3.7000');
+        $pago = $this->porBanco('4600.00', [[$compra, '1234.56', '3.726027']]);
+
+        $aplicacion = $pago->aplicaciones()->sole();
+        $this->assertSame(['4600.00', '1234.56', '3.726027'], [$aplicacion->monto, $aplicacion->monto_compra, $aplicacion->tipo_cambio]);
+        $this->assertEstado($compra, 'pagado', '0.00');
+        $this->assertSame('0.00', $this->fichaPago($pago->id)['a_cuenta']);
+        // 1,234.56 × (3.726027 − 3.7000) = 32.1318…
+        $this->assertSame('32.13', $this->ficha($compra->id)['diferencia_cambio_total']);
+
+        $otra = $this->compraUsd('10.00');
+        $libre = $this->porBanco('100.00');
+        $this->rechazo(fn () => $this->aplicar($libre, $otra, '10.00', '3.7260271'), 'seis decimales');
     }
 
     public function test_rechazos_en_otra_moneda(): void // CA5

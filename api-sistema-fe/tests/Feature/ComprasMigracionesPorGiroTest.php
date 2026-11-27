@@ -32,6 +32,7 @@ class ComprasMigracionesPorGiroTest extends TestCase
         // T-140: tipos de cambio y reembolsos.
         '2026_12_02_100000_add_tipo_cambio_to_pagos_proveedor',
         '2026_12_02_100100_create_reembolsos_proveedor_table',
+        '2026_12_02_100200_tipo_cambio_aplicacion_seis_decimales',
     ];
 
     /** @var Tenant[] */

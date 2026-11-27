@@ -87,7 +87,8 @@
                                         class="form-control form-control-sm text-end" :aria-label="`Aplicar a ${c.serie}-${c.numero}`">
                                 </td>
                                 <td>
-                                    <input :value="tcDe(c.id)" type="number" step="0.0001" min="0.0001"
+                                    <!-- 6 decimales: así el pago puede cancelar exacto en la otra moneda -->
+                                    <input :value="tcDe(c.id)" type="number" step="0.000001" min="0.000001"
                                         class="form-control form-control-sm text-end"
                                         :aria-label="`Tipo de cambio de ${c.serie}-${c.numero}`"
                                         @input="tcCompra[c.id] = valorDe($event)">

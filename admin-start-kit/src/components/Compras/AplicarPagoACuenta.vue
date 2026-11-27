@@ -22,7 +22,8 @@
                     </div>
                     <div v-if="cruzada" class="col-5">
                         <label class="form-label small mb-1" for="aplicar-tc">T.C. *</label>
-                        <input id="aplicar-tc" :value="tipoCambio" type="number" step="0.0001" min="0.0001"
+                        <!-- 6 decimales: así el pago puede cancelar exacto en la otra moneda -->
+                        <input id="aplicar-tc" :value="tipoCambio" type="number" step="0.000001" min="0.000001"
                             class="form-control form-control-sm text-end" @input="escribirTc">
                     </div>
                 </div>

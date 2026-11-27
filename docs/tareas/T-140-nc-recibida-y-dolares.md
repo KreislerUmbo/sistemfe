@@ -451,6 +451,22 @@ permisos ni menú nuevos.
     nueva apunta a compras y pagos).
   - En pantalla, `quedaACuenta()` se quitó junto con sus dos aserciones de Vitest (sin uso).
 
+## Revisión (etapa 7, 27-nov-2026)
+- **Orden de bloqueo al anular una NC:** `CompraService::anular()` bloqueaba la NC, el periodo y
+  después la compra que modifica; `guardar()` bloquea compras y después periodos. Anular la nota y
+  editar esa compra a la vez podían trabarse. Ahora la compra de referencia se bloquea antes del
+  periodo.
+- **T.C. de la aplicación con 6 decimales (decisión del usuario, opción b):** con 4, un pago en soles
+  no siempre cancelaba exacto una factura en dólares (USD 1,234.56 con S/ 4,600.00 daba 4,599.97 o
+  4,600.09). Migración nueva `2026_12_02_100200_tipo_cambio_aplicacion_seis_decimales.php`
+  (`numeric(12,6)`), cast `decimal:6`, validación `decimal:0,6` e inputs con `step="0.000001"` en
+  `RegistrarPago.vue` y `AplicarPagoACuenta.vue`. El T.C. del pago, de la compra y del reembolso
+  sigue con 4. Test: `PagoProveedorDolaresTest::test_seis_decimales_cancelan_exacto`; CA3 y CA4
+  esperan ahora `3.752300` / `3.750000`.
+- **Trampa vista:** si la columna no se migra, Postgres redondea el T.C. a 4 decimales en silencio,
+  mientras el monto ya se calculó con 6. La base de tests (`sistemafe_test_migrations`) se migra
+  aparte: `migrate --database=pgsql --path=…` con `DB_DATABASE=sistemafe_test_migrations`.
+
 ## Hallazgos fuera de alcance
 <!-- Problemas vistos y NO arreglados. Se convierten en tareas o en "Por analizar". -->
 - T-164 (cuando se construya) tiene que contar los reembolsos y usar `monto_compra` (ver «Fuera de alcance»).

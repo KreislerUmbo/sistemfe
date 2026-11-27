@@ -113,13 +113,17 @@ class CompraService
             if ($actual->estaAnulada()) {
                 throw new CompraException('La compra ya está anulada.');
             }
+            // T-140: la compra que modifica la nota, bloqueada: un reembolso no puede apoyarse en la
+            // nota mientras se anula. Antes que el periodo, el mismo orden que guardar() (compras,
+            // periodos y productos): al revés, anular la nota y editar esa compra a la vez se traban.
+            $referencia = $actual->tipo_comprobante_codigo === Compra::TIPO_NOTA_CREDITO && $actual->compra_referencia_id
+                ? Compra::whereKey($actual->compra_referencia_id)->lockForUpdate()->firstOrFail()
+                : null;
             $this->exigirPeriodoAbierto(CompraPeriodo::bloquear($actual->periodo));
 
             // T-140: primero los reembolsos, que a su vez traban los pagos.
             $this->exigirSinReembolsos($actual);
-            if ($actual->tipo_comprobante_codigo === Compra::TIPO_NOTA_CREDITO && $actual->compra_referencia_id) {
-                // Bloqueada: un reembolso no puede apoyarse en la nota mientras se anula.
-                $referencia = Compra::whereKey($actual->compra_referencia_id)->lockForUpdate()->firstOrFail();
+            if ($referencia) {
                 $this->exigirSinReembolsos($referencia);
             }
 

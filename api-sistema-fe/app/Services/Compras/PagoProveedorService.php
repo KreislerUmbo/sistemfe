@@ -539,8 +539,9 @@ class PagoProveedorService
             'aplicaciones' => [$obligatorias ? 'required' : 'nullable', 'array', 'max:'.self::MAX_APLICACIONES],
             'aplicaciones.*.compra_id' => ['required', 'integer', 'distinct'],
             'aplicaciones.*.monto' => ['required', 'numeric', 'gt:0', 'max:999999999999.99', 'decimal:0,2'],
-            // Solo se usa si la compra está en otra moneda que el pago.
-            'aplicaciones.*.tipo_cambio' => ['nullable', 'numeric', 'gt:0', 'max:999999', 'decimal:0,4'],
+            // Solo se usa si la compra está en otra moneda que el pago. 6 decimales (no 4 como el del
+            // pago): con 4, un pago en soles no siempre cancela exacto una factura en dólares.
+            'aplicaciones.*.tipo_cambio' => ['nullable', 'numeric', 'gt:0', 'max:999999', 'decimal:0,6'],
         ]);
 
         return array_values($datos['aplicaciones'] ?? []);
@@ -554,7 +555,7 @@ class PagoProveedorService
             'tipo_cambio.gt' => 'El tipo de cambio debe ser mayor a cero.',
             'tipo_cambio.decimal' => 'El tipo de cambio va con cuatro decimales como máximo.',
             'aplicaciones.*.tipo_cambio.gt' => 'El tipo de cambio debe ser mayor a cero.',
-            'aplicaciones.*.tipo_cambio.decimal' => 'El tipo de cambio va con cuatro decimales como máximo.',
+            'aplicaciones.*.tipo_cambio.decimal' => 'El tipo de cambio de la compra va con seis decimales como máximo.',
             'required' => 'Falta :attribute.',
             'integer' => ':Attribute no es válido.',
             'numeric' => ':Attribute debe ser un número.',
