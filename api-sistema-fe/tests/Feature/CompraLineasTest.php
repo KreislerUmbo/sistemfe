@@ -318,12 +318,15 @@ class CompraLineasTest extends TestCase
         $idVacia = $this->enviar($vacia)->getData(true)['compra']['id'];
         $this->assertRechazo($this->enviar(['lineas' => [$this->linea($producto, '1', '6')]] + $vacia, $idVacia), 'anúlala');
 
-        // D8: primero la nota con líneas; una nota sin líneas no estorba.
+        // D8: primero las notas. T-162 (usuario, 27-nov): también la que no tiene líneas.
         $nota = $this->nota($id, [$this->linea($producto, '1', '6')], ['serie' => 'FC01'])->getData(true)['compra'];
         // T-162: las notas de una compra, juntas, ya no pasan de su total.
-        $this->assertSame(200, $this->nota($id, [], ['base_gravada' => '10', 'igv' => '1.80', 'total' => '11.80'])->getStatusCode());
+        $sinLineas = $this->nota($id, [], ['base_gravada' => '10', 'igv' => '1.80', 'total' => '11.80']);
+        $this->assertSame(200, $sinLineas->getStatusCode());
         $this->assertRechazo($this->anular($id), "Anula primero la nota de crédito FC01-{$nota['numero']}");
         $this->assertSame(200, $this->anular($nota['id'])->getStatusCode());
+        $this->assertRechazo($this->anular($id), 'Anula primero la nota de crédito');
+        $this->assertSame(200, $this->anular($sinLineas->getData(true)['compra']['id'])->getStatusCode());
         $this->assertSame(200, $this->anular($id)->getStatusCode());
         $this->assertProducto($producto, 10.0, '5.000000');
     }

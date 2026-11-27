@@ -368,8 +368,31 @@ class CompraDetalleComprobanteTest extends TestCase
             'misma moneda');
     }
 
+    // Usuario, 27-nov: una nota anterior a T-162 fuera de tope se edita si no cambia lo que acredita.
+    public function test_nota_antigua_fuera_de_tope_se_edita_si_no_cambia_lo_que_acredita(): void
+    {
+        $compra = $this->comprar([$this->linea('Transporte', '1', '100')])['compra']['id']; // 118
+        $datos = $this->datos([], ['tipo_comprobante_codigo' => '07', 'compra_referencia_id' => $compra, 'serie' => 'FC01',
+            'base_gravada' => 50, 'igv' => 9]);
+        $nota = $this->enviar($datos)->getData(true)['compra']['id'];
+        $sinLineas = collect($datos)->except('lineas')->all();
+
+        // Como quedaría una nota registrada antes del tope: pasa del total de la compra.
+        $original = Compra::findOrFail($compra);
+        DB::table('compras')->where('id', $compra)->update(['base_gravada' => 20, 'igv' => 3.6, 'total' => 23.6]);
+
+        $this->assertSame(200, $this->enviar(['observaciones' => 'Se adjunta el XML'] + $sinLineas, $nota)->getStatusCode());
+        $this->assertRechazo($this->enviar(['base_gravada' => '40.00', 'igv' => '7.20', 'total' => '47.20'] + $sinLineas, $nota),
+            'pasa del monto');
+
+        // Lo mismo desde la compra: sin cambiar su total, se edita aunque quede por debajo de su nota.
+        $cabecera = collect($this->datos([], ['base_gravada' => 20, 'igv' => 3.6]))->except('lineas')->all();
+        $cabecera['numero'] = $original->numero;
+        $this->assertSame(200, $this->enviar(['observaciones' => 'Revisada'] + $cabecera, $compra)->getStatusCode());
+    }
+
     // CA6: con productos sigue además la regla de D3 (unidades).
-    public function test_nota_mixta_respeta_las_unidades_y_la_nota_sin_productos_no_frena_la_anulacion(): void
+    public function test_nota_mixta_respeta_las_unidades_y_toda_nota_frena_la_anulacion(): void
     {
         $producto = $this->producto();
         $compra = $this->comprar([
@@ -382,7 +405,14 @@ class CompraDetalleComprobanteTest extends TestCase
         $this->assertSame(200, $flete->getStatusCode(), $flete->getContent());
         $this->assertSame(20.0, (float) $producto->refresh()->stock);
 
-        // La nota no devolvió productos: no hay que anularla antes que la compra (D8).
+        // Aunque la nota no devolvió productos, se anula antes que la compra (D8; usuario, 27-nov).
+        try {
+            $this->anular($compra);
+            $this->fail('Se anuló la compra con una nota de crédito vigente.');
+        } catch (CompraException $e) {
+            $this->assertStringContainsString('Anula primero la nota de crédito', $e->getMessage());
+        }
+        $this->assertSame(200, $this->anular($flete->getData(true)['compra']['id']));
         $this->assertSame(200, $this->anular($compra));
         $this->assertSame(10.0, (float) $producto->refresh()->stock);
     }

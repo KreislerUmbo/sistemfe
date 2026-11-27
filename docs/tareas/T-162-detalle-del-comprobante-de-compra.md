@@ -171,13 +171,17 @@ una de mercadería mezclando una línea de producto y una de flete sin producto.
   Tests: `test_al_editar_los_textos_de_la_linea_tambien_cuentan`,
   `test_unidades_de_la_pantalla_y_lineas_que_no_son_lista`,
   `test_compra_con_notas_no_se_vuelve_nota_ni_cambia_de_proveedor`.
-  **Sin decidir (usuario):**
-  3. Anular la original con una NC vigente sin productos se permite, y esa NC queda sin poder
-     editarse («la compra de referencia está anulada»). ¿Prohibirlo con cualquier NC vigente?
-  5. `exigirDentroDelOriginal()` corre en toda edición de una NC: una NC anterior a T-162 en otra
-     moneda o que pase del total no se puede editar ni para adjuntar el XML. ¿Revisar solo si
-     cambian total, moneda o referencia, o revisar los datos de producción antes de desplegar?
-  8. El aviso de cuadre queda oculto con el bloque cerrado. ¿Mostrarlo en el encabezado?
+  **Decididos con el usuario (27-nov) y corregidos:**
+  3. Toda NC vigente frena la anulación de su compra, tenga o no productos (antes solo la que
+     devolvió productos; la sin productos quedaba vigente sobre una compra anulada y sin poder
+     editarse). Esto **revierte** la desviación de arriba («Anular una compra ya no exige…») y
+     cambia una expectativa de `CompraLineasTest` CA8, que daba por bueno anular con una NC sin
+     líneas vigente.
+  5. El tope de la NC se revisa al crearla o si cambia tipo, total, moneda o compra que modifica
+     (`cambiaLoQueAcredita()`); el «total no menor que sus notas» de la compra, solo si cambia su
+     total. Una NC o compra anterior a T-162 fuera de regla se sigue editando (adjuntos,
+     observaciones). Test: `test_nota_antigua_fuera_de_tope_se_edita_si_no_cambia_lo_que_acredita`.
+  8. Con el bloque «Detallar comprobante» cerrado, el aviso de cuadre se muestra bajo el encabezado.
 - **Falta** `/security-review`.
 
 ## Hallazgos fuera de alcance

@@ -81,11 +81,12 @@ class CompraService
 
             // T-136: aquí va la regla «con pagos aplicados no se anula hasta desaplicarlos».
 
-            // T-154 (D8): primero se anula la nota que devolvió productos de esta compra.
+            // T-154 (D8): primero se anula la nota de crédito. T-162 (usuario, 27-nov): cualquiera, tenga
+            // o no productos; si no, quedaría vigente sobre una compra anulada y sin poder editarse.
             $nota = Compra::vigentes()
                 ->where('compra_referencia_id', $actual->id)
                 ->where('tipo_comprobante_codigo', Compra::TIPO_NOTA_CREDITO)
-                ->whereHas('lineas', fn ($q) => $q->whereNotNull('product_id'))
+                ->orderBy('id')
                 ->first();
             if ($nota) {
                 throw new CompraException("Anula primero la nota de crédito {$nota->serie}-{$nota->numero}");
@@ -168,7 +169,7 @@ class CompraService
                 if ($actual->exists) {
                     $this->exigirQueCubraSusNotas($actual, $datos);
                 }
-                if ($esNotaCredito) {
+                if ($esNotaCredito && $this->cambiaLoQueAcredita($actual, $datos)) {
                     $this->exigirDentroDelOriginal($datos, $actual->id);
                 }
 
@@ -592,9 +593,23 @@ class CompraService
         if ($datos['moneda'] !== $compra->moneda) {
             throw new CompraException('Esta compra tiene notas de crédito: no se puede cambiar su moneda.');
         }
-        if (BigDecimal::of((string) $datos['total'])->isLessThan($acreditado)) {
+        // Solo si el total cambia: una compra anterior a T-162 por debajo de sus notas se sigue editando.
+        $total = BigDecimal::of((string) $datos['total']);
+        if (! $total->isEqualTo($compra->total) && $total->isLessThan($acreditado)) {
             throw new CompraException("El total no puede ser menor que sus notas de crédito ({$acreditado->toScale(2)}).");
         }
+    }
+
+    // T-162 (usuario, 27-nov): el tope de la nota se revisa al crearla o si cambia lo que acredita
+    // (tipo, total, moneda o compra que modifica). Así, una nota anterior a T-162 que no lo cumple
+    // se sigue editando, por ejemplo para adjuntarle el XML.
+    private function cambiaLoQueAcredita(Compra $nota, array $datos): bool
+    {
+        return ! $nota->exists
+            || $datos['tipo_comprobante_codigo'] !== $nota->tipo_comprobante_codigo
+            || $datos['moneda'] !== $nota->moneda
+            || ! BigDecimal::of((string) $datos['total'])->isEqualTo($nota->total)
+            || (int) $datos['compra_referencia_id'] !== (int) $nota->compra_referencia_id;
     }
 
     private function acreditado(int $compraId, ?int $sinNota): BigDecimal

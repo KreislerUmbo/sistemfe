@@ -10,6 +10,10 @@
                 <i class="las me-1" :class="abierto ? 'la-angle-up' : 'la-angle-down'"></i>{{ abierto ? 'Ocultar' : 'Mostrar' }}
             </button>
         </div>
+        <!-- Con el bloque cerrado el aviso de cuadre también se ve: no se guarda sin haberlo visto. -->
+        <div v-if="aviso && !abierto" class="card-body py-2">
+            <small class="text-warning">{{ aviso }} Se puede guardar igual.</small>
+        </div>
         <div v-show="abierto" id="compra-lineas" class="card-body">
             <p v-if="bloqueado" class="small text-muted mb-2">
                 Las líneas se registran al crear la compra: para cambiarlas, anúlala y regístrala de nuevo.
