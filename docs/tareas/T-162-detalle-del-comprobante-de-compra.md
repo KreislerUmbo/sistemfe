@@ -124,9 +124,43 @@ una de mercadería mezclando una línea de producto y una de flete sin producto.
 ---
 
 ## Resultado
-- **Commits:**
-- **Tests:**
+- **Commits:** en `feat/T-162-detalle-comprobante-compra` (ver `git log main..`).
+- **Tests:** `CompraDetalleComprobanteTest` (11: CA1, CA2, CA3, CA5, CA6); `CompraLineasTest` y
+  `CompraConcurrenciaTest` en verde (CA4). Suite completa: 2542 pasan y 1 falla, intermitente y ajena
+  (ver Hallazgos). Vitest 370, type-check y build en verde.
+- **Verificado a mano:**
+  - CA5 en `sandbox`: antes de migrar había 2 líneas sin las columnas; después, las dos con la
+    descripción del producto, `NIU` y afectación 10.
+  - CA7 en `agencia-demo`: bloque cerrado por defecto; compra sin líneas; factura de transporte con
+    dos líneas (gravada y exonerada); producto de servicio + flete (aviso de cuadre, costo solo en
+    la de producto, `<b>` mostrado como texto); NC con líneas precargadas y rechazo por monto.
+    Quedan las compras `F162-1` a `F162-3` como datos de prueba.
+  - **Falta CA7 en `sandbox`** (mercadería + flete): no hay credencial documentada y no se reseteó.
+- **Decididas con el usuario (27-nov):** 02, 05 y 14 admiten líneas sin producto; el tope por monto
+  rige para toda NC; afectaciones 10, 20, 30 y 40; la afectación se deduce de la cabecera o queda
+  vacía (la migración la informa) en vez de caer en 20.
 - **Desviaciones de la tarea y por qué:**
+  - `CompraLineasTest` cambió lo que envía, no lo que espera: sus líneas ahora mandan la
+    afectación y, en CA8, la NC sin líneas baja de S/ 118 a S/ 11.80 (el tope nuevo la rechazaba).
+  - `ComprasMigracionesPorGiroTest` suma la migración nueva a su lista.
+  - La pantalla envía `lineas` como un texto JSON: con 11 campos por línea, 100 líneas pasaban de
+    `max_input_vars` (1000). El backend sigue aceptando el arreglo.
+  - Tope de NC: además exige la misma moneda que la compra, y la compra no puede bajar de sus notas
+    ni cambiar de moneda si las tiene.
+  - Una compra sin productos deja editar la cabecera (no hubo stock); sus líneas siguen fijas.
+  - Anular una compra ya no exige anular primero una NC cuyas líneas no tienen producto.
+  - `costo_unitario_base` queda `null` sin producto; `factor` queda en 1.
+  - El listado no mostraba productos: la descripción se ve en el detalle.
+- **Al desplegar:** `tenants:migrate-verticales` y revisar si la migración informa líneas sin
+  afectación.
+- **No se corrieron** `/code-review` ni `/security-review`.
 
 ## Hallazgos fuera de alcance
--
+- Una nota de débito (08) no amplía lo que se puede acreditar: el tope es el total de la compra
+  original. Si un proveedor acredita una ND, hoy no entra.
+- La lista de unidades (tabla 6) está copiada en `CompraLinea::UNIDADES` y en `UNITS`
+  (`types/products.ts`); la ficha del producto no la valida en el backend.
+- Las gratuitas y el IVAP (afectaciones 11-17 y 21-37) hay que agregarlas antes de importar XML.
+- `CompraAsignacionTest::test_guarda_quien_ingreso_cada_fila` es intermitente: falló en la suite
+  completa y pasó 3 de 3 sola. Lee las filas sin `orderBy` y compara con `assertSame`, que exige el
+  mismo orden.
