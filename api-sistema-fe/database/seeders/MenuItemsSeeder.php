@@ -111,8 +111,9 @@ class MenuItemsSeeder extends Seeder
         $moduloCompras = Modulo::where('codigo', 'compras')->firstOrFail()->id;
         $compras = $this->item('compras', null, null, 'grupo', 'Compras', 'iconoir-shopping-bag', null, null, 5, moduloId: $moduloCompras);
         $this->item('compras.comprobantes', $compras, null, 'enlace', 'Comprobantes', null, 'compras.index', 'compras.ver', 1, moduloId: $moduloCompras);
-        $this->item('compras.pagos', $compras, null, 'enlace', 'Pagos a proveedores', null, 'compras.pagos', 'compras.ver', 2, moduloId: $moduloCompras);
-        $this->item('compras.periodos', $compras, null, 'enlace', 'Periodos', null, 'compras.periodos', 'compras.cerrar_periodo', 3, moduloId: $moduloCompras);
+        $this->item('compras.cuentas_por_pagar', $compras, null, 'enlace', 'Cuentas por pagar', null, 'compras.cuentas_por_pagar', 'compras.ver', 2, moduloId: $moduloCompras);
+        $this->item('compras.pagos', $compras, null, 'enlace', 'Pagos a proveedores', null, 'compras.pagos', 'compras.ver', 3, moduloId: $moduloCompras);
+        $this->item('compras.periodos', $compras, null, 'enlace', 'Periodos', null, 'compras.periodos', 'compras.cerrar_periodo', 4, moduloId: $moduloCompras);
 
         // Módulo Créditos (04-frontend "Además"): solo para el giro 'creditos'.
         $creditos = $this->item('creditos', null, 'creditos', 'grupo', 'Créditos', 'iconoir-hand-cash', null, null, 6);

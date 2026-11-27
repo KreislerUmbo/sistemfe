@@ -144,7 +144,7 @@ class MenuGirosTest extends TestCase
 
             $arbol = $this->etiquetas($this->arbol($usuario, $giro, $tenantId));
 
-            $this->assertContains(['Compras' => ['Comprobantes', 'Pagos a proveedores', 'Periodos']], $arbol, $giro);
+            $this->assertContains(['Compras' => ['Comprobantes', 'Cuentas por pagar', 'Pagos a proveedores', 'Periodos']], $arbol, $giro);
         }
     }
 

@@ -84,3 +84,73 @@ export interface CompraPendiente {
     /** Saldo menos lo que ya espera aprobación. */
     maximo: string;
 }
+
+// T-137 — cuentas por pagar. Los montos llegan calculados: la pantalla solo los formatea.
+
+export interface CifrasPorPagar {
+    moneda: 'PEN' | 'USD';
+    pendiente: string;
+    vencido: string;
+    por_vencer: string;
+    antiguedad: { d1_30: string; d31_60: string; d61_90: string; mas_90: string };
+    por_aprobar: string;
+    a_cuenta: string;
+    a_favor: string;
+    neto: string;
+}
+
+export interface FichaPorPagar {
+    proveedor_id: number;
+    razon_social: string;
+    nombre_comercial: string | null;
+    numero_documento: string | null;
+    ciudad: string | null;
+    monedas: CifrasPorPagar[];
+}
+
+export interface GrupoPorPagar {
+    clave: string;
+    documento: string | null;
+    razon_social: string;
+    tiene_vencido: boolean;
+    monedas: CifrasPorPagar[];
+    fichas: FichaPorPagar[];
+}
+
+export interface CompraPorPagar {
+    id: number;
+    proveedor_id: number;
+    tipo_comprobante_codigo: string;
+    serie: string;
+    numero: string;
+    fecha_emision: string;
+    vencimiento: string;
+    dias_atraso: number;
+    moneda: 'PEN' | 'USD';
+    total: string;
+    notas: string;
+    aplicado: string;
+    por_aprobar: string;
+    saldo: string;
+    estado_pago: EstadoPago;
+}
+
+/** Un pago del proveedor con algo a cuenta o esperando aprobación. */
+export interface PagoAbierto {
+    id: number;
+    proveedor_id: number;
+    fecha: string;
+    moneda: 'PEN' | 'USD';
+    monto: string;
+    a_cuenta: string;
+    por_aprobar: string;
+    origen: OrigenPago;
+    estado: EstadoDelPago;
+    metodo_pago: string | null;
+    cuenta_bancaria: string | null;
+    numero_operacion: string | null;
+}
+
+export interface DetallePorPagar extends GrupoPorPagar {
+    fichas: (FichaPorPagar & { compras: CompraPorPagar[]; pagos: PagoAbierto[] })[];
+}

@@ -47,6 +47,18 @@ class Proveedor extends Model
     ];
 
     /**
+     * Con qué se reconoce a la misma empresa en varias fichas: el documento en mayúsculas y sin
+     * espacios; sin documento, la propia ficha (`id:<n>`). La usan el duplicado de comprobantes y
+     * las cuentas por pagar.
+     */
+    public function claveDocumento(): string
+    {
+        $documento = mb_strtoupper(preg_replace('/\s+/u', '', (string) $this->numero_documento));
+
+        return $documento === '' ? "id:{$this->id}" : $documento;
+    }
+
+    /**
      * Único punto del filtro turístico/todos (plan §3.7c). Por defecto solo turísticos (las
      * pantallas de Agencia); Caja, Compras y Rendiciones piden ALCANCE_TODOS. General = sin
      * tipo, o con un tipo que no es turístico.
