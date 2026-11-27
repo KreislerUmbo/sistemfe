@@ -54,6 +54,8 @@ class Product extends Model
         'is_isc'            => 'boolean',
         'aplica_percepcion' => 'boolean',
         'controla_stock'    => 'boolean',
+        // T-154: solo lo escribe StockService (no es asignable desde la ficha).
+        'costo_promedio'    => 'decimal:6',
     ];
 
     /**

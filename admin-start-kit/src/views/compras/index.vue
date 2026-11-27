@@ -158,6 +158,34 @@
                     <dt class="col-sm-4">Registrada por</dt>
                     <dd class="col-sm-8">{{ detalle.registrada_por ?? '—' }} · {{ formatFechaHora(detalle.created_at) }}</dd>
                 </dl>
+                <div v-if="detalle.lineas?.length" class="table-responsive mb-2">
+                    <table class="table table-sm small mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Producto</th>
+                                <th class="text-end">Cantidad</th>
+                                <th class="text-end">Valor unit.</th>
+                                <th class="text-end">IGV</th>
+                                <th class="text-end">Total</th>
+                                <th class="text-end">Costo base (S/)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="l in detalle.lineas" :key="l.id">
+                                <td>{{ l.producto?.title }}</td>
+                                <td class="text-end">{{ Number(l.cantidad) }}{{ Number(l.factor) !== 1 ? ` × ${Number(l.factor)}` : '' }}</td>
+                                <td class="text-end">{{ Number(l.valor_unitario) }}</td>
+                                <td class="text-end">{{ formatMonto(l.igv, detalle.moneda) }}</td>
+                                <td class="text-end">{{ formatMonto(l.total, detalle.moneda) }}</td>
+                                <td class="text-end">{{ Number(l.costo_unitario_base) }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <small class="text-muted">
+                        {{ detalle.con_credito_fiscal ? 'El IGV va a crédito fiscal: el costo es sin IGV.' : 'Sin crédito fiscal: el costo incluye el IGV.' }}
+                    </small>
+                    <div v-if="aviso" class="text-warning small">{{ aviso }}</div>
+                </div>
                 <div class="d-flex gap-2">
                     <button v-if="detalle.tiene_pdf" type="button" class="btn btn-sm btn-outline-primary" @click="abrirAdjunto('pdf')">
                         <i class="far fa-file-pdf me-1"></i>Ver PDF
@@ -214,6 +242,7 @@ const pagina = ref(1);
 const error = ref('');
 
 const detalle = ref<Compra | null>(null);
+const aviso = ref('');
 const modalDetalle = ref(false);
 
 const mensajeDe = (e: any) => e.response?.data?.message ?? 'No se pudo completar la operación.';
@@ -260,6 +289,7 @@ const verDetalle = async (id: number) => {
     try {
         const { data } = await httpClient.get(`compras/${id}`);
         detalle.value = data.compra;
+        aviso.value = data.aviso ?? '';
         modalDetalle.value = true;
     } catch (e) {
         mostrarError(e);

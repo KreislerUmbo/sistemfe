@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 // T-135 — comprobante recibido. Nunca se borra: se anula (D8).
 class Compra extends Model
@@ -17,6 +18,9 @@ class Compra extends Model
 
     public const TIPO_NOTA_CREDITO = '07';
 
+    // T-154 (D4): los que pueden detallar productos; el 07 los devuelve al proveedor.
+    public const TIPOS_CON_LINEAS = ['01', '03', '04', '07', '12', '91'];
+
     public const MONTOS = ['base_gravada', 'igv', 'exonerado', 'inafecto', 'otros'];
 
     protected $fillable = [
@@ -24,7 +28,7 @@ class Compra extends Model
         'tipo_comprobante_codigo', 'serie', 'numero', 'fecha_emision', 'periodo',
         'moneda', 'tipo_cambio',
         'base_gravada', 'igv', 'exonerado', 'inafecto', 'otros', 'total',
-        'condicion', 'fecha_vencimiento', 'compra_referencia_id',
+        'condicion', 'fecha_vencimiento', 'compra_referencia_id', 'con_credito_fiscal',
         'adjunto_pdf', 'adjunto_xml', 'observaciones',
         'anulada_at', 'anulada_por', 'motivo_anulacion', 'user_id',
     ];
@@ -33,6 +37,7 @@ class Compra extends Model
         'fecha_emision' => 'date:Y-m-d',
         'fecha_vencimiento' => 'date:Y-m-d',
         'anulada_at' => 'datetime',
+        'con_credito_fiscal' => 'boolean',
         'tipo_cambio' => 'decimal:4',
         'base_gravada' => 'decimal:2',
         'igv' => 'decimal:2',
@@ -45,6 +50,11 @@ class Compra extends Model
     public function proveedor(): BelongsTo
     {
         return $this->belongsTo(Proveedor::class);
+    }
+
+    public function lineas(): HasMany
+    {
+        return $this->hasMany(CompraLinea::class)->orderBy('id');
     }
 
     public function referencia(): BelongsTo

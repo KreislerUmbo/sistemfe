@@ -139,6 +139,7 @@ declare module 'vue' {
     JustGage: typeof import('./src/components/JustGage.vue')['default']
     KardexProducto: typeof import('./src/components/Product/KardexProducto.vue')['default']
     LienzoCotizador: typeof import('./src/components/AgenciaViajes/cotizador/LienzoCotizador.vue')['default']
+    LineasCompra: typeof import('./src/components/Compras/LineasCompra.vue')['default']
     LineaTiempoCliente: typeof import('./src/components/Clientes/LineaTiempoCliente.vue')['default']
     ListaPendientes: typeof import('./src/components/Clientes/ListaPendientes.vue')['default']
     LogoBox: typeof import('./src/components/LogoBox.vue')['default']

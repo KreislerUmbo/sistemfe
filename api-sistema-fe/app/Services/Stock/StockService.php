@@ -2,10 +2,13 @@
 
 namespace App\Services\Stock;
 
+use App\Models\Compras\Compra;
 use App\Models\Product\Product;
 use App\Models\Product\StockMovimiento;
 use App\Models\Sale\Note;
 use App\Models\Sale\Sale;
+use Brick\Math\BigDecimal;
+use Brick\Math\RoundingMode;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -49,6 +52,87 @@ class StockService
     public function devolverPorNota(Note $nota, iterable $lineas): void
     {
         $this->aplicar($this->agrupar($lineas, -1), StockMovimiento::NC_VENTA, 'nota', $nota->id);
+    }
+
+    /** T-154: las líneas de una compra entran al stock y al costo promedio. */
+    public function entrarPorCompra(Compra $compra, iterable $lineas): void
+    {
+        [$unidades, $costos] = $this->agruparCompra($lineas);
+        $this->aplicar($this->negar($unidades), StockMovimiento::COMPRA, 'compra', $compra->id, $costos);
+    }
+
+    /** Anulación de una compra: sale lo que entró y se quita del promedio. 422 si ya no alcanza. */
+    public function revertirCompra(Compra $compra, iterable $lineas): void
+    {
+        [$unidades, $costos] = $this->agruparCompra($lineas);
+        // Solo lo que de verdad se movió: un producto pudo empezar a controlar stock después.
+        $unidades = array_intersect_key($unidades, $this->movidos($compra, StockMovimiento::COMPRA));
+        $this->aplicar($unidades, StockMovimiento::COMPRA_ANULADA, 'compra', $compra->id, $costos);
+    }
+
+    /** NC de compra: devolución al proveedor, al costo promedio vigente (que no cambia). */
+    public function salirPorNotaCompra(Compra $nota, iterable $lineas): void
+    {
+        [$unidades] = $this->agruparCompra($lineas);
+        $this->aplicar($unidades, StockMovimiento::NC_COMPRA, 'compra', $nota->id);
+    }
+
+    /** Anulación de una NC de compra: las unidades vuelven al costo con que salieron. */
+    public function revertirNotaCompra(Compra $nota, iterable $lineas): void
+    {
+        $salidas = $this->movidos($nota, StockMovimiento::NC_COMPRA);
+        [$unidades] = $this->agruparCompra($lineas);
+        $unidades = array_intersect_key($unidades, $salidas);
+
+        $costos = [];
+        foreach ($unidades as $productoId => $cantidad) {
+            if ($salidas[$productoId] !== null) {
+                $unitario = BigDecimal::of((string) $salidas[$productoId]);
+                $costos[$productoId] = ['unitario' => $unitario, 'valor' => $unitario->multipliedBy((string) $cantidad)];
+            }
+        }
+        $this->aplicar($this->negar($unidades), StockMovimiento::NC_COMPRA_ANULADA, 'compra', $nota->id, $costos);
+    }
+
+    /** @return array<int, string|null> product_id => costo unitario de la fila de ese tipo */
+    private function movidos(Compra $compra, string $tipo): array
+    {
+        return StockMovimiento::where('documento_tipo', 'compra')
+            ->where('documento_id', $compra->id)
+            ->where('tipo', $tipo)
+            ->toBase()
+            ->pluck('costo_unitario', 'product_id')
+            ->all();
+    }
+
+    /**
+     * Unidades base y costo por producto de las líneas de una compra (varias líneas se suman).
+     *
+     * @return array{0: array<int, float>, 1: array<int, array{unitario: BigDecimal, valor: BigDecimal}>}
+     */
+    private function agruparCompra(iterable $lineas): array
+    {
+        $sumas = [];
+        foreach ($lineas as $linea) {
+            $id = (int) $linea['product_id'];
+            $q = BigDecimal::of((string) $linea['cantidad'])->multipliedBy((string) $linea['factor']);
+            [$unidades, $valor] = $sumas[$id] ?? [BigDecimal::zero(), BigDecimal::zero()];
+            $sumas[$id] = [$unidades->plus($q), $valor->plus($q->multipliedBy((string) $linea['costo_unitario_base']))];
+        }
+
+        $delta = $costos = [];
+        foreach ($sumas as $id => [$unidades, $valor]) {
+            $delta[$id] = (float) (string) $unidades->toScale(6, RoundingMode::HALF_UP);
+            $costos[$id] = ['unitario' => $valor->dividedBy($unidades, 6, RoundingMode::HALF_UP), 'valor' => $valor];
+        }
+
+        return [$delta, $costos];
+    }
+
+    /** @param array<int, float> $unidades */
+    private function negar(array $unidades): array
+    {
+        return array_map(fn (float $q) => -$q, $unidades);
     }
 
     /**
@@ -115,8 +199,11 @@ class StockService
         return $porProducto;
     }
 
-    /** @param array<int, float> $delta product_id => cantidad con signo (+ descuenta, − devuelve) */
-    private function aplicar(array $delta, string $tipo, string $documentoTipo, int $documentoId): void
+    /**
+     * @param array<int, float> $delta product_id => cantidad con signo (+ descuenta, − devuelve)
+     * @param array<int, array{unitario: BigDecimal, valor: BigDecimal}> $costos solo compras (T-154)
+     */
+    private function aplicar(array $delta, string $tipo, string $documentoTipo, int $documentoId, array $costos = []): void
     {
         $delta = array_filter($delta, fn ($d) => abs($d) > 1e-9);
         if (!$delta) {
@@ -125,7 +212,7 @@ class StockService
 
         ksort($delta); // orden por id: mismo orden de bloqueo en todas las ventas
 
-        DB::transaction(function () use ($delta, $tipo, $documentoTipo, $documentoId) {
+        DB::transaction(function () use ($delta, $tipo, $documentoTipo, $documentoId, $costos) {
             $productos = Product::withTrashed()
                 ->whereIn('id', array_keys($delta))
                 ->orderBy('id')
@@ -137,12 +224,13 @@ class StockService
             foreach ($delta as $productoId => $cambio) {
                 $producto = $productos->get($productoId);
                 if ($producto && $cambio > 0 && round((float) $producto->stock - $cambio, 6) < 0) {
-                    $quedan = max(0, (float) $producto->stock);
-                    throw new HttpException(
-                        422,
-                        'Solo quedan ' . rtrim(rtrim(number_format($quedan, 4, '.', ''), '0'), '.') .
-                        ' unidades de «' . $producto->title . '».'
-                    );
+                    $mensaje = 'Solo quedan ' . $this->numero(max(0, (float) $producto->stock)) .
+                        ' unidades de «' . $producto->title . '».';
+                    if ($tipo === StockMovimiento::COMPRA_ANULADA) {
+                        $mensaje .= ' La compra sumó ' . $this->numero($cambio) . ', así que no se puede anular: ' .
+                            'registra una nota de crédito del proveedor (devolución) o haz un ajuste de stock.';
+                    }
+                    throw new HttpException(422, $mensaje);
                 }
             }
 
@@ -153,10 +241,58 @@ class StockService
                 }
                 // stock - cambio: cambio > 0 descuenta, cambio < 0 devuelve
                 $saldo = round((float) $producto->stock - $cambio, 6);
+                // El costo usa el stock y el promedio de ANTES, bajo el mismo bloqueo.
+                $costo = $this->costear($producto, $tipo, -$cambio, $costos[$productoId] ?? null);
                 $this->guardarStock($producto, $saldo);
-                $this->anotar($producto->id, $tipo, -$cambio, $saldo, $documentoTipo, $documentoId);
+                $this->anotar($producto->id, $tipo, -$cambio, $saldo, $documentoTipo, $documentoId, costo: $costo);
             }
         });
+    }
+
+    /**
+     * T-154 (D7) — actualiza `costo_promedio` en el modelo (lo guarda guardarStock()) y devuelve el
+     * costo unitario de la fila del kárdex. Fuera de compras no hace nada.
+     *
+     * @param float $cantidad con signo: + entra, − sale
+     * @param array{unitario: BigDecimal, valor: BigDecimal}|null $costo
+     */
+    private function costear(Product $producto, string $tipo, float $cantidad, ?array $costo): ?string
+    {
+        $promedio = $producto->costo_promedio;
+
+        // La devolución al proveedor sale al promedio vigente, que no cambia.
+        if ($tipo === StockMovimiento::NC_COMPRA) {
+            return $promedio;
+        }
+        if ($costo === null) {
+            return null;
+        }
+
+        $stock = BigDecimal::of((string) round((float) $producto->stock, 6));
+        $resto = $stock->plus((string) round($cantidad, 6)); // stock después
+
+        if ($tipo === StockMovimiento::COMPRA_ANULADA) {
+            // Sin resto o con resultado <= 0, el promedio se queda como está.
+            if ($promedio !== null && $resto->isPositive()) {
+                $nuevo = $stock->multipliedBy($promedio)->minus($costo['valor'])
+                    ->dividedBy($resto, 6, RoundingMode::HALF_UP);
+                if ($nuevo->isPositive()) {
+                    $producto->costo_promedio = (string) $nuevo;
+                }
+            }
+        } elseif (!$stock->isPositive() || $promedio === null) {
+            $producto->costo_promedio = (string) $costo['unitario'];
+        } else {
+            $producto->costo_promedio = (string) $stock->multipliedBy($promedio)->plus($costo['valor'])
+                ->dividedBy($resto, 6, RoundingMode::HALF_UP);
+        }
+
+        return (string) $costo['unitario'];
+    }
+
+    private function numero(float $valor): string
+    {
+        return rtrim(rtrim(number_format($valor, 4, '.', ''), '0'), '.');
     }
 
     private function guardarStock(Product $producto, float $stock): void
@@ -173,11 +309,13 @@ class StockService
         ?string $documentoTipo = null,
         ?int $documentoId = null,
         ?string $motivo = null,
+        ?string $costo = null,
     ): void {
         StockMovimiento::create([
             'product_id'     => $productoId,
             'tipo'           => $tipo,
             'cantidad'       => round($cantidad, 6),
+            'costo_unitario' => $costo,
             'saldo'          => round($saldo, 6),
             'documento_tipo' => $documentoTipo,
             'documento_id'   => $documentoId,

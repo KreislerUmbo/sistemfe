@@ -2,6 +2,12 @@
 
 export const TIPOS_NOTA = ['07', '08'];
 
+/** T-154 (D4): los que pueden detallar productos. */
+export const TIPOS_CON_LINEAS = ['01', '03', '04', '07', '12', '91'];
+
+/** T-154 (D1): en estos se propone marcado «El IGV va a crédito fiscal». */
+export const TIPOS_CON_CREDITO_FISCAL = ['01', '07', '08', '14'];
+
 export const CAMPOS_SUMA = ['base_gravada', 'igv', 'exonerado', 'inafecto', 'otros'] as const;
 
 /** Monto escrito → céntimos enteros (vacío o no numérico = 0). */
@@ -29,3 +35,28 @@ export const estaVencida = (vencimiento: string | null, hoy: string): boolean =>
 
 export const formatMonto = (valor: string | number, moneda: string): string =>
     `${moneda === 'USD' ? 'US$' : 'S/'} ${Number(valor).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+// Número escrito (hasta 6 decimales) → millonésimas, sin errores de coma flotante.
+const enMillonesimas = (valor: string | number | null | undefined): bigint => {
+    const numero = Number(valor ?? 0);
+    return Number.isFinite(numero) ? BigInt(numero.toFixed(6).replace('.', '')) : BigInt(0);
+};
+
+/** cantidad × valor unitario al céntimo, redondeando como el backend (mitad hacia arriba). */
+export const valorVentaLinea = (cantidad: string | number, valorUnitario: string | number): string => {
+    const producto = enMillonesimas(cantidad) * enMillonesimas(valorUnitario); // 12 decimales
+    const centimo = BigInt('10000000000');
+    return (Number((producto + centimo / BigInt(2)) / centimo) / 100).toFixed(2);
+};
+
+/** Montos de una línea. Sin IGV escrito, se propone en la proporción del comprobante. */
+export const montosDeLinea = (
+    linea: { cantidad: string | number; valor_unitario: string | number; igv: string | number | null },
+    comprobante: { base_gravada: string | number; igv: string | number },
+): { valor_venta: string; igv: string; total: string } => {
+    const valor = valorVentaLinea(linea.cantidad, linea.valor_unitario);
+    const base = enCentimos(comprobante.base_gravada);
+    const propuesto = base > 0 ? Math.round((enCentimos(valor) * enCentimos(comprobante.igv)) / base) : 0;
+    const igv = linea.igv === null || linea.igv === '' ? propuesto : enCentimos(linea.igv);
+    return { valor_venta: valor, igv: (igv / 100).toFixed(2), total: ((enCentimos(valor) + igv) / 100).toFixed(2) };
+};

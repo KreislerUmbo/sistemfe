@@ -13,6 +13,7 @@
             <b-th>Documento / motivo</b-th>
             <b-th class="text-end">Cantidad</b-th>
             <b-th class="text-end">Saldo</b-th>
+            <b-th class="text-end">Costo unit.</b-th>
             <b-th>Usuario</b-th>
           </b-tr>
         </b-thead>
@@ -25,10 +26,11 @@
               {{ m.cantidad > 0 ? '+' : '' }}{{ m.cantidad }}
             </b-td>
             <b-td class="text-end fw-semibold">{{ m.saldo }}</b-td>
+            <b-td class="text-end text-nowrap">{{ m.costo_unitario != null ? `S/ ${m.costo_unitario}` : '—' }}</b-td>
             <b-td>{{ m.usuario ?? '—' }}</b-td>
           </b-tr>
           <b-tr v-if="!movimientos.length">
-            <b-td colspan="6" class="text-center text-muted">{{ mensaje }}</b-td>
+            <b-td colspan="7" class="text-center text-muted">{{ mensaje }}</b-td>
           </b-tr>
         </b-tbody>
       </b-table-simple>
