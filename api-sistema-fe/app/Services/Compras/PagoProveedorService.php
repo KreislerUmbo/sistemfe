@@ -2,12 +2,16 @@
 
 namespace App\Services\Compras;
 
+use App\Models\Cash\CashMovement;
+use App\Models\Cash\CashSession;
 use App\Models\Compras\AplicacionPagoProveedor;
 use App\Models\Compras\Compra;
 use App\Models\Compras\PagoProveedor;
 use App\Models\CuentaBancaria;
 use App\Models\Proveedor;
 use App\Models\User;
+use App\Services\Cash\EgresoCajaService;
+use App\Services\CashCorrectionService;
 use App\Services\HoraPeru;
 use Brick\Math\BigDecimal;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -23,6 +27,11 @@ use Illuminate\Support\Facades\Validator;
 class PagoProveedorService
 {
     private const MAX_APLICACIONES = 100;
+
+    public function __construct(
+        private EgresoCajaService $egresoCaja,
+        private CashCorrectionService $correccion,
+    ) {}
 
     /**
      * El único cálculo de saldo, en lote:
@@ -216,6 +225,23 @@ class PagoProveedorService
         });
     }
 
+    /** El egreso de Caja de un pago se aprobó (dentro de la transacción de Caja). */
+    public function aprobado(CashMovement $movimiento): void
+    {
+        $this->delMovimiento($movimiento)->update(['estado' => PagoProveedor::VIGENTE]);
+    }
+
+    /** El egreso de Caja se rechazó: el pago queda anulado y sus aplicaciones, desaplicadas. */
+    public function rechazado(CashMovement $movimiento, User $usuario): void
+    {
+        $this->marcarAnulado($this->delMovimiento($movimiento), 'Egreso rechazado en Caja', $usuario);
+    }
+
+    private function delMovimiento(CashMovement $movimiento): PagoProveedor
+    {
+        return PagoProveedor::where('cash_movement_id', $movimiento->id)->lockForUpdate()->firstOrFail();
+    }
+
     /** Solo dentro de una transacción. */
     private function bloquear(int $pagoId): PagoProveedor
     {
@@ -304,12 +330,64 @@ class PagoProveedorService
     // Origen del dinero: valida y deja en el pago lo que ese origen necesita, antes de guardarlo.
     private function registrarSalida(PagoProveedor $pago, Proveedor $proveedor, User $usuario): void
     {
-        if ($pago->origen === PagoProveedor::ORIGEN_BANCO) {
-            $this->exigirCuenta($pago);
+        match ($pago->origen) {
+            PagoProveedor::ORIGEN_BANCO => $this->exigirCuenta($pago),
+            PagoProveedor::ORIGEN_CAJA => $this->egresarDeCaja($pago, $proveedor, $usuario),
+        };
+    }
+
+    // El egreso sale de la sesión abierta de quien paga, con las reglas del egreso manual (D2).
+    private function egresarDeCaja(PagoProveedor $pago, Proveedor $proveedor, User $usuario): void
+    {
+        // Sesión bloqueada: dos salidas a la vez no validan contra el mismo efectivo.
+        $sesion = CashSession::whereKey($this->egresoCaja->sesionAbierta($usuario)->id)->lockForUpdate()->firstOrFail();
+        $metodo = $this->egresoCaja->metodoPago((int) $pago->payment_method_id);
+        $estado = $this->egresoCaja->estadoInicial($sesion, $metodo, 'out', (float) $pago->monto, $pago->moneda);
+
+        // El movimiento apunta al pago y el pago exige su movimiento: se reserva el id antes, para
+        // no tener que modificar después un movimiento de dinero.
+        $pago->id = (int) DB::selectOne("select nextval(pg_get_serial_sequence('pagos_proveedor', 'id')) as id")->id;
+
+        $pago->cash_movement_id = CashMovement::create([
+            'cash_session_id' => $sesion->id,
+            'type' => PagoProveedor::TIPO_MOVIMIENTO,
+            'payment_method_id' => $metodo->id,
+            'direction' => 'out',
+            'amount' => $pago->monto,
+            'currency' => $pago->moneda,
+            'reference_type' => PagoProveedor::TIPO_MOVIMIENTO,
+            'reference_id' => $pago->id,
+            'description' => "Pago a proveedor: {$proveedor->razon_social}",
+            'counterparty_type' => 'proveedor',
+            'counterparty_id' => $proveedor->id,
+            'counterparty_name' => $proveedor->razon_social,
+            'counterparty_document' => $proveedor->numero_documento,
+            'status' => $estado,
+            'created_by' => $usuario->id,
+        ])->id;
+
+        if ($estado === 'pending_approval') {
+            $pago->estado = PagoProveedor::PENDIENTE;
         }
     }
 
-    private function revertirSalida(PagoProveedor $pago, User $usuario): void {}
+    // Solo Caja movió dinero que haya que devolver: Banco solo se marca.
+    private function revertirSalida(PagoProveedor $pago, User $usuario): void
+    {
+        if ($pago->origen !== PagoProveedor::ORIGEN_CAJA) {
+            return;
+        }
+
+        $movimiento = CashMovement::with('cashSession')->lockForUpdate()->findOrFail($pago->cash_movement_id);
+        if ($movimiento->status === 'pending_approval') {
+            $movimiento->update(['status' => 'rejected']);
+
+            return;
+        }
+        if ($movimiento->status === 'confirmed') {
+            $this->correccion->revertirMovimiento($movimiento, $usuario);
+        }
+    }
 
     private function exigirCuenta(PagoProveedor $pago): void
     {

@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Compras;
 
+use App\Http\Controllers\Cash\CashMovementController;
+use App\Models\Cash\CashMovement;
+use App\Models\Cash\CashSession;
+use App\Models\Company;
 use App\Models\Compras\Compra;
 use App\Models\Compras\PagoProveedor;
 use App\Models\CuentaBancaria;
@@ -12,9 +16,11 @@ use App\Models\User;
 use App\Services\Compras\CompraException;
 use App\Services\Compras\CompraService;
 use App\Services\Compras\PagoProveedorService;
+use App\Services\ExpectedCashCalculator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\Feature\Creditos\CreditosTestCase;
 
 // T-136 — pagos de compra, contra Postgres real. «Hoy» es 2026-03-15 en Perú.
@@ -274,6 +280,198 @@ class PagoProveedorTest extends CreditosTestCase
         $this->assertSame(0, $pago->aplicaciones()->activas()->count());
         $this->rechazo(fn () => $this->servicio()->anular($pago, 'Otra vez', $this->user), 'ya está anulado');
         $this->rechazo(fn () => $this->aplicar($pago, $compra, '1.00'), 'está anulado');
+    }
+
+    // ── Caja (CA3, CA4, CA5, CA11, CA12, CA13) ──────────────────────
+
+    /** Caja abierta de quien está usando el sistema, con un fondo en efectivo. */
+    private function cajaConFondo(string $fondo = '2000.00'): CashSession
+    {
+        $sesion = $this->abrirCaja($this->user);
+        CashMovement::create([
+            'cash_session_id' => $sesion->id, 'type' => 'opening_fund', 'payment_method_id' => $this->efectivo->id,
+            'direction' => 'in', 'amount' => $fondo, 'currency' => 'PEN', 'status' => 'confirmed', 'created_by' => $this->user->id,
+        ]);
+
+        return $sesion;
+    }
+
+    private function esperado(CashSession $sesion): float
+    {
+        return app(ExpectedCashCalculator::class)->compute($sesion);
+    }
+
+    private function porCaja(string $monto, array $aplicar = [], array $cambios = []): PagoProveedor
+    {
+        return $this->servicio()->registrar(array_merge([
+            'proveedor_id' => $this->proveedor->id,
+            'origen' => 'caja',
+            'moneda' => 'PEN',
+            'monto' => $monto,
+            'payment_method_id' => $this->efectivo->id,
+            'aplicaciones' => $this->filas($aplicar),
+        ], $cambios), $this->user);
+    }
+
+    private function exigirAprobacionSobre(string $monto): void
+    {
+        $datos = ['require_expense_approval' => true, 'max_expense_without_approval' => $monto];
+        $empresa = Company::first() ?? Company::create(['razon_social' => 'Empresa T136 SAC', 'razon_social_comercial' => 'Empresa T136', 'n_document' => '20136999999']);
+        $empresa->update($datos);
+    }
+
+    private function rechazoDeCaja(callable $accion, string $texto, int $status = 422): void
+    {
+        $antes = [PagoProveedor::count(), CashMovement::count()];
+        try {
+            $accion();
+            $this->fail("Se esperaba el rechazo: {$texto}");
+        } catch (HttpException $e) {
+            $this->assertSame($status, $e->getStatusCode(), $e->getMessage());
+            $this->assertStringContainsString($texto, $e->getMessage());
+        }
+        $this->assertSame($antes, [PagoProveedor::count(), CashMovement::count()], 'no debe guardarse nada');
+    }
+
+    public function test_pago_desde_caja_registra_egreso(): void
+    {
+        $sesion = $this->cajaConFondo();
+        $compra = $this->compra('500.00');
+
+        // La fecha enviada no cuenta: en Caja es hoy en Perú, también de noche.
+        $this->hoy(self::HOY, '23:30:00');
+        $pago = $this->porCaja('500.00', [[$compra, '500.00']], ['fecha' => '2026-01-01']);
+
+        $this->assertSame('vigente', $pago->estado);
+        $this->assertSame(self::HOY, $pago->fecha->toDateString());
+        $movimiento = $pago->movimiento;
+        $this->assertSame(
+            ['pago_proveedor', 'out', '500.00', 'pago_proveedor', $pago->id, 'proveedor', $this->proveedor->id, 'confirmed', $sesion->id],
+            [$movimiento->type, $movimiento->direction, $movimiento->amount, $movimiento->reference_type, (int) $movimiento->reference_id,
+                $movimiento->counterparty_type, (int) $movimiento->counterparty_id, $movimiento->status, (int) $movimiento->cash_session_id]
+        );
+        $this->assertSame($this->proveedor->razon_social, $movimiento->counterparty_name);
+        $this->assertSame(1500.0, $this->esperado($sesion));
+        $this->assertEstado($compra, 'pagado', '0.00');
+    }
+
+    public function test_pago_desde_caja_sin_sesion_abierta(): void
+    {
+        $compra = $this->compra('500.00');
+
+        $this->rechazoDeCaja(fn () => $this->porCaja('500.00', [[$compra, '500.00']]), 'No hay una sesión de caja abierta');
+        $this->assertEstado($compra, 'pendiente', '500.00');
+    }
+
+    public function test_pago_desde_caja_no_deja_el_efectivo_en_negativo(): void
+    {
+        $this->cajaConFondo('100.00');
+
+        $this->rechazoDeCaja(fn () => $this->porCaja('100.01'), 'en negativo');
+        $this->rechazoDeCaja(fn () => $this->porCaja('1.00', [], ['moneda' => 'USD']), 'en negativo');
+    }
+
+    public function test_si_falla_la_aplicacion_no_sale_dinero(): void
+    {
+        $this->cajaConFondo();
+        $compra = $this->compra('100.00');
+        $movimientos = CashMovement::count();
+
+        $this->rechazo(fn () => $this->porCaja('200.00', [[$compra, '200.00']]), 'solo se le pueden aplicar');
+        $this->assertSame($movimientos, CashMovement::count());
+    }
+
+    public function test_egreso_sobre_el_umbral_espera_aprobacion(): void
+    {
+        $sesion = $this->cajaConFondo();
+        $this->exigirAprobacionSobre('500.00');
+        $compra = $this->compra('800.00');
+
+        $pago = $this->porCaja('800.00', [[$compra, '800.00']]);
+
+        $this->assertSame('pendiente_aprobacion', $pago->estado);
+        $this->assertSame('pending_approval', $pago->movimiento->status);
+        $this->assertSame(2000.0, $this->esperado($sesion));
+        $this->assertEstado($compra, 'pendiente', '800.00');
+        $this->assertSame('800.00', $this->estado($compra)['por_aprobar']);
+        // El saldo queda reservado.
+        $this->rechazo(fn () => $this->porBanco('1.00', [[$compra, '1.00']]), 'aplicar 0.00');
+
+        app(CashMovementController::class)->approve((string) $pago->cash_movement_id);
+
+        $this->assertSame('vigente', $pago->fresh()->estado);
+        $this->assertSame(1200.0, $this->esperado($sesion));
+        $this->assertEstado($compra, 'pagado', '0.00');
+    }
+
+    public function test_egreso_rechazado_anula_el_pago(): void
+    {
+        $this->cajaConFondo();
+        $this->exigirAprobacionSobre('500.00');
+        $compra = $this->compra('800.00');
+        $pago = $this->porCaja('800.00', [[$compra, '800.00']]);
+
+        app(CashMovementController::class)->reject((string) $pago->cash_movement_id);
+
+        $pago->refresh();
+        $this->assertSame(['anulado', 'Egreso rechazado en Caja', $this->user->id], [$pago->estado, $pago->motivo_anulacion, (int) $pago->anulado_por]);
+        $this->assertSame('rejected', $pago->movimiento->status);
+        $this->assertSame(0, $pago->aplicaciones()->activas()->count());
+        $this->assertEstado($compra, 'pendiente', '800.00');
+    }
+
+    public function test_anular_un_pago_por_aprobar_rechaza_el_egreso(): void
+    {
+        $this->cajaConFondo();
+        $this->exigirAprobacionSobre('500.00');
+        $pago = $this->porCaja('800.00');
+
+        $this->servicio()->anular($pago, 'Se pagará por banco', $this->user);
+
+        $this->assertSame('rejected', $pago->fresh()->movimiento->status);
+        $this->assertSame(0, CashMovement::where('type', 'correction')->count());
+        $this->rechazoDeCaja(fn () => app(CashMovementController::class)->approve((string) $pago->cash_movement_id), 'no está pendiente');
+    }
+
+    public function test_anular_un_pago_de_caja_corrige_el_egreso(): void
+    {
+        $sesion = $this->cajaConFondo();
+        $compra = $this->compra('500.00');
+        $pago = $this->porCaja('500.00', [[$compra, '500.00']]);
+
+        $this->servicio()->anular($pago, 'Pago duplicado', $this->user);
+
+        $original = $pago->fresh()->movimiento;
+        $this->assertSame(['confirmed', '500.00', $this->user->id], [$original->status, $original->amount, (int) $original->corrected_by]);
+        $correccion = CashMovement::where('type', 'correction')->sole();
+        $this->assertSame([$original->id, 'in', '500.00'], [(int) $correccion->corrected_movement_id, $correccion->direction, $correccion->amount]);
+        $this->assertSame(2000.0, $this->esperado($sesion));
+        $this->assertSame('anulado', $pago->fresh()->estado);
+        $this->assertEstado($compra, 'pendiente', '500.00');
+    }
+
+    public function test_anular_sin_caja_abierta_no_cambia_nada(): void
+    {
+        $sesion = $this->cajaConFondo();
+        $compra = $this->compra('500.00');
+        $pago = $this->porCaja('500.00', [[$compra, '500.00']]);
+        $sesion->update(['status' => 'closed']);
+
+        // Sesión cerrada: pide permiso de supervisor (regla de CashCorrectionService).
+        $this->rechazoDeCaja(fn () => $this->servicio()->anular($pago, 'Duplicado', $this->user), 'sesión de caja cerrada', 403);
+        $this->assertSame('vigente', $pago->fresh()->estado);
+        $this->assertEstado($compra, 'pagado', '0.00');
+    }
+
+    public function test_el_movimiento_de_un_pago_no_se_corrige_desde_caja(): void
+    {
+        $this->cajaConFondo();
+        $pago = $this->porCaja('100.00');
+        $caja = app(CashMovementController::class);
+        $edicion = new Request(['payment_method_id' => $this->efectivo->id, 'amount' => 50, 'concept_id' => 1, 'description' => 'x']);
+
+        $this->rechazoDeCaja(fn () => $caja->update($edicion, (string) $pago->cash_movement_id), 'Solo se pueden editar/eliminar');
+        $this->rechazoDeCaja(fn () => $caja->destroy((string) $pago->cash_movement_id), 'Solo se pueden editar/eliminar');
     }
 
     // ── Concurrencia (CA16) ──────────────────────────────────────────

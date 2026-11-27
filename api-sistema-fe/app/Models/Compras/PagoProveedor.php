@@ -16,6 +16,9 @@ class PagoProveedor extends Model
 {
     protected $table = 'pagos_proveedor';
 
+    // cash_movements.type y reference_type del egreso de un pago desde Caja.
+    public const TIPO_MOVIMIENTO = 'pago_proveedor';
+
     public const ORIGEN_CAJA = 'caja';
 
     public const ORIGEN_BANCO = 'banco';
