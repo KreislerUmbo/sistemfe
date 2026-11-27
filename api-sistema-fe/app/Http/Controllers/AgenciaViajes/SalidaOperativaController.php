@@ -303,7 +303,8 @@ class SalidaOperativaController extends Controller
         try {
             $resultado = DB::transaction(function () use (
                 $salida, $reservas, $aCancelar, $fechaNueva, $fechaVieja, $request, $reservaController, $enganche, $antes, $datosSalida
-            ) {                $movidas = [];
+            ) {
+                $movidas = [];
                 $noTocados = [];
 
                 // T-152: compras primero y después la salida, el mismo orden que al repartir.

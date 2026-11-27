@@ -227,7 +227,7 @@
                 </div>
             </template>
         </b-modal>
-        <AsignarCompra :compra-id="compraAsignar" @cerrar="compraAsignar = null" @guardado="alAsignar" />
+        <AsignarCompra :compra-id="compraAsignar" @cerrar="alCerrarAsignar" @guardado="alAsignar" />
     </DefaultLayout>
 </template>
 
@@ -334,15 +334,27 @@ const verDetalle = async (id: number) => {
     }
 };
 
-// Un modal a la vez: se cierra el detalle y se vuelve a abrir con el reparto guardado.
+// Un modal a la vez: se cierra el detalle y se vuelve a abrir al guardar o al
+// cancelar, si se había llegado desde él.
+const desdeDetalle = ref(false);
+
 const asignar = (id: number) => {
+    desdeDetalle.value = modalDetalle.value;
     modalDetalle.value = false;
     compraAsignar.value = id;
 };
 
 const alAsignar = (id: number) => {
     compraAsignar.value = null;
+    desdeDetalle.value = false;
     verDetalle(id);
+};
+
+const alCerrarAsignar = () => {
+    const id = compraAsignar.value;
+    compraAsignar.value = null;
+    if (desdeDetalle.value && id !== null) verDetalle(id);
+    desdeDetalle.value = false;
 };
 
 const abrirAdjunto = async (archivo: 'pdf' | 'xml') => {

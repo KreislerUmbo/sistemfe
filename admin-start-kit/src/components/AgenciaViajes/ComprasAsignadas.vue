@@ -54,9 +54,14 @@ const visible = ref(false);
 const compras = ref<CompraDeFicha[]>([]);
 const error = ref('');
 
+// Al pasar rápido de una salida a otra, una respuesta lenta de la anterior no
+// debe pisar la de la actual: solo vale la del último pedido.
+let pedido = 0;
+
 watch(
     () => [props.destino, props.id] as const,
     async ([destino, id]) => {
+        const este = ++pedido;
         visible.value = false;
         error.value = '';
         compras.value = [];
@@ -65,9 +70,11 @@ watch(
         const ruta = destino === 'reserva' ? 'reservas' : 'salidas-operativas';
         try {
             const { data } = await httpClient.get(`${ruta}/${id}/compras`);
+            if (este !== pedido) return;
             compras.value = data.compras;
             visible.value = true;
         } catch (e: any) {
+            if (este !== pedido) return;
             // 403: módulo apagado o sin permiso. El resto sí se avisa.
             if (e.response?.status !== 403) {
                 error.value = e.response?.data?.message ?? 'No se pudieron cargar las compras.';

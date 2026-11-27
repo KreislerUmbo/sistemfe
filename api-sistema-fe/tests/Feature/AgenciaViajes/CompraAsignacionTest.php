@@ -204,6 +204,8 @@ class CompraAsignacionTest extends TestCase
             'destino desconocido' => [['destino' => 'otro', 'monto' => '1000']],
             'reserva inexistente' => [$this->aReserva(999999999, '1000')],
             'salida inexistente' => [$this->aSalida(999999999, '1000')],
+            'reserva id cero' => [['destino' => 'reserva', 'reserva_id' => 0, 'monto' => '1000']],
+            'salida id cero' => [['destino' => 'salida', 'salida_operativa_id' => 0, 'monto' => '1000']],
             'sin lista' => null,
             'más de 100 filas' => array_fill(0, 101, $this->aGeneral('1')),
         ];

@@ -147,7 +147,14 @@ class SalidaOperativa extends Model
             ->whereNotIn('reserva_id', ReservaItem::where('salida_operativa_id', $salidaId)->select('reserva_id'))
             ->delete();
 
-        // Bloqueada: así no se le carga una compra entre la comprobación y el borrado.
+        // Con ítems no hay nada que borrar: no se bloquea (los que llaman recorren
+        // varias salidas sin orden fijo y un bloqueo en cada una podía cruzarse).
+        if (ReservaItem::where('salida_operativa_id', $salidaId)->exists()) {
+            return;
+        }
+
+        // Bloqueada y vuelta a mirar: así no se le carga una compra ni un ítem
+        // entre la comprobación y el borrado.
         DB::transaction(function () use ($salidaId) {
             $salida = self::lockForUpdate()->find($salidaId);
             if ($salida

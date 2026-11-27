@@ -150,8 +150,15 @@ const buscarConEspera = () => {
 // Q7 y Q14: una nota sin reparto propone los destinos de la compra que modifica.
 const proponer = async (nota: Compra) => {
     if (!TIPOS_NOTA.includes(nota.tipo_comprobante_codigo) || !nota.referencia) return;
-    const { data } = await httpClient.get(`compras/${nota.referencia.id}`);
-    const origen: CompraAsignacion[] = data.compra.asignaciones ?? [];
+    let origen: CompraAsignacion[];
+    try {
+        const { data } = await httpClient.get(`compras/${nota.referencia.id}`);
+        origen = data.compra.asignaciones ?? [];
+    } catch {
+        // La propuesta es una ayuda: si no se puede leer la compra de origen,
+        // la nota se reparte a mano.
+        return;
+    }
     filas.value = origen.map((a) => ({ ...a, monto: origen.length === 1 ? nota.total : '' }));
     propuesto.value = origen.length > 0;
 };
