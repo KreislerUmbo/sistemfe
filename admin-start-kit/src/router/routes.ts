@@ -313,6 +313,16 @@ const comercialRoutes = [
     component: () => import("@/views/compras/pagos.vue"),
   },
   {
+    path: "/compras/cuentas-por-pagar",
+    name: "compras.cuentas_por_pagar",
+    meta: {
+      title: setTitle("Cuentas por pagar"),
+      authRequired: true,
+      permission: 'compras.ver',
+    },
+    component: () => import("@/views/compras/cuentas-por-pagar.vue"),
+  },
+  {
     path: "/compras/periodos",
     name: "compras.periodos",
     meta: {

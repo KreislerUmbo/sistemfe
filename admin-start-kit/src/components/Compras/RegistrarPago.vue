@@ -84,8 +84,14 @@ import type { CompraPendiente, CuentaParaPagar, MetodoDeCaja } from '@/types/pag
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 
-/** `compra`: el pago se abre desde una compra, con su saldo precargado. */
-const props = defineProps<{ compra?: { id: number; moneda: 'PEN' | 'USD'; proveedor: CompraProveedor | null } | null }>();
+/**
+ * `compra`: el pago se abre desde una compra, con su saldo precargado.
+ * `proveedor` (T-137): proveedor y moneda elegidos de entrada, editables; solo sin `compra`.
+ */
+const props = defineProps<{
+    compra?: { id: number; moneda: 'PEN' | 'USD'; proveedor: CompraProveedor | null } | null;
+    proveedor?: { proveedor: CompraProveedor; moneda: 'PEN' | 'USD' } | null;
+}>();
 const emit = defineEmits<{ (e: 'guardado'): void }>();
 const abierto = defineModel<boolean>({ required: true });
 
@@ -127,8 +133,8 @@ const cargarPendientes = async () => {
 
 watch(abierto, async (valor) => {
     if (!valor) return;
-    proveedor.value = props.compra?.proveedor ?? null;
-    moneda.value = props.compra?.moneda ?? 'PEN';
+    proveedor.value = props.compra ? props.compra.proveedor : (props.proveedor?.proveedor ?? null);
+    moneda.value = props.compra?.moneda ?? props.proveedor?.moneda ?? 'PEN';
     monto.value = '';
     observaciones.value = '';
     origen.value = origenVacio();
