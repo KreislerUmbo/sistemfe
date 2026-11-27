@@ -229,6 +229,9 @@
             </div>
         </div>
 
+        <!-- T-152 -->
+        <ComprasAsignadas v-if="reserva" destino="reserva" :id="reserva.id" />
+
         <div v-if="reserva" class="row g-3">
             <div class="col-12 col-lg-8">
                 <ul class="nav nav-pills mb-3">
@@ -1059,6 +1062,7 @@ import { useRoute, useRouter } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import httpClient from '@/helpers/http-client';
 import ClientFormQuick from '@/components/Sales/ClientFormQuick.vue';
+import ComprasAsignadas from '@/components/AgenciaViajes/ComprasAsignadas.vue';
 import ClienteComprobanteSelector, { type ClienteComprobante } from '@/components/AgenciaViajes/ClienteComprobanteSelector.vue';
 import FacturarReservaSimpleModal from '@/components/AgenciaViajes/FacturarReservaSimpleModal.vue';
 import FacturarReservaEspecialModal from '@/components/AgenciaViajes/FacturarReservaEspecialModal.vue';

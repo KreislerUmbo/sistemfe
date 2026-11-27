@@ -465,7 +465,9 @@ class ReservaController extends Controller
                 $salidasOperativasAfectadas = ReservaItem::where('reserva_id', $reserva->id)
                     ->whereNotNull('salida_operativa_id')
                     ->pluck('salida_operativa_id')
-                    ->unique();
+                    ->unique()
+                    ->sort() // T-152: mismo orden de bloqueo que CompraAsignacionService
+                    ->values();
 
                 if ($salidasOperativasAfectadas->isNotEmpty()) {
                     ReservaItem::where('reserva_id', $reserva->id)->update(['salida_operativa_id' => null]);

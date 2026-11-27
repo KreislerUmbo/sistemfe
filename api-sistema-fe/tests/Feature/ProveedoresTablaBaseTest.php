@@ -113,6 +113,9 @@ class ProveedoresTablaBaseTest extends TestCase
             Schema::drop('compras');
             Schema::drop('proveedores');
             DB::table('migrations')->whereIn('migration', [self::MIGRACION_CORE, self::MIGRACION_COLUMNAS])->delete();
+            // T-152: el reparto de compras (vertical) también es posterior y apunta a compras;
+            // sin compras en este escenario, se da por aplicado para que el vertical lo omita.
+            DB::table('migrations')->insert(['migration' => '2026_11_30_100000_create_compra_asignaciones_table', 'batch' => 1]);
         });
 
         (new ReflectionMethod(TenantProvisioningService::class, 'migrarVertical'))

@@ -30,8 +30,8 @@ class LimpiarOperacionPrueba
         'commercial_quotes', 'order_items', 'orders', 'sales',
         // Caja (las cajas y los conceptos se conservan)
         'cash_session_totals', 'cash_session_denominations', 'cash_movements', 'cash_sessions',
-        // Reservas y salidas
-        'salida_vehiculo_reservas', 'salida_vehiculos', 'salida_servicios',
+        // Reservas y salidas (T-152: el reparto de compras apunta a las dos)
+        'compra_asignaciones', 'salida_vehiculo_reservas', 'salida_vehiculos', 'salida_servicios',
         'reserva_item_vuelo_pasajero', 'reserva_item_checkins', 'reserva_item_pasajero', 'reserva_items',
         'salidas_operativas', 'reserva_modificaciones', 'reserva_pasajeros', 'reserva',
         // Cotizador

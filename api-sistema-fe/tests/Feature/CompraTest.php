@@ -428,6 +428,9 @@ class CompraTest extends TestCase
             'GET api/compras/{id}' => 'compras.ver',
             'GET api/compras/catalogos' => 'compras.ver|compras.registrar',
             'GET api/compras/{id}/adjunto/{archivo}' => 'compras.ver',
+            // T-152
+            'GET api/compras/destinos' => 'compras.registrar',
+            'PUT api/compras/{id}/asignaciones' => 'compras.registrar',
             'POST api/compras' => 'compras.registrar',
             'POST api/compras/{id}' => 'compras.registrar',
             'POST api/compras/{id}/anular' => 'compras.anular',
