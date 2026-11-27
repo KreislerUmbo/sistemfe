@@ -7,6 +7,9 @@ use App\Models\Cash\PaymentMethod;
 use App\Models\Company;
 use App\Models\User;
 use App\Services\ExpectedCashCalculator;
+use App\Services\HoraPeru;
+use App\Services\TipoCambio\TipoCambioSunatResolver;
+use Brick\Math\BigDecimal;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 // T-136 — reglas de un egreso (o ingreso) manual de Caja, extraídas de CashMovementController
@@ -43,16 +46,17 @@ class EgresoCajaService
     /**
      * Estado con el que nace el movimiento. Aprobación condicional: solo salidas, solo si la
      * empresa la exige y el monto supera el umbral. «No negativo» se valida solo si queda
-     * confirmado ahora: uno pendiente se revalida al aprobarse.
+     * confirmado ahora: uno pendiente se revalida al aprobarse. El umbral está en soles (T-140):
+     * `$tipoCambio` es el de la operación en USD; sin él se usa la venta SUNAT de hoy.
      */
-    public function estadoInicial(CashSession $sesion, PaymentMethod $metodo, string $direccion, float $monto, string $moneda): string
+    public function estadoInicial(CashSession $sesion, PaymentMethod $metodo, string $direccion, float $monto, string $moneda, ?string $tipoCambio = null): string
     {
         $company = Company::first();
 
         if ($direccion === 'out'
             && $company?->require_expense_approval
             && $company->max_expense_without_approval !== null
-            && $monto > (float) $company->max_expense_without_approval) {
+            && $this->superaUmbral($monto, $moneda, $tipoCambio, (string) $company->max_expense_without_approval)) {
             return 'pending_approval';
         }
 
@@ -61,6 +65,21 @@ class EgresoCajaService
         ]);
 
         return 'confirmed';
+    }
+
+    // Sin tipo de cambio no se puede comparar: pide aprobación, nunca pasa sin revisión.
+    private function superaUmbral(float $monto, string $moneda, ?string $tipoCambio, string $umbral): bool
+    {
+        $enSoles = BigDecimal::of((string) $monto);
+        if ($moneda === 'USD') {
+            $tipoCambio ??= app(TipoCambioSunatResolver::class)->resolverParaFecha(HoraPeru::hoy())?->venta;
+            if ($tipoCambio === null) {
+                return true;
+            }
+            $enSoles = $enSoles->multipliedBy((string) $tipoCambio);
+        }
+
+        return $enSoles->isGreaterThan($umbral);
     }
 
     // Simula el efecto combinado de una o más operaciones propuestas sobre el efectivo esperado

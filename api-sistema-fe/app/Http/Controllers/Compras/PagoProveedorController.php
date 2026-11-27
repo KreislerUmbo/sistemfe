@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Compras\AplicacionPagoProveedor;
 use App\Models\Compras\Compra;
 use App\Models\Compras\PagoProveedor;
+use App\Models\Compras\ReembolsoProveedor;
 use App\Models\Proveedor;
 use App\Services\Compras\PagoProveedorService;
 use Brick\Math\BigDecimal;
@@ -28,10 +29,12 @@ class PagoProveedorController extends Controller
             ->orderByDesc('fecha')->orderByDesc('id')
             ->paginate($perPage);
 
+        $disponibles = $this->service->disponibles($pagos->getCollection()->modelKeys());
+
         return response()->json([
             'total' => $pagos->total(),
             'paginate' => $perPage,
-            'pagos' => $pagos->getCollection()->map(fn (PagoProveedor $p) => $this->datos($p))->values(),
+            'pagos' => $pagos->getCollection()->map(fn (PagoProveedor $p) => $this->datos($p, $disponibles[$p->id]))->values(),
         ]);
     }
 
@@ -122,9 +125,12 @@ class PagoProveedorController extends Controller
             $query->where('estado', $request->get('estado'));
         }
         if ($request->boolean('con_saldo')) {
+            // Lo mismo que disponibles(), en SQL: lo aplicado y lo reembolsado.
             $query->where('estado', '<>', PagoProveedor::ANULADO)
                 ->whereRaw('monto > (select coalesce(sum(a.monto), 0) from aplicaciones_pago_proveedor a '
-                    .'where a.pago_proveedor_id = pagos_proveedor.id and a.desaplicada_at is null)');
+                    .'where a.pago_proveedor_id = pagos_proveedor.id and a.desaplicada_at is null) '
+                    .'+ (select coalesce(sum(r.monto), 0) from reembolsos_proveedor r '
+                    .'where r.pago_proveedor_id = pagos_proveedor.id and r.estado = ?)', [ReembolsoProveedor::VIGENTE]);
         }
     }
 
@@ -133,15 +139,18 @@ class PagoProveedorController extends Controller
         $pago = PagoProveedor::with(['proveedor', 'cuentaBancaria', 'metodoPago', 'aplicaciones.compra', 'usuario', 'anulador'])
             ->findOrFail($pago->id);
 
-        return response()->json(array_filter(['code' => 200, 'message' => $mensaje]) + ['pago' => $this->datos($pago)]);
+        $datos = $this->datos($pago, $this->service->disponibles([$pago->id])[$pago->id])
+            + ReembolsoProveedor::paraFicha($pago->reembolsos()->get());
+
+        return response()->json(array_filter(['code' => 200, 'message' => $mensaje]) + ['pago' => $datos]);
     }
 
-    private function datos(PagoProveedor $pago): array
+    private function datos(PagoProveedor $pago, BigDecimal $disponible): array
     {
         $persona = fn ($usuario) => $usuario ? trim("{$usuario->name} {$usuario->surname}") : null;
         $activas = $pago->aplicaciones->whereNull('desaplicada_at');
         $aplicado = $activas->reduce(fn (BigDecimal $s, AplicacionPagoProveedor $a) => $s->plus($a->monto), BigDecimal::of('0.00'));
-        $aCuenta = $pago->estaAnulado() ? BigDecimal::of('0.00') : BigDecimal::of($pago->monto)->minus($aplicado);
+        $aCuenta = $pago->estaAnulado() ? BigDecimal::of('0.00') : $disponible;
 
         return [
             'id' => $pago->id,
@@ -150,6 +159,7 @@ class PagoProveedorController extends Controller
             'fecha' => $pago->fecha->toDateString(),
             'moneda' => $pago->moneda,
             'monto' => $pago->monto,
+            'tipo_cambio' => $pago->tipo_cambio,
             'aplicado' => (string) $aplicado->toScale(2),
             'a_cuenta' => (string) $aCuenta->toScale(2),
             'origen' => $pago->origen,
@@ -166,8 +176,11 @@ class PagoProveedorController extends Controller
             'aplicaciones' => $pago->aplicaciones->map(fn (AplicacionPagoProveedor $a) => [
                 'id' => $a->id,
                 'compra_id' => $a->compra_id,
-                'compra' => $a->compra?->only(['id', 'tipo_comprobante_codigo', 'serie', 'numero', 'total', 'moneda']),
+                'compra' => $a->compra?->only(['id', 'tipo_comprobante_codigo', 'serie', 'numero', 'total', 'moneda', 'tipo_cambio']),
                 'monto' => $a->monto,
+                'monto_compra' => $a->monto_compra,
+                'tipo_cambio' => $a->tipo_cambio,
+                'diferencia_cambio' => $a->compra ? $this->service->diferenciaDeCambio($a, $a->compra, $pago)?->__toString() : null,
                 'desaplicada_at' => $a->desaplicada_at?->toISOString(),
                 'motivo_desaplicacion' => $a->motivo_desaplicacion,
             ])->values(),

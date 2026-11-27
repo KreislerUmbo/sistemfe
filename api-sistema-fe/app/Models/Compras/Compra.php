@@ -67,11 +67,17 @@ class Compra extends Model
         return $this->hasMany(AplicacionPagoProveedor::class)->orderBy('id');
     }
 
+    // T-140: lo que el proveedor devolvió de su saldo a favor, también los anulados.
+    public function reembolsos(): HasMany
+    {
+        return $this->hasMany(ReembolsoProveedor::class)->orderBy('id');
+    }
+
     // T-136: los pagos que hoy le están aplicados.
     public function pagos(): BelongsToMany
     {
         return $this->belongsToMany(PagoProveedor::class, 'aplicaciones_pago_proveedor', 'compra_id', 'pago_proveedor_id')
-            ->withPivot(['id', 'monto'])->wherePivotNull('desaplicada_at');
+            ->withPivot(['id', 'monto', 'monto_compra'])->wherePivotNull('desaplicada_at');
     }
 
     public function referencia(): BelongsTo

@@ -214,15 +214,17 @@ class CuentasPorPagarService
     /** Pagos del grupo con algo a cuenta (vigentes) o esperando aprobación. */
     private function pagosAbiertos(array $proveedorIds): Collection
     {
-        return PagoProveedor::whereIn('proveedor_id', $proveedorIds)
+        $abiertos = PagoProveedor::whereIn('proveedor_id', $proveedorIds)
             ->where('estado', '<>', PagoProveedor::ANULADO)
             ->with(['metodoPago', 'cuentaBancaria'])
-            ->withSum(['aplicaciones as aplicado' => fn ($q) => $q->whereNull('desaplicada_at')], 'monto')
             ->orderBy('fecha')->orderBy('id')
-            ->get()
-            ->map(function (PagoProveedor $p) {
+            ->get();
+        $disponibles = $this->pagos->disponibles($abiertos->modelKeys());
+
+        return $abiertos->toBase()
+            ->map(function (PagoProveedor $p) use ($disponibles) {
                 $pendiente = $p->estado === PagoProveedor::PENDIENTE;
-                $aCuenta = $pendiente ? BigDecimal::of('0.00') : BigDecimal::of($p->monto)->minus((string) ($p->aplicado ?? '0'));
+                $aCuenta = $pendiente ? BigDecimal::of('0.00') : $disponibles[$p->id];
                 if (! $pendiente && $aCuenta->isZero()) {
                     return null;
                 }

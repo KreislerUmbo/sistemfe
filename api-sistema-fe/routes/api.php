@@ -75,6 +75,7 @@ use App\Http\Controllers\Compras\CompraController;
 use App\Http\Controllers\Compras\CompraPeriodoController;
 use App\Http\Controllers\Compras\CuentasPorPagarController;
 use App\Http\Controllers\Compras\PagoProveedorController;
+use App\Http\Controllers\Compras\ReembolsoProveedorController;
 use App\Http\Controllers\Central\TenantCorreoController;
 use App\Http\Controllers\Central\TenantBackupController;
 use App\Http\Controllers\Central\TenantPlanController;
@@ -433,9 +434,13 @@ Route::group([
             Route::post('compras/pagos', [PagoProveedorController::class, 'store']);
             Route::post('compras/pagos/{id}/aplicaciones', [PagoProveedorController::class, 'aplicar'])->whereNumber('id');
             Route::post('compras/aplicaciones/{id}/desaplicar', [PagoProveedorController::class, 'desaplicar'])->whereNumber('id');
+            // T-140: el reembolso se registra con el permiso de pagar y se anula con el de anular (D11).
+            Route::post('compras/reembolsos', [ReembolsoProveedorController::class, 'store']);
             Route::get('proveedores/{id}/compras-pendientes', [PagoProveedorController::class, 'comprasPendientes'])->whereNumber('id');
         });
         Route::post('compras/pagos/{id}/anular', [PagoProveedorController::class, 'anular'])
+            ->whereNumber('id')->middleware('permission:compras.anular');
+        Route::post('compras/reembolsos/{id}/anular', [ReembolsoProveedorController::class, 'anular'])
             ->whereNumber('id')->middleware('permission:compras.anular');
         Route::middleware('permission:compras.ver')->group(function () {
             // T-137 — cuentas por pagar (solo lectura).

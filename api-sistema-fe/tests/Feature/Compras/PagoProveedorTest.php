@@ -216,7 +216,7 @@ class PagoProveedorTest extends CreditosTestCase
         $dolares = $this->compra('100.00', ['moneda' => 'USD', 'tipo_cambio' => '3.7']);
         $libre = $this->porBanco('100.00');
         $this->rechazo(fn () => $this->aplicar($libre, $ajena, '10.00'), 'de otro proveedor');
-        $this->rechazo(fn () => $this->aplicar($libre, $dolares, '10.00'), 'está en USD');
+        $this->rechazo(fn () => $this->aplicar($libre, $dolares, '10.00'), 'está en USD: indica el tipo de cambio');
 
         $nc = $this->nota($this->compra('50.00'), '10.00');
         $this->rechazo(fn () => $this->aplicar($libre, $nc, '5.00'), 'nota de crédito');
@@ -371,7 +371,7 @@ class PagoProveedorTest extends CreditosTestCase
         $this->cajaConFondo('100.00');
 
         $this->rechazoDeCaja(fn () => $this->porCaja('100.01'), 'en negativo');
-        $this->rechazoDeCaja(fn () => $this->porCaja('1.00', [], ['moneda' => 'USD']), 'en negativo');
+        $this->rechazoDeCaja(fn () => $this->porCaja('1.00', [], ['moneda' => 'USD', 'tipo_cambio' => '3.7']), 'en negativo');
     }
 
     public function test_si_falla_la_aplicacion_no_sale_dinero(): void

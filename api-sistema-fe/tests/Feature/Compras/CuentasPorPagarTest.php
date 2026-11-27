@@ -292,6 +292,18 @@ class CuentasPorPagarTest extends CreditosTestCase
         }
     }
 
+    // T-140 (CA8): una aplicación cruzada baja cada moneda por su propio monto.
+    public function test_aplicacion_en_otra_moneda(): void
+    {
+        $compra = $this->compra('1000.00', ['moneda' => 'USD', 'tipo_cambio' => '3.7']);
+        $this->porBanco('4000.00', [], ['aplicaciones' => [['compra_id' => $compra->id, 'monto' => '400.00', 'tipo_cambio' => '3.75']]]);
+
+        $monedas = $this->grupo(self::RUC)['monedas'];
+
+        $this->assertCifras(['pendiente' => '600.00', 'a_cuenta' => '0.00', 'neto' => '600.00'], $this->en($monedas, 'USD'));
+        $this->assertCifras(['pendiente' => '0.00', 'a_cuenta' => '2500.00', 'neto' => '-2500.00'], $this->en($monedas));
+    }
+
     public function test_que_entra_al_listado(): void
     {
         // Nada pendiente: una anulada y una pagada entera.
