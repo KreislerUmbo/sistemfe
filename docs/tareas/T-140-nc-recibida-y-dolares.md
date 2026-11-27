@@ -409,10 +409,52 @@ permisos ni menú nuevos.
 
 ## Resultado
 <!-- Lo completa quien construye, al terminar. -->
-- **Commits:**
-- **Tests:** (nuevos / suite completa)
+- **Commits:** `ff063959` (backend), `d7a289cc` (frontend), en `feat/T-140-nc-recibida-y-dolares`.
+  La rama sale de `docs/T-140-preparar` (`bc3be319`), porque la tarea todavía no está en `main`.
+- **Tests:**
+  - Nuevos: `PagoProveedorDolaresTest` (CA1-CA7, CA9), `ReembolsoProveedorTest` (CA10-CA20 y «anular
+    no deja la caja en negativo»), `UmbralAprobacionDolaresTest` (CA21-CA23),
+    `CuentasPorPagarTest::test_aplicacion_en_otra_moneda` (CA8); base común `ComprasT140TestCase`.
+  - Suite completa contra PostgreSQL: **2619 pasan y 1 falló**
+    (`CompraTest::test_ca1_y_ca9…`, inventario de rutas sin las dos nuevas). Se anotaron las rutas
+    y se volvió a correr solo `CompraTest` (10/10) y los tests de la tarea (68/68), no la suite
+    entera.
+  - Frontend: `vue-tsc` sin errores, `build` correcto, Vitest 47 archivos en verde.
+  - CA24, Playwright en `agencia-demo`: (a) factura USD pagada en soles con T.C. sugerido y
+    «Pérdida S/ 62.00» en las dos fichas; (b) reembolso parcial por Caja desde la ficha y el resto por
+    banco desde cuentas por pagar; (c) pago a cuenta reembolsado en parte; (d) reembolso por Caja
+    anulado, visto en el turno como «Reembolso de proveedor» con su corrección. Además, «Aplicar
+    pago a cuenta» de soles a dólares. Consola sin errores. Quedaron datos de prueba en
+    `agencia-demo`: compras FT40-1 a FT40-3 y FC40-1, cuenta «BCP T140 USD-T140» y sus pagos.
+- **Decisión del usuario al construir:** con un reembolso vigente en una compra **tampoco se
+  desaplica ni se anula** ningún pago vigente aplicado a ella. Sin esa traba, anular el pago dejaba
+  la compra debiendo el total y el reembolso sin respaldo.
 - **Desviaciones de la tarea y por qué:**
+  - `pagos.vue` no tenía ficha del pago: se creó (`FichaPagoProveedor.vue`, botón «Ver pago»).
+    También `ListaReembolsos.vue` y `helpers/tipoCambioSugerido.ts` (aparte, para que los helpers
+    puros sigan probándose sin navegador).
+  - `aplicadoDe()` se conserva (devuelve lo aplicado y lo usa un test existente); lo disponible sale
+    de `disponibles()`.
+  - `CashCorrectionService` no valida «no negativo»: se valida en
+    `OrigenDineroService::revertirEnCaja()` al revertir un ingreso.
+  - `EgresoCajaService` pide `TipoCambioSunatResolver` con `app()` y no por constructor: un test
+    existente lo construye a mano.
+  - El origen del dinero quedó en `moverEnCaja()` / `revertirEnCaja()` / `exigirCuenta()` de
+    `OrigenDineroService` (sirven para los dos sentidos).
+  - `guardar()` bloquea además la compra que la nota modificaba hasta ahora, y anular una NC bloquea
+    la compra de referencia: sin eso, un reembolso podía registrarse a la vez.
+  - Una aplicación cruzada cuyo equivalente redondea a 0.00 se rechaza (422).
+  - `compras-pendientes` no devuelve ninguna cifra «a cuenta» (CA13): se comprueba el tope al aplicar.
+  - Tests existentes tocados, además del texto de CA5: en `PagoProveedorTest`, el pago en USD sin
+    T.C. de «no deja el efectivo en negativo» ahora envía T.C. (la aserción no cambia);
+    `CompraTest` (rutas); `ComprasMigracionesPorGiroTest` y `ProveedoresTablaBaseTest` (la tabla
+    nueva apunta a compras y pagos).
+  - En pantalla, `quedaACuenta()` se quitó junto con sus dos aserciones de Vitest (sin uso).
 
 ## Hallazgos fuera de alcance
 <!-- Problemas vistos y NO arreglados. Se convierten en tareas o en "Por analizar". -->
 - T-164 (cuando se construya) tiene que contar los reembolsos y usar `monto_compra` (ver «Fuera de alcance»).
+- Desde la ficha de una compra, «Registrar pago» deja la moneda fija en la de la compra: para
+  pagarla en la otra moneda hay que entrar por «Nuevo pago» o «Aplicar pago a cuenta».
+- Al cerrar quedan: sacar de «Por analizar» la línea del umbral en su moneda, el recorrido y el
+  §10 del recorrido 99 y §8 del 100.
