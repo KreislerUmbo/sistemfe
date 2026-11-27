@@ -1,4 +1,5 @@
 // T-135 — comprobantes de compra.
+import type { AplicacionDeCompra, CuentaParaPagar, EstadoPago, MetodoDeCaja } from '@/types/pagosProveedor';
 
 export interface CompraProveedor {
     id: number;
@@ -30,6 +31,12 @@ export interface Compra {
     total: string;
     condicion: 'contado' | 'credito';
     fecha_vencimiento: string | null;
+    /** T-136: derivados; null en anuladas y notas de crédito. */
+    saldo: string | null;
+    estado_pago: EstadoPago | null;
+    por_aprobar: string | null;
+    /** Solo en el detalle. */
+    aplicaciones_pago?: AplicacionDeCompra[];
     compra_referencia_id: number | null;
     con_credito_fiscal: boolean;
     /** Solo en el detalle (`GET compras/{id}`). */
@@ -107,6 +114,8 @@ export interface TipoComprobanteCompra {
 export interface CompraCatalogos {
     tipos: TipoComprobanteCompra[];
     tipo_cambio: { fecha: string; venta: string | number } | null;
+    cuentas_bancarias: CuentaParaPagar[];
+    metodos_pago: MetodoDeCaja[];
 }
 
 /** El comprobante que ya estaba registrado (respuesta 409). */

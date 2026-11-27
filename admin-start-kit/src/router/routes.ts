@@ -303,6 +303,16 @@ const comercialRoutes = [
     component: () => import("@/views/compras/form.vue"),
   },
   {
+    path: "/compras/pagos",
+    name: "compras.pagos",
+    meta: {
+      title: setTitle("Pagos a proveedores"),
+      authRequired: true,
+      permission: 'compras.ver',
+    },
+    component: () => import("@/views/compras/pagos.vue"),
+  },
+  {
     path: "/compras/periodos",
     name: "compras.periodos",
     meta: {

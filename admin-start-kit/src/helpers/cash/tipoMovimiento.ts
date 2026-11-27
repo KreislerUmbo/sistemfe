@@ -9,6 +9,7 @@ const ETIQUETAS: Record<string, string> = {
   manual_expense: 'Egreso manual',
   correction: 'Corrección',
   currency_exchange: 'Cambio de moneda',
+  pago_proveedor: 'Pago a proveedor',
   // Módulo Créditos (CajaCredito)
   credito_desembolso: 'Desembolso de crédito',
   credito_pago: 'Cobro de crédito',
