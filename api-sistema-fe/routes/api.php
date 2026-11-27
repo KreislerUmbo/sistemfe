@@ -73,6 +73,7 @@ use App\Http\Controllers\Central\TenantAdminController;
 use App\Http\Controllers\Central\TenantModuloController;
 use App\Http\Controllers\Compras\CompraController;
 use App\Http\Controllers\Compras\CompraPeriodoController;
+use App\Http\Controllers\Compras\PagoProveedorController;
 use App\Http\Controllers\Central\TenantCorreoController;
 use App\Http\Controllers\Central\TenantBackupController;
 use App\Http\Controllers\Central\TenantPlanController;
@@ -422,6 +423,19 @@ Route::group([
     });
     // T-135 — Compras (sistema base, módulo activable). No hay borrar: se anula.
     Route::middleware('modulo:compras')->group(function () {
+        // T-136 — pagos a proveedores. Aprobar el egreso de Caja sigue en cash.approve_expenses.
+        Route::middleware('permission:compras.ver')->group(function () {
+            Route::get('compras/pagos', [PagoProveedorController::class, 'index']);
+            Route::get('compras/pagos/{id}', [PagoProveedorController::class, 'show'])->whereNumber('id');
+        });
+        Route::middleware('permission:compras.pagar')->group(function () {
+            Route::post('compras/pagos', [PagoProveedorController::class, 'store']);
+            Route::post('compras/pagos/{id}/aplicaciones', [PagoProveedorController::class, 'aplicar'])->whereNumber('id');
+            Route::post('compras/aplicaciones/{id}/desaplicar', [PagoProveedorController::class, 'desaplicar'])->whereNumber('id');
+            Route::get('proveedores/{id}/compras-pendientes', [PagoProveedorController::class, 'comprasPendientes'])->whereNumber('id');
+        });
+        Route::post('compras/pagos/{id}/anular', [PagoProveedorController::class, 'anular'])
+            ->whereNumber('id')->middleware('permission:compras.anular');
         Route::middleware('permission:compras.ver')->group(function () {
             Route::get('compras', [CompraController::class, 'index']);
             Route::get('compras/{id}', [CompraController::class, 'show'])->whereNumber('id');

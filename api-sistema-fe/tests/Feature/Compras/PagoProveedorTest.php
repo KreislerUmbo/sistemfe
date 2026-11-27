@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Tests\Feature\Compras;
 
 use App\Http\Controllers\Cash\CashMovementController;
+use App\Http\Controllers\Compras\CompraController;
+use App\Http\Controllers\Compras\PagoProveedorController;
 use App\Models\Cash\CashMovement;
 use App\Models\Cash\CashSession;
 use App\Models\Company;
@@ -20,6 +22,7 @@ use App\Services\ExpectedCashCalculator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Route;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\Feature\Creditos\CreditosTestCase;
 
@@ -565,6 +568,69 @@ class PagoProveedorTest extends CreditosTestCase
 
         $this->assertEstado($compra, 'pendiente', '300.00');
         $this->assertSame(0, PagoProveedor::count());
+    }
+
+    // ── API (CA17) ──────────────────────────────────────────────────
+
+    private function api(): PagoProveedorController
+    {
+        return app(PagoProveedorController::class);
+    }
+
+    private function peticion(array $datos = [], string $metodo = 'GET'): Request
+    {
+        return Request::create('/api/compras/pagos', $metodo, $datos);
+    }
+
+    public function test_api_registrar_aplicar_listar_y_anular(): void
+    {
+        $compra = $this->compra('1000.00');
+        $dolares = $this->compra('50.00', ['moneda' => 'USD', 'tipo_cambio' => '3.7']);
+
+        $pendientes = $this->api()->comprasPendientes($this->peticion(['moneda' => 'PEN']), (string) $this->proveedor->id)->getData(true)['compras'];
+        $this->assertSame([$compra->id], array_column($pendientes, 'id'));
+        $this->assertSame(['1000.00', '1000.00'], [$pendientes[0]['saldo'], $pendientes[0]['maximo']]);
+
+        $creado = $this->api()->store($this->peticion([
+            'proveedor_id' => $this->proveedor->id, 'origen' => 'banco', 'moneda' => 'PEN', 'monto' => '700.00',
+            'fecha' => '2026-03-10', 'cuenta_bancaria_id' => $this->cuenta->id, 'numero_operacion' => 'API-1',
+        ], 'POST'))->getData(true)['pago'];
+        $this->assertSame(['700.00', '0.00'], [$creado['a_cuenta'], $creado['aplicado']]);
+
+        $aplicado = $this->api()->aplicar($this->peticion(['aplicaciones' => [['compra_id' => $compra->id, 'monto' => '400']]], 'POST'), (string) $creado['id'])->getData(true)['pago'];
+        $this->assertSame(['300.00', '400.00'], [$aplicado['a_cuenta'], $aplicado['aplicado']]);
+
+        $listar = fn (array $filtros) => array_column($this->api()->index($this->peticion($filtros))->getData(true)['pagos'], 'id');
+        $this->assertSame([$creado['id']], $listar(['con_saldo' => 1, 'origen' => 'banco', 'estado' => 'vigente', 'proveedor_id' => $this->proveedor->id]));
+        $this->assertSame([$creado['id']], $listar(['desde' => '2026-03-10', 'hasta' => '2026-03-10']));
+        $this->assertSame([], $listar(['desde' => '2026-03-11']));
+        $this->assertSame([], $listar(['origen' => 'caja']));
+
+        $compras = app(CompraController::class);
+        $fila = collect($compras->index(new Request)->getData(true)['compras'])->firstWhere('id', $compra->id);
+        $this->assertSame(['parcial', '600.00'], [$fila['estado_pago'], $fila['saldo']]);
+        $ficha = $compras->show((string) $compra->id)->getData(true)['compra'];
+        $this->assertSame(['parcial', '600.00', '400.00'], [$ficha['estado_pago'], $ficha['saldo'], $ficha['aplicaciones_pago'][0]['monto']]);
+        $this->assertSame($creado['id'], $ficha['aplicaciones_pago'][0]['pago']['id']);
+
+        $this->api()->desaplicar($this->peticion(['motivo' => 'Otra compra'], 'POST'), (string) $ficha['aplicaciones_pago'][0]['id']);
+        $anulado = $this->api()->anular($this->peticion(['motivo' => 'Error'], 'POST'), (string) $creado['id'])->getData(true)['pago'];
+        $this->assertSame(['anulado', '0.00'], [$anulado['estado'], $anulado['a_cuenta']]);
+        $this->assertSame([], $listar(['con_saldo' => 1]));
+        $this->assertNotEmpty($dolares->id);
+
+        $catalogos = $compras->catalogos(new Request, app(\App\Services\TipoCambio\TipoCambioSunatResolver::class))->getData(true);
+        $this->assertContains($this->cuenta->id, array_column($catalogos['cuentas_bancarias'], 'id'));
+        $this->assertContains($this->efectivo->id, array_column($catalogos['metodos_pago'], 'id'));
+    }
+
+    public function test_compras_pendientes_exige_modulo_y_permiso(): void
+    {
+        $ruta = Route::getRoutes()->match(Request::create('/api/proveedores/1/compras-pendientes', 'GET'));
+
+        $this->assertContains('modulo:compras', $ruta->gatherMiddleware());
+        $this->assertContains('permission:compras.pagar', $ruta->gatherMiddleware());
+        $this->assertContains('tenant', $ruta->gatherMiddleware());
     }
 
     // ── Concurrencia (CA16) ──────────────────────────────────────────

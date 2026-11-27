@@ -3,14 +3,18 @@
 namespace App\Http\Controllers\Compras;
 
 use App\Http\Controllers\Controller;
+use App\Models\Cash\PaymentMethod;
+use App\Models\Compras\AplicacionPagoProveedor;
 use App\Models\Compras\Compra;
 use App\Models\Compras\CompraLinea;
 use App\Models\Compras\CompraPeriodo;
+use App\Models\CuentaBancaria;
 use App\Models\Proveedor;
 use App\Models\Sale\TipoComprobante;
 use App\Services\AgenciaViajes\CompraAsignacionService;
 use App\Services\BusquedaLike;
 use App\Services\Compras\CompraService;
+use App\Services\Compras\PagoProveedorService;
 use App\Services\HoraPeru;
 use App\Services\Tenancy\GiroActual;
 use App\Services\TipoCambio\TipoCambioSunatResolver;
@@ -18,6 +22,7 @@ use Brick\Math\BigDecimal;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 
@@ -27,7 +32,7 @@ class CompraController extends Controller
 {
     private const ARCHIVOS = ['pdf', 'xml'];
 
-    public function __construct(private CompraService $service) {}
+    public function __construct(private CompraService $service, private PagoProveedorService $pagos) {}
 
     public function index(Request $request)
     {
@@ -41,6 +46,8 @@ class CompraController extends Controller
             ->paginate($perPage);
 
         $contexto = $this->contexto($compras->getCollection()->pluck('periodo')->all());
+        // T-136: saldo y estado de toda la página en lote.
+        $contexto['pagos'] = $this->pagos->estados($compras->getCollection());
 
         return response()->json([
             'total' => $compras->total(),
@@ -94,6 +101,11 @@ class CompraController extends Controller
         return response()->json([
             'tipos' => TipoComprobante::where('uso_compras', true)->orderBy('codigo')->get(['codigo', 'nombre']),
             'tipo_cambio' => $cambio ? ['fecha' => $cambio->fecha->toDateString(), 'venta' => $cambio->venta] : null,
+            // T-136: lo que se elige al pagar.
+            'cuentas_bancarias' => CuentaBancaria::where('activo', true)->orderBy('orden')->orderBy('id')
+                ->get(['id', 'banco', 'numero_cuenta', 'alias', 'moneda']),
+            'metodos_pago' => PaymentMethod::where('is_active', true)->orderBy('sort_order')->orderBy('id')
+                ->get(['id', 'name']),
         ]);
     }
 
@@ -180,7 +192,8 @@ class CompraController extends Controller
     {
         $compra = Compra::with(['proveedor', 'referencia', 'usuario', 'anulador', 'lineas.producto'])->findOrFail($compra->id);
 
-        $datos = $this->datos($compra, $this->contexto([$compra->periodo]));
+        $datos = $this->datos($compra, $this->contexto([$compra->periodo]) + ['pagos' => $this->pagos->estados(collect([$compra]))]);
+        $datos['aplicaciones_pago'] = $this->aplicacionesDe($compra);
         $datos['lineas'] = $compra->lineas->map(fn (CompraLinea $l) => $l->only([
             'id', 'product_id', 'descripcion', 'unidad_medida', 'codigo_proveedor', 'tipo_afectacion_igv',
             'factor', 'cantidad', 'valor_unitario', 'valor_venta', 'igv', 'total', 'costo_unitario_base',
@@ -196,6 +209,29 @@ class CompraController extends Controller
 
         return response()->json(array_filter(['code' => 200, 'message' => $mensaje, 'aviso' => $this->aviso($compra)])
             + ['compra' => $datos]);
+    }
+
+    // T-136: la ficha muestra también las desaplicadas, para que se vea qué pasó.
+    private function aplicacionesDe(Compra $compra): Collection
+    {
+        return $compra->aplicaciones()->with(['pago.cuentaBancaria', 'pago.metodoPago'])->get()
+            ->map(fn (AplicacionPagoProveedor $a) => [
+                'id' => $a->id,
+                'monto' => $a->monto,
+                'desaplicada_at' => $a->desaplicada_at?->toISOString(),
+                'motivo_desaplicacion' => $a->motivo_desaplicacion,
+                'pago' => [
+                    'id' => $a->pago->id,
+                    'fecha' => $a->pago->fecha->toDateString(),
+                    'monto' => $a->pago->monto,
+                    'origen' => $a->pago->origen,
+                    'estado' => $a->pago->estado,
+                    'numero_operacion' => $a->pago->numero_operacion,
+                    'metodo_pago' => $a->pago->metodoPago?->name,
+                    'cuenta' => $a->pago->cuentaBancaria
+                        ? "{$a->pago->cuentaBancaria->banco} {$a->pago->cuentaBancaria->numero_cuenta}" : null,
+                ],
+            ]);
     }
 
     // T-154 (D9): las líneas que no cuadran con la base se guardan igual, pero se avisa.
@@ -271,6 +307,10 @@ class CompraController extends Controller
             'otros' => $compra->otros,
             'total' => $compra->total,
             'condicion' => $compra->condicion,
+            // T-136: derivados; null en anuladas y notas de crédito.
+            'saldo' => $contexto['pagos'][$compra->id]['saldo'],
+            'estado_pago' => $contexto['pagos'][$compra->id]['estado_pago'],
+            'por_aprobar' => $contexto['pagos'][$compra->id]['por_aprobar'],
             'fecha_vencimiento' => $compra->fecha_vencimiento?->toDateString(),
             'compra_referencia_id' => $compra->compra_referencia_id,
             'con_credito_fiscal' => $compra->con_credito_fiscal,
