@@ -9,15 +9,18 @@ use App\Models\Compras\CompraPeriodo;
 use App\Models\Product\Product;
 use App\Models\Proveedor;
 use App\Models\Sale\TipoComprobante;
+use App\Models\User;
 use App\Rules\ArchivoSubido;
 use App\Services\HoraPeru;
 use App\Services\Stock\StockService;
 use App\Services\Tenancy\GiroActual;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
+use Closure;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -49,11 +52,42 @@ class CompraService
     // La pantalla manda `lineas` como un texto JSON: campo por campo pasarían de max_input_vars.
     private const MAX_LINEAS = 100;
 
-    public function __construct(private StockService $stock) {}
+    public function __construct(private StockService $stock, private PagoProveedorService $pagos) {}
 
     public function registrar(Request $request, int $userId): Compra
     {
-        return $this->guardar($request, new Compra(['user_id' => $userId]));
+        // T-136 (D3): «Pagada ahora». Sin compras.pagar la compra se registra igual, pendiente.
+        $pago = $request->input('pago');
+        $usuario = $pago ? User::findOrFail($userId) : null;
+
+        return $this->guardar(
+            $request,
+            new Compra(['user_id' => $userId]),
+            $usuario?->can('compras.pagar') ? fn (Compra $compra) => $this->pagarAhora($compra, $pago, $usuario) : null,
+        );
+    }
+
+    // Compra, pago por el total y aplicación en la misma transacción: si el pago falla, no queda nada.
+    private function pagarAhora(Compra $compra, mixed $pago, User $usuario): void
+    {
+        if (! is_array($pago)) {
+            throw new CompraException('Los datos del pago no se pudieron leer.');
+        }
+        if ($compra->condicion !== 'contado' || $compra->tipo_comprobante_codigo === Compra::TIPO_NOTA_CREDITO) {
+            throw new CompraException('Solo una compra al contado se paga al registrarla.');
+        }
+        // Un comprobante en cero no tiene nada que pagar.
+        if (BigDecimal::of($compra->total)->isZero()) {
+            return;
+        }
+
+        $this->pagos->registrar([
+            ...Arr::only($pago, ['origen', 'payment_method_id', 'cuenta_bancaria_id', 'numero_operacion', 'fecha']),
+            'proveedor_id' => $compra->proveedor_id,
+            'moneda' => $compra->moneda,
+            'monto' => $compra->total,
+            'aplicaciones' => [['compra_id' => $compra->id, 'monto' => $compra->total]],
+        ], $usuario);
     }
 
     public function editar(Request $request, Compra $compra): Compra
@@ -79,7 +113,10 @@ class CompraService
             }
             $this->exigirPeriodoAbierto(CompraPeriodo::bloquear($actual->periodo));
 
-            // T-136: aquí va la regla «con pagos aplicados no se anula hasta desaplicarlos».
+            // T-136: con pagos aplicados (o por aprobar) no se anula hasta desaplicarlos.
+            if ($actual->aplicaciones()->activas()->exists()) {
+                throw new CompraException('Desaplica primero los pagos de esta compra.');
+            }
 
             // T-154 (D8): primero se anula la nota de crédito. T-162 (usuario, 27-nov): cualquiera, tenga
             // o no productos; si no, quedaría vigente sobre una compra anulada y sin poder editarse.
@@ -106,13 +143,13 @@ class CompraService
         });
     }
 
-    private function guardar(Request $request, Compra $compra): Compra
+    private function guardar(Request $request, Compra $compra, ?Closure $alRegistrar = null): Compra
     {
         $datos = $this->validar($request);
         $nuevos = [];
 
         try {
-            return DB::transaction(function () use ($request, $compra, $datos, &$nuevos) {
+            return DB::transaction(function () use ($request, $compra, $datos, &$nuevos, $alRegistrar) {
                 $actual = $compra->exists ? Compra::whereKey($compra->id)->lockForUpdate()->firstOrFail() : $compra;
                 if ($actual->estaAnulada()) {
                     throw new CompraException('Una compra anulada no se puede editar.');
@@ -120,6 +157,7 @@ class CompraService
 
                 if ($actual->exists) {
                     $this->exigirSinReparto($actual, $datos);
+                    $this->exigirQueRespeteSusPagos($actual, $datos);
                 }
 
                 $lineas = $datos['lineas'];
@@ -188,6 +226,10 @@ class CompraService
                             ? $this->stock->salirPorNotaCompra($actual, $deStock)
                             : $this->stock->entrarPorCompra($actual, $deStock);
                     }
+                }
+
+                if ($alRegistrar) {
+                    $alRegistrar($actual);
                 }
 
                 return $actual;
@@ -360,6 +402,32 @@ class CompraService
         if ($cambia && app(GiroActual::class)->es('agencia_viajes')
             && CompraAsignacion::where('compra_id', $compra->id)->exists()) {
             throw new CompraException('Esta compra tiene reparto: quita el reparto antes de cambiar el total o la moneda.');
+        }
+    }
+
+    // T-136: con pagos aplicados (o por aprobar) no cambian proveedor ni moneda, y el total no baja
+    // de lo pagado más sus notas de crédito. Con la compra ya bloqueada.
+    private function exigirQueRespeteSusPagos(Compra $compra, array $datos): void
+    {
+        if (! $compra->aplicaciones()->activas()->exists()) {
+            return;
+        }
+        if ((int) $datos['proveedor_id'] !== (int) $compra->proveedor_id || $datos['moneda'] !== $compra->moneda) {
+            throw new CompraException('Esta compra tiene pagos: desaplícalos antes de cambiar el proveedor o la moneda.');
+        }
+        if ($datos['tipo_comprobante_codigo'] === Compra::TIPO_NOTA_CREDITO) {
+            throw new CompraException('Esta compra tiene pagos: no puede pasar a ser una nota de crédito.');
+        }
+
+        // Solo si el total cambia: una compra pagada con saldo a favor se sigue editando.
+        $total = BigDecimal::of((string) $datos['total']);
+        if ($total->isEqualTo($compra->total)) {
+            return;
+        }
+        $saldo = $this->pagos->saldos([$compra->id])[$compra->id];
+        $minimo = $saldo['aplicado']->plus($saldo['por_aprobar'])->plus($saldo['notas']);
+        if ($total->isLessThan($minimo)) {
+            throw new CompraException("El total no puede ser menor que lo pagado y sus notas de crédito ({$minimo->toScale(2)}).");
         }
     }
 

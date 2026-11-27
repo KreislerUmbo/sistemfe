@@ -474,6 +474,99 @@ class PagoProveedorTest extends CreditosTestCase
         $this->rechazoDeCaja(fn () => $caja->destroy((string) $pago->cash_movement_id), 'Solo se pueden editar/eliminar');
     }
 
+    // ── La compra con pagos (CA14) y «Pagada ahora» (CA15) ──────────
+
+    private function editarCompra(Compra $compra, string $total, array $cambios = []): Compra
+    {
+        $datos = $this->datosCompra($total, ['serie' => $compra->serie, 'numero' => $compra->numero] + $cambios);
+
+        return app(CompraService::class)->editar(Request::create("/api/compras/{$compra->id}", 'POST', $datos), $compra->fresh());
+    }
+
+    public function test_no_se_anula_ni_se_cambia_una_compra_con_pagos(): void
+    {
+        $compra = $this->compra('1000.00');
+        $pago = $this->porBanco('400.00', [[$compra, '400.00']]);
+        $this->nota($compra, '100.00');
+        $anular = fn () => app(CompraService::class)->anular($compra, 'Duplicada', $this->user->id);
+
+        $this->rechazo($anular, 'Desaplica primero los pagos');
+
+        $otro = $this->proveedor('T136 Otro SAC', '20136000002');
+        $this->rechazo(fn () => $this->editarCompra($compra, '1000.00', ['proveedor_id' => $otro->id]), 'pagos');
+        $this->rechazo(fn () => $this->editarCompra($compra, '1000.00', ['moneda' => 'USD', 'tipo_cambio' => '3.7']), 'pagos');
+        $this->rechazo(fn () => $this->editarCompra($compra, '499.99'), 'lo pagado y sus notas de crédito (500.00)');
+        $this->assertSame('500.00', $this->editarCompra($compra, '500.00')->total);
+
+        $this->servicio()->desaplicar($pago->aplicaciones()->first(), 'Compra equivocada', $this->user);
+        // Aún tiene su nota de crédito (regla de T-162): se anula primero.
+        app(CompraService::class)->anular(Compra::where('compra_referencia_id', $compra->id)->sole(), 'x', $this->user->id);
+        $this->assertTrue($anular()->estaAnulada());
+    }
+
+    public function test_un_pago_por_aprobar_tambien_frena_la_anulacion(): void
+    {
+        $this->cajaConFondo();
+        $this->exigirAprobacionSobre('10.00');
+        $compra = $this->compra('100.00');
+        $this->porCaja('100.00', [[$compra, '100.00']]);
+
+        $this->rechazo(fn () => app(CompraService::class)->anular($compra, 'x', $this->user->id), 'Desaplica primero');
+    }
+
+    private function pagadaAhora(array $pago, array $cambios = [], string $total = '300.00'): Compra
+    {
+        return $this->compra($total, $cambios + ['pago' => $pago]);
+    }
+
+    public function test_contado_pagada_ahora_desde_caja_o_banco(): void
+    {
+        $sesion = $this->cajaConFondo();
+
+        $porCaja = $this->pagadaAhora(['origen' => 'caja', 'payment_method_id' => $this->efectivo->id]);
+        $this->assertEstado($porCaja, 'pagado', '0.00');
+        $this->assertSame(1700.0, $this->esperado($sesion));
+
+        $porBanco = $this->pagadaAhora([
+            'origen' => 'banco', 'cuenta_bancaria_id' => $this->cuenta->id, 'numero_operacion' => 'T-1', 'fecha' => '2026-03-14',
+            // El monto y el proveedor los pone la compra: lo que se envíe no cuenta.
+            'monto' => '1', 'proveedor_id' => 999999,
+        ]);
+        $this->assertEstado($porBanco, 'pagado', '0.00');
+        $pago = $porBanco->pagos()->sole();
+        $this->assertSame(['300.00', '2026-03-14', $this->proveedor->id], [$pago->monto, $pago->fecha->toDateString(), $pago->proveedor_id]);
+    }
+
+    public function test_si_falla_el_pago_no_queda_la_compra(): void
+    {
+        $compras = Compra::count();
+        try {
+            $this->pagadaAhora(['origen' => 'caja', 'payment_method_id' => $this->efectivo->id]);
+            $this->fail('Sin sesión de caja no debía guardar.');
+        } catch (HttpException $e) {
+            $this->assertStringContainsString('No hay una sesión de caja abierta', $e->getMessage());
+        }
+        $this->assertSame($compras, Compra::count());
+        $this->assertSame(0, PagoProveedor::count());
+
+        $this->rechazo(fn () => $this->pagadaAhora(['origen' => 'banco', 'fecha' => self::HOY]), 'Falta la cuenta bancaria');
+        $this->rechazo(
+            fn () => $this->pagadaAhora(['origen' => 'caja'], ['condicion' => 'credito', 'fecha_vencimiento' => '2026-04-01']),
+            'al contado'
+        );
+        $this->assertSame($compras, Compra::count());
+    }
+
+    public function test_sin_compras_pagar_la_compra_queda_pendiente(): void
+    {
+        $this->user = $this->usuario(['compras.registrar']);
+
+        $compra = $this->pagadaAhora(['origen' => 'caja', 'payment_method_id' => $this->efectivo->id]);
+
+        $this->assertEstado($compra, 'pendiente', '300.00');
+        $this->assertSame(0, PagoProveedor::count());
+    }
+
     // ── Concurrencia (CA16) ──────────────────────────────────────────
 
     public function test_el_saldo_se_revisa_con_las_compras_bloqueadas_en_orden_de_id(): void

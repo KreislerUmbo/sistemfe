@@ -483,6 +483,15 @@ class PagoProveedorService
     private function comprobar(array $entrada, array $reglas): array
     {
         $validator = Validator::make($entrada, $reglas, [
+            'required' => 'Falta :attribute.',
+            'integer' => ':Attribute no es válido.',
+            'numeric' => ':Attribute debe ser un número.',
+            'string' => ':Attribute no es válido.',
+            'array' => 'Las aplicaciones no se pudieron leer.',
+            'in' => ':Attribute no es válido.',
+            'exists' => ':Attribute no existe.',
+            'max' => ':Attribute pasa del máximo.',
+            'date_format' => 'La fecha del pago no es válida.',
             'origen.in' => 'Ese origen de pago no existe.',
             'monto.gt' => 'El monto debe ser mayor a cero.',
             'fecha.before_or_equal' => 'La fecha del pago no puede ser futura.',
@@ -492,10 +501,17 @@ class PagoProveedorService
             '*.decimal' => 'El monto va con dos decimales como máximo.',
             'aplicaciones.*.monto.decimal' => 'El monto va con dos decimales como máximo.',
         ], [
-            'proveedor_id' => 'proveedor',
-            'cuenta_bancaria_id' => 'cuenta bancaria',
-            'numero_operacion' => 'número de operación',
-            'payment_method_id' => 'método de pago',
+            'proveedor_id' => 'el proveedor',
+            'origen' => 'el origen',
+            'moneda' => 'la moneda',
+            'monto' => 'el monto',
+            'fecha' => 'la fecha del pago',
+            'cuenta_bancaria_id' => 'la cuenta bancaria',
+            'numero_operacion' => 'el número de operación',
+            'payment_method_id' => 'el método de pago',
+            'observaciones' => 'la observación',
+            'aplicaciones.*.compra_id' => 'la compra',
+            'aplicaciones.*.monto' => 'el monto aplicado',
         ]);
 
         if ($validator->fails()) {
