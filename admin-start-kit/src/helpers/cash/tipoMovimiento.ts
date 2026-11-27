@@ -10,6 +10,7 @@ const ETIQUETAS: Record<string, string> = {
   correction: 'Corrección',
   currency_exchange: 'Cambio de moneda',
   pago_proveedor: 'Pago a proveedor',
+  reembolso_proveedor: 'Reembolso de proveedor',
   // Módulo Créditos (CajaCredito)
   credito_desembolso: 'Desembolso de crédito',
   credito_pago: 'Cobro de crédito',

@@ -2,7 +2,7 @@
     <!-- T-136 — de dónde sale el dinero: Caja (egreso en mi turno) o Banco (sin turno). -->
     <div class="row g-2">
         <div class="col-md-3">
-            <label class="form-label small mb-1" :for="`${prefijo}-origen`">Sale de *</label>
+            <label class="form-label small mb-1" :for="`${prefijo}-origen`">{{ ingreso ? 'Entra a' : 'Sale de' }} *</label>
             <select :id="`${prefijo}-origen`" v-model="modelo.origen" class="form-select form-select-sm">
                 <option value="caja">Caja (mi turno)</option>
                 <option value="banco">Banco</option>
@@ -31,8 +31,8 @@
                     maxlength="30">
             </div>
             <div class="col-md-3">
-                <label class="form-label small mb-1" :for="`${prefijo}-fecha`">Fecha del pago *</label>
-                <CampoFecha :id="`${prefijo}-fecha`" v-model="modelo.fecha" :max="hoy" etiqueta="pago" :estatico="enModal" />
+                <label class="form-label small mb-1" :for="`${prefijo}-fecha`">Fecha del {{ ingreso ? 'reembolso' : 'pago' }} *</label>
+                <CampoFecha :id="`${prefijo}-fecha`" v-model="modelo.fecha" :max="hoy" :etiqueta="ingreso ? 'reembolso' : 'pago'" :estatico="enModal" />
             </div>
         </template>
     </div>
@@ -50,7 +50,9 @@ const props = withDefaults(defineProps<{
     metodos: MetodoDeCaja[];
     prefijo?: string;
     enModal?: boolean;
-}>(), { prefijo: 'pago', enModal: false });
+    /** T-140: el dinero entra (reembolso) en vez de salir. */
+    ingreso?: boolean;
+}>(), { prefijo: 'pago', enModal: false, ingreso: false });
 
 const modelo = defineModel<OrigenPagoForm>({ required: true });
 const hoy = hoyPeru();

@@ -121,6 +121,10 @@
                                                             </span>
                                                         </td>
                                                         <td class="text-end">
+                                                            <button v-if="puede('compras.pagar') && esSaldoAFavor(c.saldo)" type="button"
+                                                                class="btn btn-sm btn-link p-0 text-nowrap" @click="reembolsarCompra(c)">
+                                                                Registrar reembolso
+                                                            </button>
                                                             <button v-if="puede('compras.pagar') && admiteAplicar(c)" type="button"
                                                                 class="btn btn-sm btn-link p-0 text-nowrap" @click="aplicar(c)">
                                                                 Aplicar pago a cuenta
@@ -141,6 +145,9 @@
                                                     · <span class="badge" :class="ESTADOS_DEL_PAGO[p.estado].clase">{{ ESTADOS_DEL_PAGO[p.estado].texto }}</span>
                                                 </template>
                                                 <template v-else> · a cuenta {{ formatMonto(p.a_cuenta, p.moneda) }}</template>
+                                                <button v-if="puede('compras.pagar') && p.estado === 'vigente' && enCentimos(p.a_cuenta) > 0"
+                                                    type="button" class="btn btn-sm btn-link p-0 ms-2 align-baseline"
+                                                    @click="reembolsarPago(p)">Registrar reembolso</button>
                                             </div>
                                         </template>
                                     </div>
@@ -173,6 +180,7 @@
 
         <RegistrarPago v-model="registrando" :proveedor="paraPagar" @guardado="listar" />
         <AplicarPagoACuenta v-model="aplicando" :compra="paraAplicar" @guardado="listar" />
+        <RegistrarReembolso v-model="reembolsando" :destino="paraReembolsar" @guardado="listar" />
     </DefaultLayout>
 </template>
 
@@ -181,6 +189,7 @@ import { onMounted, reactive, ref, watch } from 'vue';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import AplicarPagoACuenta from '@/components/Compras/AplicarPagoACuenta.vue';
 import RegistrarPago from '@/components/Compras/RegistrarPago.vue';
+import RegistrarReembolso from '@/components/Compras/RegistrarReembolso.vue';
 import httpClient from '@/helpers/http-client';
 import { enCentimos, formatMonto } from '@/helpers/compras';
 import { descargarArchivo, leerMensajeErrorBlob } from '@/helpers/descargarArchivo';
@@ -189,7 +198,9 @@ import { ESTADOS_DEL_PAGO, ESTADOS_PAGO, esSaldoAFavor } from '@/helpers/pagosPr
 import { nombreConCiudad } from '@/helpers/proveedor';
 import { useAuthStore } from '@/stores/auth';
 import type { CompraProveedor } from '@/types/compras';
-import type { CifrasPorPagar, CompraPorPagar, DetallePorPagar, FichaPorPagar, GrupoPorPagar } from '@/types/pagosProveedor';
+import type {
+    CifrasPorPagar, CompraPorPagar, DestinoReembolso, DetallePorPagar, FichaPorPagar, GrupoPorPagar, PagoAbierto,
+} from '@/types/pagosProveedor';
 
 const authStore = useAuthStore();
 const puede = (permiso: string) => authStore.isPermitedRoute(permiso);
@@ -346,6 +357,32 @@ const pagar = (ficha: FichaPorPagar, moneda: 'PEN' | 'USD') => {
 const aplicar = (compra: CompraPorPagar) => {
     paraAplicar.value = compra;
     aplicando.value = true;
+};
+
+// T-140
+const reembolsando = ref(false);
+const paraReembolsar = ref<DestinoReembolso | null>(null);
+
+const reembolsarCompra = (c: CompraPorPagar) => {
+    paraReembolsar.value = {
+        proveedor_id: c.proveedor_id,
+        compra_id: c.id,
+        moneda: c.moneda,
+        maximo: Math.abs(Number(c.saldo)).toFixed(2),
+        titulo: `Saldo a favor de ${c.serie}-${c.numero}`,
+    };
+    reembolsando.value = true;
+};
+
+const reembolsarPago = (p: PagoAbierto) => {
+    paraReembolsar.value = {
+        proveedor_id: p.proveedor_id,
+        pago_proveedor_id: p.id,
+        moneda: p.moneda,
+        maximo: p.a_cuenta,
+        titulo: `Lo a cuenta del pago del ${formatFecha(p.fecha)}`,
+    };
+    reembolsando.value = true;
 };
 
 watch(pagina, listar);
