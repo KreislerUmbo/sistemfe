@@ -221,10 +221,38 @@ y una NC después de pagar.
 
 ## Resultado
 <!-- Lo completa quien construye, al terminar. -->
-- **Commits:**
-- **Tests:** (nuevos / suite completa)
+- **Commits** (rama `feat/T-137-cuentas-por-pagar`):
+  - `4280a045` refactor: `vencimiento()` y `claveDocumento()` (§2)
+  - `79de9ef7` feat: `CuentasPorPagarService` y `sinAplicarPorProveedor()` (§1)
+  - `e5999a3b` feat: Excel (§4)
+  - `d86dbfd3` feat: controlador, rutas y `CuentasPorPagarTest` (§3)
+  - `3e940d04` feat: pantalla, ruta, menú y `RegistrarPago` (§5)
+  - `af14ade0` test: el menú de Compras en `MenuGirosTest`
+- **Tests:** nuevos, `CuentasPorPagarTest` 14/14 (CA1-CA14). Suite completa contra Postgres:
+  2594 en verde y 1 fallo, `MenuGirosTest` (esperaba el menú sin la entrada nueva); corregido y
+  vuelto a correr solo. `npx vue-tsc --build --force`, `npm run build` y vitest (374) en verde.
+- **CA16** (Playwright, `agencia-demo`): menú, abrir un grupo, «Registrar pago» con proveedor y
+  moneda elegidos y pago por Banco, «Aplicar pago a cuenta», descarga del Excel, enlace a la compra
+  (`?ver=`). Sin `compras.pagar` no aparecen los botones (probado quitando el permiso en el
+  navegador; el servidor lo cubren las rutas). No se vio en pantalla un Neto negativo ni una fila en
+  dólares (cubiertos por tests).
 - **Desviaciones de la tarea y por qué:**
+  - El commit de preparación (`0052deab`) no estaba en `main`: la rama sale de `main` más ese
+    commit.
+  - Las extracciones de §2 van en el primer commit, porque el servicio las usa.
+  - `resumen()` recibe además `solo_vencido` (así los totales salen del mismo filtro), `detalle()`
+    recibe `dias` (también en la ruta) y `sinAplicarPorProveedor()` acepta ids opcionales.
+  - `sinAplicarPorProveedor()` **no** reemplaza la subconsulta de `con_saldo`: agrupa por proveedor
+    y el filtro es por pago.
+  - Un grupo muestra solo las fichas con alguna cifra; la búsqueda sí mira todas las fichas del
+    mismo documento.
+  - En el Excel, encabezados, documento y nombres van como texto («+90» salía como el número 90).
+  - CA13: el 403 con el módulo apagado se comprueba por el middleware de las rutas.
+  - Se sumaron las tres rutas a la auditoría de `CompraTest` y la entrada a `MenuGirosTest`.
 
 ## Hallazgos fuera de alcance
 <!-- Problemas vistos y NO arreglados. Se convierten en tareas o en "Por analizar". -->
--
+- `CompraService::guardar()` todavía arma `clave_proveedor` a mano (misma regla que
+  `claveDocumento()`); la tarea solo pedía que `clave()` delegara.
+- `yarn` no está en el PATH de esta máquina: se usó `npm run build`.
+- Quedan en `agencia-demo` datos de prueba: compras serie `T137` y sus pagos por banco.
