@@ -268,6 +268,8 @@ watch(() => form.tipo_comprobante_codigo, (tipo, antes) => {
     creditoFiscal.value = TIPOS_CON_CREDITO_FISCAL.includes(tipo);
     // Las líneas de una nota salen de su compra: no se mezclan con las de una compra.
     if (tipo === '07' || antes === '07') lineas.value = [];
+    // De 08 a 07 la referencia no cambia, así que su watch no carga los productos: se cargan acá.
+    if (tipo === '07' && form.compra_referencia_id && !compraId) cargarLineasDeReferencia();
 });
 
 // En una nota de crédito, los productos salen de la compra que modifica, con su máximo (D3).
@@ -404,7 +406,8 @@ const guardar = async () => {
                 product_id: l.product_id,
                 factor: l.factor,
                 cantidad: l.cantidad,
-                valor_unitario: l.valor_unitario === '' ? 0 : l.valor_unitario,
+                // Vacío viaja vacío: el backend lo rechaza (un 0 bajaría el costo promedio sin aviso).
+                valor_unitario: l.valor_unitario,
                 ...montosDeLinea(l, form),
             };
             for (const [campo, valor] of Object.entries(campos)) datos.append(`lineas[${i}][${campo}]`, String(valor));

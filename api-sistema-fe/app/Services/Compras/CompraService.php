@@ -363,7 +363,23 @@ class CompraService
                 throw new CompraException("«{$producto->title}»: el valor de venta debe ser cantidad × valor unitario ({$valorVenta}).");
             }
 
+            // Sin crédito fiscal el total es el costo: tiene que ser valor de venta + IGV.
+            $total = $valorVenta->plus((string) $linea['igv']);
+            if (! $total->isEqualTo((string) $linea['total'])) {
+                throw new CompraException("«{$producto->title}»: el total debe ser valor de venta + IGV ({$total}).");
+            }
+
+            $unidades = $cantidad->multipliedBy($factor);
+            if ($unidades->isLessThan('0.000001')) {
+                throw new CompraException("«{$producto->title}»: la cantidad por el factor es demasiado chica.");
+            }
+
             $monto = (string) ($datos['con_credito_fiscal'] ? $linea['valor_venta'] : $linea['total']);
+            $costo = BigDecimal::of($monto)->multipliedBy($cambio)->dividedBy($unidades, 6, RoundingMode::HALF_UP);
+            // decimal(18,6): pasado ese tope la base lo rechazaría con un 500.
+            if ($costo->isGreaterThan('999999999999.999999')) {
+                throw new CompraException("«{$producto->title}»: el costo por unidad sale demasiado alto; revisa la cantidad y el factor.");
+            }
 
             $preparadas[] = [
                 'product_id' => $producto->id,
@@ -373,8 +389,7 @@ class CompraService
                 'valor_venta' => (string) $linea['valor_venta'],
                 'igv' => (string) $linea['igv'],
                 'total' => (string) $linea['total'],
-                'costo_unitario_base' => (string) BigDecimal::of($monto)->multipliedBy($cambio)
-                    ->dividedBy($cantidad->multipliedBy($factor), 6, RoundingMode::HALF_UP),
+                'costo_unitario_base' => (string) $costo,
             ];
         }
 

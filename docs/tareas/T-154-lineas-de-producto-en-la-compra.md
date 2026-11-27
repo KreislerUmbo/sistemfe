@@ -210,9 +210,23 @@ Pantalla, en un tenant de tienda (encender «Compras» en el Panel Superadmin y 
   7. Buscador de productos propio dentro de `LineasCompra.vue`: el de ventas muestra el precio de
      venta y ofrece crear productos.
 
+## Revisión (26-nov-2026)
+Diff revisado contra la tarea. Backend conforme. Se corrigió, con tests en `CompraLineasTest` (CA9):
+1. `form.vue`: pasar de 08 a 07 con la referencia ya elegida dejaba la NC sin productos (el watch de
+   la referencia no se disparaba). Ahora el cambio de tipo carga las líneas de la referencia.
+2. `form.vue`: un valor unitario vacío se mandaba como 0 y entraba a costo cero. Ahora viaja vacío y
+   el backend responde 422.
+3. `CompraService::prepararLineas()`: el `total` de la línea debe ser `valor_venta + igv` (sin
+   crédito fiscal es el costo). Era el primer hallazgo de abajo: queda cerrado.
+4. `prepararLineas()`: cantidad × factor menor a 0.000001, o un costo que pase de decimal(18,6), da
+   422 en vez de un 500.
+
+Suite completa después de la revisión: 2513 pasan y 1 falla, el intermitente conocido
+`Fila13Fase1cFacturacionTest::descuento_del_combo…`, que pasa al correrlo solo. Frontend:
+`type-check`, `build` y Vitest (6) sin errores. No se repitió la prueba en pantalla. Pendiente
+de la etapa 7: `/code-review` y `/security-review`.
+
 ## Hallazgos fuera de alcance
-- El `total` de una línea no se compara con `valor_venta + igv` (la tarea no lo pide). La pantalla lo
-  calcula, pero por la API se puede mandar otro, y sin crédito fiscal ese total es el costo.
 - Quien registre compras necesita además `list_product` para buscar productos (se suma al hallazgo de
   permisos de T-135).
 - El costo se ve en el kárdex y la ficha con `list_product`: no hay un permiso aparte para ver costos.

@@ -340,6 +340,12 @@ class CompraLineasTest extends TestCase
         $this->assertRechazo($this->enviar($this->datos([$this->linea($producto, '1', '6', ['factor' => '0'])])), 'factor');
         $this->assertRechazo($this->enviar($this->datos([$this->linea($producto, '1', '6', ['igv' => '-1'])])), 'negativos');
         $this->assertRechazo($this->enviar($this->datos([$this->linea($producto, '1', '6', ['product_id' => 999999999])])), 'no existe');
+        // Revisión: el total es el costo sin crédito fiscal; un valor unitario vacío no pasa como 0.
+        $this->assertRechazo($this->enviar($this->datos([$this->linea($producto, '1', '6', ['total' => '9.00'])],
+            ['con_credito_fiscal' => '0'])), 'valor de venta + IGV (7.08)');
+        $this->assertRechazo($this->enviar($this->datos([$this->linea($producto, '1', '6', ['valor_unitario' => ''])])), 'Completa los montos');
+        // Unidades demasiado chicas: 422, no un 500 por desbordar costo_unitario_base.
+        $this->assertRechazo($this->enviar($this->datos([$this->linea($producto, '0.000001', '0', ['factor' => '0.000001'])])), 'demasiado chica');
         $this->assertProducto($producto, 10.0, '5.000000');
 
         $servicio = $this->producto(0, null, ['tipo_bien_servicio' => 'SERVICIO']);
