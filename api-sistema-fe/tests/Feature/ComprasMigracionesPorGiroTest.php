@@ -23,6 +23,8 @@ class ComprasMigracionesPorGiroTest extends TestCase
         '2026_11_29_100000_create_compra_lineas_table', '2026_11_29_100100_add_con_credito_fiscal_to_compras',
         // T-152: solo en Agencia, y con FK a compras.
         '2026_11_30_100000_create_compra_asignaciones_table',
+        // T-162: completa compra_lineas.
+        '2026_11_30_200000_add_detalle_comprobante_to_compra_lineas',
     ];
 
     /** @var Tenant[] */

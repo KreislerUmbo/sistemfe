@@ -568,6 +568,17 @@ compra **mercadería**, y hoy el stock solo sube editando la ficha del producto,
 - **Concurrencia:** las líneas usan el mismo bloqueo por producto que las ventas
   (`lockForUpdate`, orden por id), dentro de la transacción de la compra.
 
+**Detalle del comprobante (T-162, 27-nov-2026).** Cambia lo anterior en esto:
+- La línea refleja la del comprobante del proveedor: descripción, cantidad, unidad (código SUNAT),
+  código del ítem y afectación del IGV (10, 20, 30 o 40). **El producto es opcional**: solo la
+  línea con un producto que controla stock mueve stock y costo. Sin afectación no se guarda, y
+  solo la gravada lleva IGV.
+- 02, 05 y 14 admiten líneas, pero solo sin producto.
+- Una compra cuyas líneas no tienen producto deja editar su cabecera; las líneas siguen fijas.
+- El cuadre avisa por total y, si el total cuadra, por afectación.
+- **Las notas de crédito vigentes de una compra, juntas, no pasan de su total** (con o sin
+  líneas), van en su misma moneda, y la compra no puede quedar por debajo de ellas.
+
 **Fuera de esta decisión** (anotado en «Por analizar»): guardar el costo en cada línea de venta
 para la ganancia por venta en retail; la valorización del inventario como reporte para el
 contador; y si el kárdex debe tener el formato del Registro de Inventario Permanente Valorizado

@@ -51,22 +51,35 @@ export interface Compra {
 
 export interface CompraLinea {
     id: number;
-    product_id: number;
+    product_id: number | null;
     producto: { id: number; title: string; sku: string | null } | null;
+    /** T-162: como viene en el comprobante del proveedor. */
+    descripcion: string;
+    unidad_medida: string;
+    codigo_proveedor: string | null;
+    tipo_afectacion_igv: string | null;
     factor: string;
     cantidad: string;
     valor_unitario: string;
     valor_venta: string;
     igv: string;
     total: string;
-    costo_unitario_base: string;
+    /** null en una línea sin producto. */
+    costo_unitario_base: string | null;
 }
 
 /** Una línea en el formulario. `igv` null = se propone solo. */
 export interface LineaCompraForm {
-    product_id: number;
+    /** null = línea sin producto (servicio, flete): no mueve stock. */
+    product_id: number | null;
+    /** Nombre y código del producto del catálogo, si tiene. */
     titulo: string;
     sku: string | null;
+    descripcion: string;
+    unidad_medida: string;
+    codigo_proveedor: string;
+    /** Vacío = la de la cabecera. */
+    tipo_afectacion_igv: string;
     factor: string;
     cantidad: string | number;
     valor_unitario: string | number;

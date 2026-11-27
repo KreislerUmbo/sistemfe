@@ -182,7 +182,8 @@ class CompraController extends Controller
 
         $datos = $this->datos($compra, $this->contexto([$compra->periodo]));
         $datos['lineas'] = $compra->lineas->map(fn (CompraLinea $l) => $l->only([
-            'id', 'product_id', 'factor', 'cantidad', 'valor_unitario', 'valor_venta', 'igv', 'total', 'costo_unitario_base',
+            'id', 'product_id', 'descripcion', 'unidad_medida', 'codigo_proveedor', 'tipo_afectacion_igv',
+            'factor', 'cantidad', 'valor_unitario', 'valor_venta', 'igv', 'total', 'costo_unitario_base',
         ]) + ['producto' => $l->producto?->only(['id', 'title', 'sku'])])->values();
         // Lo que una nota de crédito todavía puede devolver de esta compra, en unidades base (D3).
         $datos['devolvible'] = collect($this->service->devolvible($compra->id))
@@ -198,6 +199,7 @@ class CompraController extends Controller
     }
 
     // T-154 (D9): las líneas que no cuadran con la base se guardan igual, pero se avisa.
+    // T-162: si la suma cuadra, además se compara cada afectación con su monto de la cabecera.
     private function aviso(Compra $compra): ?string
     {
         if ($compra->lineas->isEmpty()) {
@@ -206,10 +208,32 @@ class CompraController extends Controller
 
         $sumar = fn (iterable $valores) => collect($valores)
             ->reduce(fn (BigDecimal $total, $valor) => $total->plus((string) $valor), BigDecimal::of('0.00'));
+        $nombre = $compra->lineas->contains(fn (CompraLinea $l) => $l->product_id === null) ? 'Las líneas' : 'Los productos';
+
         $lineas = $sumar($compra->lineas->pluck('valor_venta'));
         $base = $sumar([$compra->base_gravada, $compra->exonerado, $compra->inafecto]);
+        if (! $lineas->isEqualTo($base)) {
+            return "{$nombre} suman {$lineas} y la base del comprobante es {$base}";
+        }
+        // Una línea anterior a T-162 puede no tener afectación: no hay con qué comparar por tipo.
+        if ($compra->lineas->contains(fn (CompraLinea $l) => $l->tipo_afectacion_igv === null)) {
+            return null;
+        }
 
-        return $lineas->isEqualTo($base) ? null : "Los productos suman {$lineas} y la base del comprobante es {$base}";
+        $diferencias = [];
+        foreach ([
+            ['gravado', ['10'], $compra->base_gravada],
+            ['exonerado', ['20'], $compra->exonerado],
+            // La exportación no tiene monto propio en la cabecera: va con lo inafecto.
+            ['inafecto', ['30', '40'], $compra->inafecto],
+        ] as [$tipo, $codigos, $cabecera]) {
+            $suma = $sumar($compra->lineas->whereIn('tipo_afectacion_igv', $codigos)->pluck('valor_venta'));
+            if (! $suma->isEqualTo((string) $cabecera)) {
+                $diferencias[] = "{$tipo} {$suma} en las líneas y {$cabecera} en el comprobante";
+            }
+        }
+
+        return $diferencias ? 'No cuadra por afectación del IGV: '.implode('; ', $diferencias) : null;
     }
 
     private function contexto(array $periodos): array

@@ -21,6 +21,9 @@ class Compra extends Model
     // T-154 (D4): los que pueden detallar productos; el 07 los devuelve al proveedor.
     public const TIPOS_CON_LINEAS = ['01', '03', '04', '07', '12', '91'];
 
+    // T-162: estos, además, admiten líneas, pero solo sin producto (no mueven stock).
+    public const TIPOS_CON_LINEAS_SIN_PRODUCTO = ['02', '05', '14'];
+
     public const MONTOS = ['base_gravada', 'igv', 'exonerado', 'inafecto', 'otros'];
 
     protected $fillable = [
