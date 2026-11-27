@@ -288,6 +288,7 @@ export type ConfiguracionCodigo = {
 };
 
 export type CuentaBancaria = {
+    moneda?: 'PEN' | 'USD' | null;
   id: number;
   banco: string;
   titular: string;

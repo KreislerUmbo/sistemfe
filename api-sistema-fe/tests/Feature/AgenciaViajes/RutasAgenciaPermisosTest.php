@@ -31,7 +31,6 @@ class RutasAgenciaPermisosTest extends TestCase
     private const PERMISO_POR_GRUPO = [
         // Configuración de la agencia
         [null, 'api/configuracion-*', ['agencia.configuracion']],
-        [null, 'api/cuentas-bancarias*', ['agencia.configuracion']],
         [['POST', 'PUT'], 'api/crm-motivos-resultado*', ['agencia.configuracion']],
         [['GET'], 'api/crm-motivos-resultado', ['agencia.configuracion', 'cotizaciones.editar']],
         // Catálogos

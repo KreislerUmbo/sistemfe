@@ -21,7 +21,7 @@ use App\Http\Controllers\AgenciaViajes\CotizacionResultadoController;
 use App\Http\Controllers\AgenciaViajes\CrmMotivoResultadoController;
 use App\Http\Controllers\AgenciaViajes\CrmTipoViajeController;
 use App\Http\Controllers\AgenciaViajes\ClientePerfilViajeroController;
-use App\Http\Controllers\AgenciaViajes\CuentaBancariaController;
+use App\Http\Controllers\CuentaBancariaController;
 use App\Http\Controllers\AgenciaViajes\DestinoAtractivoController;
 use App\Http\Controllers\AgenciaViajes\DestinoServicioController;
 use App\Http\Controllers\AgenciaViajes\GuiaController;
@@ -413,6 +413,13 @@ Route::group([
         ->middleware('permission:proveedores.gestionar');
     Route::put("proveedores-base/{id}", [ProveedorBaseController::class, 'update'])
         ->whereNumber('id')->middleware('permission:proveedores.gestionar');
+    // T-136 — cuentas bancarias del sistema base (antes de Agencia).
+    Route::middleware('permission:cuentas_bancarias.gestionar')->group(function () {
+        Route::get("cuentas-bancarias", [CuentaBancariaController::class, 'index']);
+        Route::post("cuentas-bancarias", [CuentaBancariaController::class, 'store']);
+        Route::put("cuentas-bancarias/{id}", [CuentaBancariaController::class, 'update'])->whereNumber('id');
+        Route::delete("cuentas-bancarias/{id}", [CuentaBancariaController::class, 'destroy'])->whereNumber('id');
+    });
     // T-135 — Compras (sistema base, módulo activable). No hay borrar: se anula.
     Route::middleware('modulo:compras')->group(function () {
         Route::middleware('permission:compras.ver')->group(function () {
@@ -993,15 +1000,6 @@ Route::group([
     Route::put("configuracion-codigos/{tipo}", [ConfiguracionCodigosController::class, 'update'])
         ->middleware('permission:agencia.configuracion');
     Route::get("configuracion-codigos/{tipo}/previsualizar", [ConfiguracionCodigosController::class, 'previsualizar'])
-        ->middleware('permission:agencia.configuracion');
-
-    Route::get("cuentas-bancarias", [CuentaBancariaController::class, 'index'])
-        ->middleware('permission:agencia.configuracion');
-    Route::post("cuentas-bancarias", [CuentaBancariaController::class, 'store'])
-        ->middleware('permission:agencia.configuracion');
-    Route::put("cuentas-bancarias/{id}", [CuentaBancariaController::class, 'update'])
-        ->middleware('permission:agencia.configuracion');
-    Route::delete("cuentas-bancarias/{id}", [CuentaBancariaController::class, 'destroy'])
         ->middleware('permission:agencia.configuracion');
 
     // Sesión pdf-cotizacion — documento aparte, mismo contenido para toda

@@ -93,6 +93,7 @@ declare module 'vue' {
     ConfigAvisosCobranza: typeof import('./src/components/Creditos/ConfigAvisosCobranza.vue')['default']
     ConfiguracionCorreoSeccion: typeof import('./src/components/AgenciaViajes/ConfiguracionCorreoSeccion.vue')['default']
     CronogramaCuotasCampos: typeof import('./src/components/CronogramaCuotasCampos.vue')['default']
+    CuentasBancarias: typeof import('./src/components/CuentasBancarias.vue')['default']
     CuotasCredito: typeof import('./src/components/Creditos/CuotasCredito.vue')['default']
     DatosVentaPanel: typeof import('./src/components/Sales/DatosVentaPanel.vue')['default']
     DestinoServicioPicker: typeof import('./src/components/AgenciaViajes/DestinoServicioPicker.vue')['default']

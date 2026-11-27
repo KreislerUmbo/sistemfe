@@ -25,6 +25,8 @@ class ComprasMigracionesPorGiroTest extends TestCase
         '2026_11_30_100000_create_compra_asignaciones_table',
         // T-162: completa compra_lineas.
         '2026_11_30_200000_add_detalle_comprobante_to_compra_lineas',
+        // T-136: compras.pagar.
+        '2026_12_01_100200_add_pagos_proveedor_permissions',
     ];
 
     /** @var Tenant[] */
@@ -103,7 +105,7 @@ class ComprasMigracionesPorGiroTest extends TestCase
             $this->assertTrue(Schema::hasColumn('compras', 'con_credito_fiscal'), $giro);
             $this->assertTrue(Schema::hasColumn('products', 'costo_promedio'), $giro);
             $this->assertSame(
-                ['compras.anular', 'compras.cerrar_periodo', 'compras.registrar', 'compras.ver'],
+                ['compras.anular', 'compras.cerrar_periodo', 'compras.pagar', 'compras.registrar', 'compras.ver'],
                 Permission::where('name', 'like', 'compras.%')->orderBy('name')->pluck('name')->all(),
                 $giro
             );

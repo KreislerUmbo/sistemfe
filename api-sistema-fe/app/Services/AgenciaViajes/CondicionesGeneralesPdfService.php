@@ -3,7 +3,7 @@
 namespace App\Services\AgenciaViajes;
 
 use App\Models\AgenciaViajes\ConfiguracionAgencia;
-use App\Models\AgenciaViajes\CuentaBancaria;
+use App\Models\CuentaBancaria;
 use App\Services\HoraPeru;
 use App\Services\PdfFontService;
 use App\Services\TextoFormatoService;

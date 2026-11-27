@@ -1,12 +1,12 @@
 <?php
 
-namespace App\Http\Controllers\AgenciaViajes;
+namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
-use App\Models\AgenciaViajes\CuentaBancaria;
+use App\Models\CuentaBancaria;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
+// T-136: del sistema base (antes en AgenciaViajes), con cuentas_bancarias.gestionar.
 class CuentaBancariaController extends Controller
 {
     public function index()
@@ -26,6 +26,7 @@ class CuentaBancariaController extends Controller
             'alias' => 'nullable|string|max:100',
             'activo' => 'nullable|boolean',
             'orden' => 'nullable|integer',
+            'moneda' => 'nullable|string|in:'.implode(',', CuentaBancaria::MONEDAS),
         ]);
 
         if ($validator->fails()) {
@@ -49,6 +50,7 @@ class CuentaBancariaController extends Controller
             'alias' => 'nullable|string|max:100',
             'activo' => 'nullable|boolean',
             'orden' => 'nullable|integer',
+            'moneda' => 'nullable|string|in:'.implode(',', CuentaBancaria::MONEDAS),
         ]);
 
         if ($validator->fails()) {
