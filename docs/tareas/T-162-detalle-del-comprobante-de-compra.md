@@ -153,7 +153,7 @@ una de mercadería mezclando una línea de producto y una de flete sin producto.
   - El listado no mostraba productos: la descripción se ve en el detalle.
 - **Al desplegar:** `tenants:migrate-verticales` y revisar si la migración informa líneas sin
   afectación.
-- **No se corrieron** `/code-review` ni `/security-review`.
+- `/code-review` y `/security-review` corridos el 27-nov (ver abajo).
 - **Revisión del diff (27-nov):** corregido que las líneas en texto JSON no pasaban por el recorte
   de espacios ni por «vacío = null» de Laravel (un `product_id: ""` daba «el producto no existe»), y
   que la afectación como número (`10`) se tomaba por no gravada. Test:
@@ -182,7 +182,10 @@ una de mercadería mezclando una línea de producto y una de flete sin producto.
      total. Una NC o compra anterior a T-162 fuera de regla se sigue editando (adjuntos,
      observaciones). Test: `test_nota_antigua_fuera_de_tope_se_edita_si_no_cambia_lo_que_acredita`.
   8. Con el bloque «Detallar comprobante» cerrado, el aviso de cuadre se muestra bajo el encabezado.
-- **Falta** `/security-review`.
+- **`/security-review` (27-nov): sin hallazgos.** Rutas y permisos sin cambios; las líneas JSON
+  llegan a `createMany()` solo con las claves que arma `prepararLineas()`; consultas en la base del
+  tenant y con valores enlazados; la descripción y el código se muestran con `{{ }}`/`:value`, sin `v-html`.
+- **Para cerrar:** falta CA7 en `sandbox` (mercadería + flete), cuando haya credencial.
 
 ## Hallazgos fuera de alcance
 - Una nota de débito (08) no amplía lo que se puede acreditar: el tope es el total de la compra
