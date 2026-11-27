@@ -69,3 +69,20 @@ watch(cuentasDeLaMoneda, (cuentas) => {
     }
 });
 </script>
+
+<style scoped>
+/* En modo `estatico` flatpickr envuelve el input y el botón del calendario se caía a otra línea. */
+:deep(.campo-fecha > .flatpickr-wrapper) {
+    flex: 1 1 auto;
+    width: 1%;
+    min-width: 0;
+}
+
+:deep(.campo-fecha > .flatpickr-wrapper > .form-control) {
+    padding: 0.25rem 0.5rem;
+    font-size: var(--bs-body-font-size);
+    min-height: calc(1.5em + 0.5rem + 2px);
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+}
+</style>
