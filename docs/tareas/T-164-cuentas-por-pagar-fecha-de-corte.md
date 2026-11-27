@@ -5,7 +5,7 @@
 | **Módulo** | COM |
 | **Depende de** | **T-137** (en `main`): esta tarea le agrega el corte a su servicio, pantalla y Excel |
 | **Reglas** | `CLAUDE.md` → «Fechas y horas» (filtrar un instante por día con `HoraPeru::finDiaUtc()`, nunca `whereDate`) |
-| **Decisiones** | `docs/tareas/T-137-cuentas-por-pagar.md` (D1-D4 y definiciones de columnas); recorrido `docs/aprendizaje/99-recorrido-pagos-a-proveedores.md` §3, §6 y §7; decisión del usuario del 27-nov-2026 (abajo) |
+| **Decisiones** | recorrido `docs/aprendizaje/100-recorrido-cuentas-por-pagar.md` (D1-D4 de T-137 y definiciones de columnas, §2-§3); recorrido `docs/aprendizaje/99-recorrido-pagos-a-proveedores.md` §3, §6 y §7; decisión del usuario del 27-nov-2026 (abajo) |
 | **Rama** | `feat/T-164-cuentas-por-pagar-corte` (desde `main`) |
 
 ## Contexto
