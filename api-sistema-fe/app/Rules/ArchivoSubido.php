@@ -27,6 +27,21 @@ final class ArchivoSubido
         return ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,gif', 'max:' . self::MAXIMO_KB];
     }
 
+    /** Solo PDF (comprobantes de compra). */
+    public static function pdf(): array
+    {
+        return ['nullable', 'file', 'mimes:pdf', 'max:' . self::MAXIMO_KB];
+    }
+
+    /**
+     * XML de un comprobante. Un XML sin declaración se detecta como texto plano, por eso `txt`;
+     * además el nombre tiene que terminar en .xml. Se guarda en privado y nunca se sirve en línea.
+     */
+    public static function xml(): array
+    {
+        return ['nullable', 'file', 'extensions:xml', 'mimes:xml,txt', 'max:' . self::MAXIMO_KB];
+    }
+
     /** Imagen o PDF (comprobantes y adjuntos). */
     public static function imagenOPdf(): array
     {

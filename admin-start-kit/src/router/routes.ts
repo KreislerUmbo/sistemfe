@@ -271,6 +271,47 @@ const comercialRoutes = [
     },
     component: () => import("@/views/cash/proveedores.vue"),
   },
+  // T-135 — Compras (módulo activable: la API responde 403 si está apagado).
+  {
+    path: "/compras",
+    name: "compras.index",
+    meta: {
+      title: setTitle("Comprobantes de compra"),
+      authRequired: true,
+      permission: 'compras.ver',
+    },
+    component: () => import("@/views/compras/index.vue"),
+  },
+  {
+    path: "/compras/nueva",
+    name: "compras.nueva",
+    meta: {
+      title: setTitle("Registrar compra"),
+      authRequired: true,
+      permission: 'compras.registrar',
+    },
+    component: () => import("@/views/compras/form.vue"),
+  },
+  {
+    path: "/compras/:id(\\d+)/editar",
+    name: "compras.editar",
+    meta: {
+      title: setTitle("Editar compra"),
+      authRequired: true,
+      permission: 'compras.registrar',
+    },
+    component: () => import("@/views/compras/form.vue"),
+  },
+  {
+    path: "/compras/periodos",
+    name: "compras.periodos",
+    meta: {
+      title: setTitle("Periodos de compras"),
+      authRequired: true,
+      permission: 'compras.cerrar_periodo',
+    },
+    component: () => import("@/views/compras/periodos.vue"),
+  },
   {
     path: "/cash-concepts",
     name: "cash-concepts.index",

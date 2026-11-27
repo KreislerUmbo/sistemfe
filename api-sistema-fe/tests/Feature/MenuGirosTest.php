@@ -6,6 +6,8 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Services\MenuResolver;
 use App\Models\Central\MenuItem;
+use App\Models\Central\Modulo;
+use App\Models\Central\TenantModuloOverride;
 use Database\Seeders\AgenciaViajesRolesSeeder;
 use Database\Seeders\MenuItemsSeeder;
 use Illuminate\Support\Facades\DB;
@@ -126,6 +128,24 @@ class MenuGirosTest extends TestCase
         ];
 
         $this->assertSame($esperado, $this->etiquetas($this->arbol($this->superAdmin(), 'agencia_viajes', 't-menu-agencia')));
+    }
+
+    // T-135 — «Compras» está sembrado para todos los giros, pero solo aparece con el módulo activo
+    // (apagado lo cubren las fotos de arriba).
+    public function test_t135_con_el_modulo_activo_cada_giro_ve_compras(): void
+    {
+        $usuario = $this->superAdmin();
+
+        foreach (['retail', 'agencia_viajes', 'creditos'] as $giro) {
+            $tenantId = "t-menu-compras-{$giro}";
+            DB::connection('central')->table('tenants')->insert(['id' => $tenantId, 'giro' => $giro, 'tipo' => 'demo',
+                'sunat_modo' => 'pruebas', 'status' => 'activo', 'data' => '{}', 'created_at' => now(), 'updated_at' => now()]);
+            TenantModuloOverride::create(['tenant_id' => $tenantId, 'modulo_id' => Modulo::where('codigo', 'compras')->value('id'), 'habilitado' => true]);
+
+            $arbol = $this->etiquetas($this->arbol($usuario, $giro, $tenantId));
+
+            $this->assertContains(['Compras' => ['Comprobantes', 'Periodos']], $arbol, $giro);
+        }
     }
 
     // Aunque el tenant de agencia fuera el de la plataforma, no vuelven los grupos de retail.

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Central\MenuItem;
+use App\Models\Central\Modulo;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Cache\DatabaseStore;
@@ -50,18 +51,14 @@ class MenuResolver
             // de la plataforma. Mismo efecto sobre los hijos que giros_excluidos.
             ->reject(fn (MenuItem $item) => $item->solo_plataforma && ! PlataformaTenant::es((string) $tenant->id));
 
-        // Paso 2 del plan (§4.1) — filtro por modulos_efectivos($tenant) — NO
-        // IMPLEMENTADO A PROPÓSITO. Confirmado con grep sobre todo app/ antes
-        // de escribir esta clase: ni modulos_efectivos(), ni
-        // tenant_modulo_overrides, ni un modelo Modulo existen todavía en el
-        // código. plan-modulo-planes-acceso.md §3.4/3.5 los marca
-        // explícitamente como "trabajo genuinamente nuevo, sin conflicto",
-        // no como ya construido — no corresponde a este brief improvisar un
-        // reemplazo. `menu_items.modulo_id` ya existe en el schema (nullable,
-        // sin FK real) para cuando ese módulo exista: el único cambio que
-        // haría falta acá es agregar un ->filter() más en este punto exacto.
-        // Hoy ningún menu_item sembrado tiene modulo_id, así que el paso no
-        // filtra nada de todas formas.
+        // Paso 2 del plan (§4.1) — módulos activables (T-135): un ítem con modulo_id solo se
+        // muestra si ese módulo está activo en el tenant; sus hijos se caen con él.
+        if ($items->contains(fn (MenuItem $item) => $item->modulo_id !== null)) {
+            $activos = Modulo::whereIn('codigo', app(ModulosTenant::class)->efectivos($tenant))->pluck('id');
+            $items = $items->reject(
+                fn (MenuItem $item) => $item->modulo_id !== null && ! $activos->contains($item->modulo_id)
+            );
+        }
 
         $visibles = $items->filter(
             fn (MenuItem $item) => $item->permiso_requerido === null || $user->can($item->permiso_requerido)

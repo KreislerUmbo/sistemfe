@@ -299,6 +299,27 @@ export const PERMISOS = [
         ]
     },
     {
+        'name': 'Compras',
+        'permisos': [
+            {
+                name: 'Ver comprobantes',
+                permiso: 'compras.ver',
+            },
+            {
+                name: 'Registrar y editar',
+                permiso: 'compras.registrar',
+            },
+            {
+                name: 'Anular',
+                permiso: 'compras.anular',
+            },
+            {
+                name: 'Cerrar y reabrir periodos',
+                permiso: 'compras.cerrar_periodo',
+            },
+        ]
+    },
+    {
         'name': 'Conceptos de Caja',
         'permisos': [
             {

@@ -46,7 +46,9 @@ class TiposComprobanteCatalogTest extends TestCase
             $this->assertContains($esperado, $codigos, "Falta el código '{$esperado}' en el catálogo.");
         }
 
-        $this->assertCount(16, $codigos);
+        // T-135 (D2) sumó la 91, comprobante de no domiciliado.
+        $this->assertContains('91', $codigos);
+        $this->assertCount(17, $codigos);
     }
 
     public function test_nv_es_documento_interno_no_fiscal(): void

@@ -27,6 +27,15 @@ export interface TenantOverview {
   domains: string[];
 }
 
+// GET/PUT tenants/{id}/modulos (T-135).
+export interface TenantModulo {
+  codigo: string;
+  nombre: string;
+  descripcion: string | null;
+  habilitado: boolean;
+  notas: string | null;
+}
+
 // GET/POST tenants/{id}/company. La fila real trae más columnas (config de Caja/
 // Amortizaciones agregada en fases anteriores: mora_habilitada_default, etc.) que esta
 // interfaz no declara — no hace falta, TS no exige que el objeto recibido tenga

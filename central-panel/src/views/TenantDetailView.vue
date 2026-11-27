@@ -12,6 +12,7 @@ import SunatConfigTab from '@/components/tenant-detail/SunatConfigTab.vue';
 import CertificadoTab from '@/components/tenant-detail/CertificadoTab.vue';
 import TestEmissionTab from '@/components/tenant-detail/TestEmissionTab.vue';
 import CorreoTab from '@/components/tenant-detail/CorreoTab.vue';
+import ModulosCard from '@/components/tenant-detail/ModulosCard.vue';
 
 const route = useRoute();
 const tenantId = route.params.id as string;
@@ -387,6 +388,8 @@ const domainsText = computed(() =>
           </form>
         </div>
       </div>
+
+      <ModulosCard :tenant-id="tenantId" />
 
       <ul class="nav nav-tabs mb-3">
         <li v-for="tab in tabs" :key="tab.key" class="nav-item">
