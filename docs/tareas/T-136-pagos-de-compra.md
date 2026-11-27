@@ -278,10 +278,54 @@ corre `deploy.sh`; revisar su salida).
 
 ## Resultado
 <!-- Lo completa quien construye, al terminar. -->
-- **Commits:**
-- **Tests:** (nuevos / suite completa)
-- **Desviaciones de la tarea y por qué:**
+- **Commits:** `2b676519` cuentas bancarias al sistema base · `a5973284` pagos, aplicaciones,
+  saldo y estado · `b85977dc` pago desde Caja con aprobación (`EgresoCajaService` extraído) ·
+  `ced99dfc` reglas en `CompraService` y «Pagada ahora» · `f88b93c5` API · `c5799beb` pantallas ·
+  `75b2a01c` calendario dentro del modal.
+- **Tests:** nuevos `PagoProveedorTest` (26, CA3–CA18) y `CuentasBancariasCoreTest` (3, CA1–CA2);
+  ajustados `ComprasMigracionesPorGiroTest`, `ProveedoresTablaBaseTest`, `CompraTest`,
+  `MenuGirosTest`, `RetirarPagoProveedorViejoTest`, `RutasAgenciaPermisosTest`. Front:
+  `pagosProveedor.test.ts` (4) y `vue-tsc` sin errores. **Suite completa (27-nov):** 2575 de 2578;
+  las 3 fallas, de `Sesion12hReasignarMayoristaTest` («roles_pkey» duplicada), pasan solas (12/12):
+  intermitente, había otra sesión corriendo tests contra la misma base. Una corrida anterior dio 6
+  fallas por tenants huérfanos (ver Hallazgos); limpiados, no volvieron.
+- **Revisión (`/code-review` medium, 27-nov), corregido:** la moneda de una cuenta con pagos ya no
+  se cambia ni se vacía (422); el pago desde Caja vuelve a comprobar que la sesión siga abierta
+  después de bloquearla; el número de operación «0» vale y uno que no es texto da 422 (no 500);
+  «Aplicar pago a cuenta» propone `saldo − por_aprobar` (el mismo límite del servidor); la ficha
+  ya no recarga el listado dos veces al guardar un pago. +3 tests en `PagoProveedorTest` (32 en
+  total con `CuentasBancariasCoreTest`). Descartado: «las compras al contado anteriores saldrían
+  vencidas» (producción no tiene compras: T-135 y T-136 llegan en el mismo deploy) y «se editó una
+  migración» (excepción documentada arriba, precedente T-132).
+- **CA19 (pantalla, agencia-demo, Playwright, 27-nov):** compra al contado CA19-1 «Pagada ahora»
+  desde Caja → egreso `pago_proveedor` en la sesión 6 con el proveedor de contraparte; compra a
+  crédito CA19-2 pagada por Banco en 400 + 600 → «Pagado»; cuenta sin moneda → aviso «Completa la
+  moneda…»; número de operación repetido (`OP0001` = «op 0001») → 409; anular el pago de Caja →
+  egreso «Corregido» + corrección de ingreso 236 en Caja, esperado de la sesión +236, compra de
+  vuelta a «Pendiente»; ficha con la sección Pagos y «Desaplicar». **Retail no se probó en
+  pantalla** (sin credencial de `sandbox`); el esquema y los permisos por giro los cubren CA1/CA10.
+  Quedan en agencia-demo CA19-1, CA19-2 y sus pagos, y la cuenta BCP con moneda PEN.
+- **Desviaciones de la tarea y por qué:** ninguna de alcance. Agregados menores: el proveedor con
+  pagos tampoco se borra (`ProveedorController::destroy`), igual que la cuenta; el número de
+  operación se normaliza (mayúsculas, sin espacios) antes de comparar.
 
 ## Hallazgos fuera de alcance
 <!-- Problemas vistos y NO arreglados. Se convierten en tareas o en "Por analizar". -->
-- 
+- La regla de aprobación de egresos compara el monto **en su moneda** contra
+  `max_expense_without_approval` (soles): un pago o egreso manual en USD se mide como si fueran
+  soles. Ya pasaba con el egreso manual; ahora lo heredan los pagos en dólares (T-140).
+- Anular un pago cuyo egreso espera aprobación lo deja `rejected` con solo `compras.anular`, sin
+  `cash.approve_expenses`. Parece correcto (es retirar la propia solicitud); confirmar con el usuario.
+- El pago valida que el proveedor exista, no que esté activo.
+- (De antes de T-136, ahora también para pagos) `CashMovementController::approve()` valida «no
+  negativo» sin bloquear la sesión ni comprobar que siga abierta: dos aprobaciones simultáneas
+  pueden dejar el efectivo esperado en negativo, o confirmar un egreso en una sesión cerrada.
+- Una compra cuyo pago espera aprobación en Caja se muestra «Pendiente» y, pasada su fecha,
+  «Vencido», aunque ya se pagó (falta la aprobación). Decidir si corresponde un estado «por aprobar»
+  (o tomar `saldo − por_aprobar` para el vencido).
+- Tests: `tenants:migrate-verticales` recorre **todos** los tenants de `sistemafe_test_migrations`.
+  Un tenant huérfano de una corrida que falló (columna aplicada sin su registro en `migrations`)
+  hace fallar `ProveedoresTablaBaseTest::ca3`, `ComprasMigracionesPorGiroTest::ca10` y demás, y
+  cada falla deja otro huérfano. El 27-nov había 23 (desde el 25-nov); se borraron a mano.
+  Conviene que esos tests corran el comando solo sobre sus propios tenants o limpien huérfanos
+  `test-*` al empezar.

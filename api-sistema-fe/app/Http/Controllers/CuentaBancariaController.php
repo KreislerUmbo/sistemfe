@@ -58,7 +58,17 @@ class CuentaBancariaController extends Controller
             return response()->json(['code' => 422, 'message' => $validator->errors()->first()], 422);
         }
 
-        $cuenta->update($validator->validated());
+        // T-136: con pagos, la moneda queda fija (ni otra ni vacía): sus pagos salieron en esa moneda.
+        $datos = $validator->validated();
+        if (array_key_exists('moneda', $datos) && $datos['moneda'] !== $cuenta->moneda
+            && PagoProveedor::where('cuenta_bancaria_id', $cuenta->id)->exists()) {
+            return response()->json([
+                'code' => 422,
+                'message' => 'No se puede cambiar la moneda: la cuenta ya tiene pagos a proveedores.',
+            ], 422);
+        }
+
+        $cuenta->update($datos);
 
         return response()->json(['code' => 200, 'message' => 'Cuenta bancaria actualizada', 'cuenta_bancaria' => $cuenta]);
     }

@@ -341,6 +341,10 @@ class PagoProveedorService
     {
         // Sesión bloqueada: dos salidas a la vez no validan contra el mismo efectivo.
         $sesion = CashSession::whereKey($this->egresoCaja->sesionAbierta($usuario)->id)->lockForUpdate()->firstOrFail();
+        // Pudo cerrarse entre la lectura y el bloqueo: un egreso nunca entra a una sesión ya cuadrada.
+        if ($sesion->status !== 'open') {
+            throw new CompraException('Tu sesión de caja se acaba de cerrar: abre una nueva para pagar desde Caja.');
+        }
         $metodo = $this->egresoCaja->metodoPago((int) $pago->payment_method_id);
         $estado = $this->egresoCaja->estadoInicial($sesion, $metodo, 'out', (float) $pago->monto, $pago->moneda);
 
@@ -435,8 +439,10 @@ class PagoProveedorService
     private function validar(array $entrada): array
     {
         // Mayúsculas y sin espacios, para que «op 123» y «OP123» sean la misma operación.
-        if (isset($entrada['numero_operacion'])) {
-            $entrada['numero_operacion'] = mb_strtoupper(preg_replace('/\s+/u', '', (string) $entrada['numero_operacion'])) ?: null;
+        // Solo si es texto: otra cosa la rechaza la validación (string), sin romperse aquí. «0» vale.
+        if (isset($entrada['numero_operacion']) && is_string($entrada['numero_operacion'])) {
+            $normalizado = mb_strtoupper(preg_replace('/\s+/u', '', $entrada['numero_operacion']));
+            $entrada['numero_operacion'] = $normalizado === '' ? null : $normalizado;
         }
         $banco = ($entrada['origen'] ?? null) === PagoProveedor::ORIGEN_BANCO;
         $caja = ($entrada['origen'] ?? null) === PagoProveedor::ORIGEN_CAJA;

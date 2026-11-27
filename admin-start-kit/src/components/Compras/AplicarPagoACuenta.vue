@@ -38,7 +38,7 @@ import type { PagoProveedor } from '@/types/pagosProveedor';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 
-const props = defineProps<{ compra: { id: number; proveedor_id: number; moneda: 'PEN' | 'USD'; saldo: string | null } | null }>();
+const props = defineProps<{ compra: { id: number; proveedor_id: number; moneda: 'PEN' | 'USD'; saldo: string | null; por_aprobar?: string | null } | null }>();
 const emit = defineEmits<{ (e: 'guardado'): void }>();
 const abierto = defineModel<boolean>({ required: true });
 
@@ -51,11 +51,13 @@ const guardando = ref(false);
 
 const mensajeDe = (e: any) => e.response?.data?.message ?? 'No se pudo completar la operación.';
 
-// Propone lo menor entre lo que queda a cuenta y el saldo de la compra.
+// Propone lo menor entre lo que queda a cuenta y lo que la compra todavía admite: su saldo menos
+// lo que ya espera aprobación en Caja (el mismo límite que aplica el servidor).
 const proponer = () => {
     const pago = pagos.value.find((p) => p.id === pagoId.value);
     if (!pago) return;
-    monto.value = (Math.min(enCentimos(pago.a_cuenta), enCentimos(props.compra?.saldo)) / 100).toFixed(2);
+    const admite = enCentimos(props.compra?.saldo) - enCentimos(props.compra?.por_aprobar ?? 0);
+    monto.value = (Math.max(0, Math.min(enCentimos(pago.a_cuenta), admite)) / 100).toFixed(2);
 };
 watch(pagoId, proponer);
 

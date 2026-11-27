@@ -678,4 +678,53 @@ class PagoProveedorTest extends CreditosTestCase
         $proveedores = app(\App\Http\Controllers\AgenciaViajes\ProveedorController::class);
         $this->assertSame(422, $proveedores->destroy((string) $this->proveedor->id)->getStatusCode());
     }
+    // ── Revisión del 27-nov (/code-review) ───────────────────────────
+
+    public function test_la_moneda_de_una_cuenta_con_pagos_no_cambia(): void
+    {
+        $this->porBanco('10.00');
+        $controller = app(\App\Http\Controllers\CuentaBancariaController::class);
+        $datos = fn (?string $moneda) => new Request([
+            'banco' => 'BCP', 'titular' => 'Empresa', 'numero_cuenta' => $this->cuenta->numero_cuenta, 'moneda' => $moneda,
+        ]);
+
+        foreach (['USD', null] as $moneda) {
+            $respuesta = $controller->update($datos($moneda), (string) $this->cuenta->id);
+            $this->assertSame(422, $respuesta->getStatusCode(), (string) $moneda);
+            $this->assertStringContainsString('ya tiene pagos', $respuesta->getData(true)['message']);
+        }
+        $this->assertSame('PEN', $this->cuenta->fresh()->moneda);
+
+        // Lo demás se sigue editando, y una cuenta sin pagos cambia de moneda.
+        $this->assertSame(200, $controller->update($datos('PEN'), (string) $this->cuenta->id)->getStatusCode());
+        $sinPagos = $this->cuenta('PEN');
+        $this->assertSame(200, $controller->update($datos('USD'), (string) $sinPagos->id)->getStatusCode());
+        $this->assertSame('USD', $sinPagos->fresh()->moneda);
+    }
+
+    public function test_no_paga_desde_una_sesion_que_se_cerro_antes_del_bloqueo(): void
+    {
+        $this->cajaConFondo('500.00');
+        // La sesión se cierra justo después de leerla y antes de bloquearla.
+        $this->app->instance(\App\Services\Cash\EgresoCajaService::class, new class(app(ExpectedCashCalculator::class)) extends \App\Services\Cash\EgresoCajaService
+        {
+            public function sesionAbierta(User $usuario): CashSession
+            {
+                $sesion = parent::sesionAbierta($usuario);
+                CashSession::whereKey($sesion->id)->update(['status' => 'closed']);
+
+                return $sesion;
+            }
+        });
+        $antes = [PagoProveedor::count(), CashMovement::count()];
+
+        $this->rechazo(fn () => $this->porCaja('50.00'), 'se acaba de cerrar');
+        $this->assertSame($antes, [PagoProveedor::count(), CashMovement::count()]);
+    }
+
+    public function test_numero_de_operacion_cero_vale_y_una_lista_se_rechaza(): void
+    {
+        $this->assertSame('0', $this->porBanco('10.00', [], ['numero_operacion' => '0'])->numero_operacion);
+        $this->rechazo(fn () => $this->porBanco('10.00', [], ['numero_operacion' => ['x']]), 'número de operación');
+    }
 }

@@ -299,8 +299,8 @@
             </template>
         </b-modal>
         <AsignarCompra :compra-id="compraAsignar" @cerrar="alCerrarAsignar" @guardado="alAsignar" />
-        <RegistrarPago v-model="modalPago" :compra="detalle" @guardado="alPagar" />
-        <AplicarPagoACuenta v-model="modalAplicar" :compra="detalle" @guardado="alPagar" />
+        <RegistrarPago v-model="modalPago" :compra="detalle" />
+        <AplicarPagoACuenta v-model="modalAplicar" :compra="detalle" />
     </DefaultLayout>
 </template>
 
@@ -451,7 +451,7 @@ const aplicarACuenta = () => {
     modalDetalle.value = false;
     modalAplicar.value = true;
 };
-const alPagar = () => listar();
+// Al cerrarse cualquiera de los dos (guardado o cancelado) se recargan la ficha y el listado: una vez.
 watch([modalPago, modalAplicar], ([pago, aplicar], [antesPago, antesAplicar]) => {
     if (((antesPago && !pago) || (antesAplicar && !aplicar)) && detalle.value) {
         verDetalle(detalle.value.id);
