@@ -189,7 +189,7 @@ class CompraService
 
                 $documento = $this->normalizar($proveedor->numero_documento);
                 $datos['proveedor_documento'] = $documento === '' ? null : $documento;
-                $datos['clave_proveedor'] = $documento === '' ? "id:{$proveedor->id}" : $documento;
+                $datos['clave_proveedor'] = $proveedor->claveDocumento();
                 $datos['compra_referencia_id'] = $this->referencia($datos, $actual);
 
                 if ($existente = $this->duplicada($datos, $actual->id)) {
