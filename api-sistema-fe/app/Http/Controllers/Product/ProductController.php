@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Product;
 
 use App\Rules\ArchivoSubido;
 use App\Http\Controllers\Controller;
+use App\Models\Compras\Compra;
 use App\Http\Resources\Product\ProductCollection;
 use App\Http\Resources\Product\ProductResource;
 use App\Models\Product\Categorie;
@@ -220,7 +221,8 @@ class ProductController extends Controller
         }
 
         return response()->json([
-            "product" => ProductResource::make($product),
+            // El costo (T-154) solo va en la ficha: el listado lo usa también quien vende.
+            "product" => ProductResource::make($product)->resolve() + ['costo_promedio' => $product->costo_promedio],
             "code" => 200
         ]);
     }
@@ -313,6 +315,7 @@ class ProductController extends Controller
         $documentos = [
             'venta' => Sale::withTrashed()->whereIn('id', $ids('venta'))->get(['id', 'serie', 'correlativo'])->keyBy('id'),
             'nota' => Note::withTrashed()->whereIn('id', $ids('nota'))->get(['id', 'serie', 'correlativo'])->keyBy('id'),
+            'compra' => Compra::whereIn('id', $ids('compra'))->get(['id', 'serie', 'numero'])->keyBy('id'),
         ];
 
         return response()->json([
@@ -322,8 +325,9 @@ class ProductController extends Controller
                 $documento = null;
                 if ($m->documento_tipo) {
                     $doc = $documentos[$m->documento_tipo]->get($m->documento_id);
-                    $documento = ($m->documento_tipo === 'nota' ? 'Nota' : 'Venta') . " #{$m->documento_id}"
-                        . ($doc?->correlativo ? " ({$doc->serie}-{$doc->correlativo})" : '');
+                    $numero = $m->documento_tipo === 'compra' ? $doc?->numero : $doc?->correlativo;
+                    $documento = ['venta' => 'Venta', 'nota' => 'Nota', 'compra' => 'Compra'][$m->documento_tipo]
+                        . " #{$m->documento_id}" . ($numero ? " ({$doc->serie}-{$numero})" : '');
                 }
 
                 return [
@@ -333,6 +337,7 @@ class ProductController extends Controller
                     'documento' => $documento,
                     'motivo' => $m->motivo,
                     'cantidad' => $m->cantidad,
+                    'costo_unitario' => $m->costo_unitario,
                     'saldo' => $m->saldo,
                     'usuario' => $m->user ? trim("{$m->user->name} {$m->user->surname}") : null,
                 ];

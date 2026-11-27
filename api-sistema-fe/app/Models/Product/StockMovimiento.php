@@ -16,10 +16,11 @@ class StockMovimiento extends Model
     public const VENTA_ELIMINADA = 'venta_eliminada';
     public const NC_VENTA = 'nc_venta';
     public const AJUSTE = 'ajuste';
-    // Reservados para las compras (T-154).
+    // Compras (T-154).
     public const COMPRA = 'compra';
     public const COMPRA_ANULADA = 'compra_anulada';
     public const NC_COMPRA = 'nc_compra';
+    public const NC_COMPRA_ANULADA = 'nc_compra_anulada';
 
     public const UPDATED_AT = null;
 

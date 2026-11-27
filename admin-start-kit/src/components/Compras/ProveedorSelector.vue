@@ -2,8 +2,9 @@
     <div class="position-relative">
         <div class="input-group input-group-sm">
             <input :id="id" v-model="texto" type="text" class="form-control" autocomplete="off" :placeholder="placeholder"
+                :disabled="disabled"
                 @input="buscarConPausa" @focus="buscar" @blur="cerrar" />
-            <button v-if="modelValue" type="button" class="btn btn-outline-secondary" title="Quitar proveedor" @click="elegir(null)">
+            <button v-if="modelValue && !disabled" type="button" class="btn btn-outline-secondary" title="Quitar proveedor" @click="elegir(null)">
                 <i class="fas fa-times"></i>
             </button>
         </div>
@@ -26,7 +27,7 @@ import httpClient from '@/helpers/http-client';
 import { nombreConCiudad } from '@/helpers/proveedor';
 import type { CompraProveedor } from '@/types/compras';
 
-const props = withDefaults(defineProps<{ modelValue: CompraProveedor | null; id?: string; placeholder?: string }>(), {
+const props = withDefaults(defineProps<{ modelValue: CompraProveedor | null; id?: string; placeholder?: string; disabled?: boolean }>(), {
     id: undefined,
     placeholder: 'Buscar por nombre o documento',
 });

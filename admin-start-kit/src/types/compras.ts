@@ -31,6 +31,10 @@ export interface Compra {
     condicion: 'contado' | 'credito';
     fecha_vencimiento: string | null;
     compra_referencia_id: number | null;
+    con_credito_fiscal: boolean;
+    /** Solo en el detalle (`GET compras/{id}`). */
+    lineas?: CompraLinea[];
+    devolvible?: { product_id: number; maximo: number }[];
     referencia: { id: number; tipo_comprobante_codigo: string; serie: string; numero: string } | null;
     tiene_pdf: boolean;
     tiene_xml: boolean;
@@ -41,6 +45,32 @@ export interface Compra {
     motivo_anulacion: string | null;
     registrada_por: string | null;
     created_at: string;
+}
+
+export interface CompraLinea {
+    id: number;
+    product_id: number;
+    producto: { id: number; title: string; sku: string | null } | null;
+    factor: string;
+    cantidad: string;
+    valor_unitario: string;
+    valor_venta: string;
+    igv: string;
+    total: string;
+    costo_unitario_base: string;
+}
+
+/** Una línea en el formulario. `igv` null = se propone solo. */
+export interface LineaCompraForm {
+    product_id: number;
+    titulo: string;
+    sku: string | null;
+    factor: string;
+    cantidad: string | number;
+    valor_unitario: string | number;
+    igv: string | number | null;
+    /** En una nota de crédito: unidades base que todavía se pueden devolver. */
+    maximo?: number;
 }
 
 export type MontosCompra = Pick<Compra, 'base_gravada' | 'igv' | 'exonerado' | 'inafecto' | 'otros' | 'total'>;

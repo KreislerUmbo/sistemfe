@@ -17,7 +17,11 @@ use Tests\TestCase;
 // ProveedoresTablaBaseTest: tenants descartables con base física propia.
 class ComprasMigracionesPorGiroTest extends TestCase
 {
-    private const MIGRACIONES = ['2026_11_28_100000_create_compras_tables', '2026_11_28_100100_add_compras_permissions'];
+    private const MIGRACIONES = [
+        '2026_11_28_100000_create_compras_tables', '2026_11_28_100100_add_compras_permissions',
+        // T-154: dependen de compras.
+        '2026_11_29_100000_create_compra_lineas_table', '2026_11_29_100100_add_con_credito_fiscal_to_compras',
+    ];
 
     /** @var Tenant[] */
     private array $tenantsCreados = [];
@@ -68,6 +72,7 @@ class ComprasMigracionesPorGiroTest extends TestCase
             // Como un tenant anterior a T-135: le faltan y se las trae el comando del deploy.
             $tenant->run(function () {
                 Schema::drop('compra_periodos');
+                Schema::drop('compra_lineas');
                 Schema::drop('compras');
                 Permission::where('name', 'like', 'compras.%')->delete();
                 DB::table('migrations')->whereIn('migration', self::MIGRACIONES)->delete();
@@ -86,6 +91,10 @@ class ComprasMigracionesPorGiroTest extends TestCase
         $tenant->run(function () use ($giro) {
             $this->assertTrue(Schema::hasTable('compras'), $giro);
             $this->assertTrue(Schema::hasTable('compra_periodos'), $giro);
+            // T-154
+            $this->assertTrue(Schema::hasTable('compra_lineas'), $giro);
+            $this->assertTrue(Schema::hasColumn('compras', 'con_credito_fiscal'), $giro);
+            $this->assertTrue(Schema::hasColumn('products', 'costo_promedio'), $giro);
             $this->assertSame(
                 ['compras.anular', 'compras.cerrar_periodo', 'compras.registrar', 'compras.ver'],
                 Permission::where('name', 'like', 'compras.%')->orderBy('name')->pluck('name')->all(),

@@ -18,10 +18,10 @@
                     <div class="row g-2 align-items-end">
                         <div class="col-md-8">
                             <label class="form-label small mb-1" for="compra-proveedor">Proveedor *</label>
-                            <ProveedorSelector id="compra-proveedor" v-model="proveedor" />
+                            <ProveedorSelector id="compra-proveedor" v-model="proveedor" :disabled="conProductos" />
                         </div>
                         <div class="col-md-4">
-                            <button v-if="puede('proveedores.gestionar')" type="button" class="btn btn-sm btn-outline-primary"
+                            <button v-if="puede('proveedores.gestionar') && !conProductos" type="button" class="btn btn-sm btn-outline-primary"
                                 @click="altaRapida = true">
                                 <i class="fas fa-bolt me-1"></i>Nuevo proveedor
                             </button>
@@ -39,7 +39,7 @@
                     <div class="row g-2">
                         <div class="col-md-4">
                             <label class="form-label small mb-1" for="compra-tipo">Tipo *</label>
-                            <select id="compra-tipo" v-model="form.tipo_comprobante_codigo" class="form-select form-select-sm">
+                            <select id="compra-tipo" v-model="form.tipo_comprobante_codigo" class="form-select form-select-sm" :disabled="conProductos">
                                 <option v-for="t in tipos" :key="t.codigo" :value="t.codigo">{{ t.codigo }} — {{ t.nombre }}</option>
                             </select>
                         </div>
@@ -66,7 +66,8 @@
 
                         <div v-if="esNota" class="col-md-8">
                             <label class="form-label small mb-1" for="compra-referencia">Compra que modifica *</label>
-                            <select id="compra-referencia" v-model="form.compra_referencia_id" class="form-select form-select-sm">
+                            <select id="compra-referencia" v-model="form.compra_referencia_id" class="form-select form-select-sm"
+                                :disabled="conProductos">
                                 <option :value="null">{{ proveedor ? '— Elegir —' : 'Elige primero el proveedor' }}</option>
                                 <option v-for="r in referencias" :key="r.id" :value="r.id">
                                     {{ r.serie }}-{{ r.numero }} · {{ formatFecha(r.fecha_emision) }} · {{ formatMonto(r.total, r.moneda) }}
@@ -83,14 +84,15 @@
                     <div class="row g-2">
                         <div class="col-md-2">
                             <label class="form-label small mb-1" for="compra-moneda">Moneda *</label>
-                            <select id="compra-moneda" v-model="form.moneda" class="form-select form-select-sm">
+                            <select id="compra-moneda" v-model="form.moneda" class="form-select form-select-sm" :disabled="conProductos">
                                 <option value="PEN">Soles (PEN)</option>
                                 <option value="USD">Dólares (USD)</option>
                             </select>
                         </div>
                         <div v-if="form.moneda === 'USD'" class="col-md-3">
                             <label class="form-label small mb-1" for="compra-tc">Tipo de cambio *</label>
-                            <input id="compra-tc" v-model="form.tipo_cambio" type="number" step="0.0001" min="0" class="form-control form-control-sm">
+                            <input id="compra-tc" v-model="form.tipo_cambio" type="number" step="0.0001" min="0" class="form-control form-control-sm"
+                                :disabled="conProductos">
                             <small class="text-muted">{{ notaTipoCambio }}</small>
                         </div>
                         <div class="w-100"></div>
@@ -123,9 +125,19 @@
                             <CampoFecha id="compra-vencimiento" v-model="form.fecha_vencimiento" :min="form.fecha_emision || undefined"
                                 etiqueta="vencimiento" />
                         </div>
+                        <div class="col-12">
+                            <div class="form-check">
+                                <input id="compra-credito-fiscal" v-model="creditoFiscal" class="form-check-input" type="checkbox"
+                                    :disabled="conProductos">
+                                <label class="form-check-label small" for="compra-credito-fiscal">El IGV va a crédito fiscal</label>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
+
+            <LineasCompra v-if="muestraProductos" v-model="lineas" :comprobante="form" :es-nota="esNotaCredito"
+                :bloqueado="conProductos" />
 
             <div class="card">
                 <div class="card-header"><h5 class="card-title mb-0">Adjuntos y observaciones</h5></div>
@@ -171,14 +183,20 @@ import Swal from 'sweetalert2/dist/sweetalert2.js';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import CampoFecha from '@/components/CampoFecha.vue';
 import CompletarDocumentoProveedor from '@/components/Compras/CompletarDocumentoProveedor.vue';
+import LineasCompra from '@/components/Compras/LineasCompra.vue';
 import ProveedorSelector from '@/components/Compras/ProveedorSelector.vue';
 import ProveedorAltaRapida from '@/components/Proveedores/ProveedorAltaRapida.vue';
 import httpClient from '@/helpers/http-client';
-import { enCentimos, formatMonto, pasaDeDoceMeses, periodoDe, sumaDeMontos, TIPOS_NOTA } from '@/helpers/compras';
+import {
+    enCentimos, formatMonto, montosDeLinea, pasaDeDoceMeses, periodoDe, sumaDeMontos, TIPOS_CON_CREDITO_FISCAL, TIPOS_CON_LINEAS,
+    TIPOS_NOTA,
+} from '@/helpers/compras';
 import { formatFecha, hoyPeru } from '@/helpers/fecha';
 import { nombreConCiudad } from '@/helpers/proveedor';
 import { useAuthStore } from '@/stores/auth';
-import type { Compra, CompraCatalogos, CompraExistente, CompraProveedor, TipoComprobanteCompra } from '@/types/compras';
+import type {
+    Compra, CompraCatalogos, CompraExistente, CompraProveedor, LineaCompraForm, TipoComprobanteCompra,
+} from '@/types/compras';
 
 type TVueSwalInstance = typeof Swal & typeof Swal.fire;
 
@@ -236,6 +254,50 @@ const notaTipoCambio = ref('');
 let sugerido = '';
 
 const esNota = computed(() => TIPOS_NOTA.includes(form.tipo_comprobante_codigo));
+
+// T-154 — productos de la compra. `conProductos`: ya registrada con ellos, así que quedan fijos (D2).
+const lineas = ref<LineaCompraForm[]>([]);
+const creditoFiscal = ref(true);
+const conProductos = ref(false);
+const esNotaCredito = computed(() => form.tipo_comprobante_codigo === '07');
+const muestraProductos = computed(() =>
+    conProductos.value || (!compraId && TIPOS_CON_LINEAS.includes(form.tipo_comprobante_codigo)));
+
+watch(() => form.tipo_comprobante_codigo, (tipo, antes) => {
+    if (cargando.value) return;
+    creditoFiscal.value = TIPOS_CON_CREDITO_FISCAL.includes(tipo);
+    // Las líneas de una nota salen de su compra: no se mezclan con las de una compra.
+    if (tipo === '07' || antes === '07') lineas.value = [];
+});
+
+// En una nota de crédito, los productos salen de la compra que modifica, con su máximo (D3).
+const cargarLineasDeReferencia = async () => {
+    const id = form.compra_referencia_id;
+    lineas.value = [];
+    if (!id) return;
+    try {
+        const { data } = await httpClient.get<{ compra: Compra }>(`compras/${id}`);
+        if (id !== form.compra_referencia_id || !esNotaCredito.value) return;
+        const maximos = new Map((data.compra.devolvible ?? []).map((d) => [d.product_id, d.maximo]));
+        lineas.value = (data.compra.lineas ?? [])
+            .map((l) => ({
+                product_id: l.product_id,
+                titulo: l.producto?.title ?? '',
+                sku: l.producto?.sku ?? null,
+                factor: String(Number(l.factor)),
+                cantidad: '',
+                valor_unitario: Number(l.valor_unitario),
+                igv: null,
+                maximo: maximos.get(l.product_id) ?? 0,
+            }))
+            .filter((l) => l.maximo > 0);
+    } catch (e: any) {
+        error.value = e.response?.data?.message ?? 'No se pudieron cargar los productos de esa compra.';
+    }
+};
+watch(() => form.compra_referencia_id, () => {
+    if (!cargando.value && !compraId && esNotaCredito.value) cargarLineasDeReferencia();
+});
 const suma = computed(() => sumaDeMontos(form));
 const cuadra = computed(() => form.total === '' || enCentimos(form.total) === enCentimos(suma.value));
 
@@ -333,13 +395,31 @@ const guardar = async () => {
         const esMonto = campo === 'total' || MONTOS.some(([m]) => m === campo);
         datos.append(campo, esMonto && valor === '' ? '0' : String(valor ?? ''));
     }
+    datos.append('con_credito_fiscal', creditoFiscal.value ? '1' : '0');
+    // Al editar no se mandan: quedan las guardadas. En una nota, solo las que tienen cantidad.
+    if (!compraId && muestraProductos.value) {
+        const llenas = lineas.value.filter((l) => !esNotaCredito.value || Number(l.cantidad) > 0);
+        llenas.forEach((l, i) => {
+            const campos = {
+                product_id: l.product_id,
+                factor: l.factor,
+                cantidad: l.cantidad,
+                valor_unitario: l.valor_unitario === '' ? 0 : l.valor_unitario,
+                ...montosDeLinea(l, form),
+            };
+            for (const [campo, valor] of Object.entries(campos)) datos.append(`lineas[${i}][${campo}]`, String(valor));
+        });
+    }
     if (archivos.adjunto_pdf) datos.append('adjunto_pdf', archivos.adjunto_pdf);
     if (archivos.adjunto_xml) datos.append('adjunto_xml', archivos.adjunto_xml);
 
     guardando.value = true;
     try {
         const { data } = await httpClient.post(compraId ? `compras/${compraId}` : 'compras', datos);
-        await (Swal as TVueSwalInstance).fire('Listo', data.message, 'success');
+        // D9: se guardó, pero los productos no cuadran con la base.
+        await (data.aviso
+            ? (Swal as TVueSwalInstance).fire(data.message, data.aviso, 'warning')
+            : (Swal as TVueSwalInstance).fire('Listo', data.message, 'success'));
         router.push({ name: 'compras.index' });
     } catch (e: any) {
         const respuesta = e.response?.data;
@@ -382,6 +462,17 @@ const cargarCompra = async () => {
     });
     totalEscrito.value = enCentimos(c.total) !== enCentimos(sumaDeMontos(c));
     proveedor.value = c.proveedor;
+    creditoFiscal.value = c.con_credito_fiscal;
+    conProductos.value = !!c.lineas?.length;
+    lineas.value = (c.lineas ?? []).map((l) => ({
+        product_id: l.product_id,
+        titulo: l.producto?.title ?? '',
+        sku: l.producto?.sku ?? null,
+        factor: String(Number(l.factor)),
+        cantidad: Number(l.cantidad),
+        valor_unitario: Number(l.valor_unitario),
+        igv: l.igv,
+    }));
     tienePdf.value = c.tiene_pdf;
     tieneXml.value = c.tiene_xml;
     if (c.anulada_at) error.value = 'Esta compra está anulada: no se puede editar.';

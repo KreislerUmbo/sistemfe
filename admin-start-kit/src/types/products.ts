@@ -13,6 +13,8 @@ export type Product = {
     categorie_id:number,
     categorie: ProductCategorie,
     price_general:number,
+    /** Costo promedio en soles (T-154); solo lo trae la ficha. */
+    costo_promedio?:string | null,
     /** Precio mayorista (T-115). */
     price_company:number,
     /** T-115: desde cuántas unidades rige el precio mayorista; null = solo clientes mayoristas. */
@@ -57,6 +59,8 @@ export type MovimientoStock = {
     documento:string | null,
     motivo:string | null,
     cantidad:number,
+    /** Solo en los movimientos de compra (T-154). */
+    costo_unitario:number | null,
     saldo:number,
     usuario:string | null,
 }
@@ -70,6 +74,7 @@ export const TIPOS_MOVIMIENTO: Record<string, string> = {
     compra: 'Compra',
     compra_anulada: 'Compra anulada',
     nc_compra: 'Nota de crédito de compra',
+    nc_compra_anulada: 'NC de compra anulada',
 }
 
 export type ProductResponse = {

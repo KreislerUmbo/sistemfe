@@ -108,7 +108,8 @@ class ProveedoresTablaBaseTest extends TestCase
         $tenant = $this->crearTenant('agencia_viajes');
 
         $tenant->run(function () {
-            // T-135: compras (posterior, con FK a proveedores) no existía todavía en esa agencia.
+            // T-135 y T-154: compras (posterior, con FK a proveedores) y sus líneas no existían todavía.
+            Schema::drop('compra_lineas');
             Schema::drop('compras');
             Schema::drop('proveedores');
             DB::table('migrations')->whereIn('migration', [self::MIGRACION_CORE, self::MIGRACION_COLUMNAS])->delete();
@@ -193,6 +194,7 @@ class ProveedoresTablaBaseTest extends TestCase
 
         $agencia->run(fn () => $this->migracionCore()->down());
         // Un rollback va en orden inverso: lo que apunta a proveedores (T-135) sale antes.
+        $retail->run(fn () => Schema::drop('compra_lineas'));
         $retail->run(fn () => Schema::drop('compras'));
         $retail->run(fn () => $this->migracionCore()->down());
 

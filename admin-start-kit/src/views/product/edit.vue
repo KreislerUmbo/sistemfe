@@ -107,6 +107,9 @@
               <b-col lg="2" md="6">
                 <label for="stock" class="fw-semibold">Stock <span class="text-danger">*</span></label>
                 <b-form-input id="stock" type="number" min="0" v-model="stock" placeholder="0" />
+                <small class="text-muted">
+                  Costo promedio: {{ product_selected?.costo_promedio != null ? `S/ ${Number(product_selected.costo_promedio)}` : '—' }}
+                </small>
               </b-col>
 
               <b-col lg="2" md="6">

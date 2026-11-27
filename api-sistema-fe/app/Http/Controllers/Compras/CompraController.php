@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Compras;
 
 use App\Http\Controllers\Controller;
 use App\Models\Compras\Compra;
+use App\Models\Compras\CompraLinea;
 use App\Models\Compras\CompraPeriodo;
 use App\Models\Proveedor;
 use App\Models\Sale\TipoComprobante;
@@ -11,6 +12,7 @@ use App\Services\BusquedaLike;
 use App\Services\Compras\CompraService;
 use App\Services\HoraPeru;
 use App\Services\TipoCambio\TipoCambioSunatResolver;
+use Brick\Math\BigDecimal;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -168,10 +170,34 @@ class CompraController extends Controller
 
     private function respuesta(Compra $compra, ?string $mensaje = null)
     {
-        $compra = Compra::with(['proveedor', 'referencia', 'usuario', 'anulador'])->findOrFail($compra->id);
+        $compra = Compra::with(['proveedor', 'referencia', 'usuario', 'anulador', 'lineas.producto'])->findOrFail($compra->id);
 
-        return response()->json(array_filter(['code' => 200, 'message' => $mensaje])
-            + ['compra' => $this->datos($compra, $this->contexto([$compra->periodo]))]);
+        $datos = $this->datos($compra, $this->contexto([$compra->periodo]));
+        $datos['lineas'] = $compra->lineas->map(fn (CompraLinea $l) => $l->only([
+            'id', 'product_id', 'factor', 'cantidad', 'valor_unitario', 'valor_venta', 'igv', 'total', 'costo_unitario_base',
+        ]) + ['producto' => $l->producto?->only(['id', 'title', 'sku'])])->values();
+        // Lo que una nota de crédito todavía puede devolver de esta compra, en unidades base (D3).
+        $datos['devolvible'] = collect($this->service->devolvible($compra->id))
+            ->map(fn (BigDecimal $maximo, int $id) => ['product_id' => $id, 'maximo' => $maximo->toFloat()])
+            ->values();
+
+        return response()->json(array_filter(['code' => 200, 'message' => $mensaje, 'aviso' => $this->aviso($compra)])
+            + ['compra' => $datos]);
+    }
+
+    // T-154 (D9): las líneas que no cuadran con la base se guardan igual, pero se avisa.
+    private function aviso(Compra $compra): ?string
+    {
+        if ($compra->lineas->isEmpty()) {
+            return null;
+        }
+
+        $sumar = fn (iterable $valores) => collect($valores)
+            ->reduce(fn (BigDecimal $total, $valor) => $total->plus((string) $valor), BigDecimal::of('0.00'));
+        $lineas = $sumar($compra->lineas->pluck('valor_venta'));
+        $base = $sumar([$compra->base_gravada, $compra->exonerado, $compra->inafecto]);
+
+        return $lineas->isEqualTo($base) ? null : "Los productos suman {$lineas} y la base del comprobante es {$base}";
     }
 
     private function contexto(array $periodos): array
@@ -211,6 +237,7 @@ class CompraController extends Controller
             'condicion' => $compra->condicion,
             'fecha_vencimiento' => $compra->fecha_vencimiento?->toDateString(),
             'compra_referencia_id' => $compra->compra_referencia_id,
+            'con_credito_fiscal' => $compra->con_credito_fiscal,
             'referencia' => $compra->referencia?->only(['id', 'tipo_comprobante_codigo', 'serie', 'numero']),
             'tiene_pdf' => $compra->adjunto_pdf !== null,
             'tiene_xml' => $compra->adjunto_xml !== null,

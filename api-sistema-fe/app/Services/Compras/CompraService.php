@@ -3,12 +3,16 @@
 namespace App\Services\Compras;
 
 use App\Models\Compras\Compra;
+use App\Models\Compras\CompraLinea;
 use App\Models\Compras\CompraPeriodo;
+use App\Models\Product\Product;
 use App\Models\Proveedor;
 use App\Models\Sale\TipoComprobante;
 use App\Rules\ArchivoSubido;
 use App\Services\HoraPeru;
+use App\Services\Stock\StockService;
 use Brick\Math\BigDecimal;
+use Brick\Math\RoundingMode;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -32,6 +36,14 @@ class CompraService
     private const TIPO_NO_DOMICILIADO = '91';
 
     private const ADJUNTOS = ['pdf' => 'adjunto_pdf', 'xml' => 'adjunto_xml'];
+
+    // T-154 (D2): una compra con productos no cambia nada que afecte al stock o al costo.
+    private const FIJA_CON_PRODUCTOS = 'Esta compra tiene productos: anúlala y regístrala de nuevo';
+
+    // 7 campos por línea: pasadas ~140, PHP las corta sin aviso (max_input_vars).
+    private const MAX_LINEAS = 100;
+
+    public function __construct(private StockService $stock) {}
 
     public function registrar(Request $request, int $userId): Compra
     {
@@ -63,7 +75,24 @@ class CompraService
 
             // T-136: aquí va la regla «con pagos aplicados no se anula hasta desaplicarlos».
 
+            // T-154 (D8): primero se anula la nota que devolvió productos de esta compra.
+            $nota = Compra::vigentes()
+                ->where('compra_referencia_id', $actual->id)
+                ->where('tipo_comprobante_codigo', Compra::TIPO_NOTA_CREDITO)
+                ->whereHas('lineas')
+                ->first();
+            if ($nota) {
+                throw new CompraException("Anula primero la nota de crédito {$nota->serie}-{$nota->numero}");
+            }
+
             $actual->update(['anulada_at' => now(), 'anulada_por' => $userId, 'motivo_anulacion' => $motivo]);
+
+            $lineas = $actual->lineas()->get();
+            if ($lineas->isNotEmpty()) {
+                $actual->tipo_comprobante_codigo === Compra::TIPO_NOTA_CREDITO
+                    ? $this->stock->revertirNotaCompra($actual, $lineas)
+                    : $this->stock->revertirCompra($actual, $lineas);
+            }
 
             return $actual;
         });
@@ -79,6 +108,23 @@ class CompraService
                 $actual = $compra->exists ? Compra::whereKey($compra->id)->lockForUpdate()->firstOrFail() : $compra;
                 if ($actual->estaAnulada()) {
                     throw new CompraException('Una compra anulada no se puede editar.');
+                }
+
+                $lineas = $datos['lineas'];
+                unset($datos['lineas']);
+                $datos['con_credito_fiscal'] ??= (bool) $actual->con_credito_fiscal;
+
+                if ($actual->exists) {
+                    $this->exigirSinCambiosDeStock($actual, $datos, $lineas);
+                    $lineas = []; // las líneas solo se registran al crear (D2)
+                } elseif ($lineas && ! in_array($datos['tipo_comprobante_codigo'], Compra::TIPOS_CON_LINEAS, true)) {
+                    throw new CompraException('Ese tipo de comprobante no lleva productos.');
+                }
+
+                // Orden de bloqueo: compras, periodos y productos. La compra que modifica una nota
+                // se bloquea para que dos notas no devuelvan lo mismo, ni se anule a la vez.
+                if (in_array($datos['tipo_comprobante_codigo'], Compra::TIPOS_NOTA, true) && ! empty($datos['compra_referencia_id'])) {
+                    Compra::whereKey($datos['compra_referencia_id'])->lockForUpdate()->first();
                 }
 
                 // Se bloquean el periodo de antes y el nuevo, siempre en el mismo orden.
@@ -100,6 +146,14 @@ class CompraService
                     throw $this->yaRegistrada($existente);
                 }
 
+                $esNotaCredito = $datos['tipo_comprobante_codigo'] === Compra::TIPO_NOTA_CREDITO;
+                if ($lineas) {
+                    $lineas = $this->prepararLineas($lineas, $datos);
+                    if ($esNotaCredito) {
+                        $this->exigirDevolvible($lineas, $datos['compra_referencia_id']);
+                    }
+                }
+
                 $actual->fill($datos);
                 foreach (self::ADJUNTOS as $tipo => $columna) {
                     if ($archivo = $request->file($columna)) {
@@ -107,6 +161,13 @@ class CompraService
                     }
                 }
                 $actual->save();
+
+                if ($lineas) {
+                    $actual->lineas()->createMany($lineas);
+                    $esNotaCredito
+                        ? $this->stock->salirPorNotaCompra($actual, $lineas)
+                        : $this->stock->entrarPorCompra($actual, $lineas);
+                }
 
                 return $actual;
             });
@@ -158,6 +219,15 @@ class CompraService
             'fecha_vencimiento' => ['nullable', 'required_if:condicion,credito', 'date_format:Y-m-d'],
             'compra_referencia_id' => ['nullable', 'integer'],
             'observaciones' => ['nullable', 'string', 'max:2000'],
+            'con_credito_fiscal' => ['nullable', 'boolean'],
+            'lineas' => ['nullable', 'array', 'max:'.self::MAX_LINEAS],
+            'lineas.*.product_id' => ['required', 'integer'],
+            'lineas.*.cantidad' => ['required', 'numeric', 'gt:0', 'max:999999999', 'decimal:0,6'],
+            'lineas.*.factor' => ['nullable', 'numeric', 'gt:0', 'max:999999', 'decimal:0,6'],
+            'lineas.*.valor_unitario' => ['required', 'numeric', 'min:0', 'max:999999999999', 'decimal:0,6'],
+            'lineas.*.valor_venta' => $monto,
+            'lineas.*.igv' => $monto,
+            'lineas.*.total' => $monto,
             'adjunto_pdf' => ArchivoSubido::pdf(),
             'adjunto_xml' => ArchivoSubido::xml(),
         ], [
@@ -169,6 +239,14 @@ class CompraService
             'fecha_vencimiento.required_if' => 'A crédito se necesita la fecha de vencimiento.',
             '*.min' => 'Los montos no pueden ser negativos.',
             '*.decimal' => 'Hay un monto con demasiados decimales.',
+            'lineas.max' => 'Una compra admite hasta '.self::MAX_LINEAS.' líneas de productos.',
+            'lineas.*.product_id.required' => 'Hay una línea sin producto.',
+            'lineas.*.cantidad.required' => 'Hay un producto sin cantidad.',
+            'lineas.*.cantidad.gt' => 'La cantidad de cada producto debe ser mayor a cero.',
+            'lineas.*.factor.gt' => 'El factor debe ser mayor a cero.',
+            'lineas.*.*.required' => 'Completa los montos de cada producto.',
+            'lineas.*.*.min' => 'Los montos no pueden ser negativos.',
+            'lineas.*.*.decimal' => 'Hay una línea con demasiados decimales.',
             'adjunto_pdf.mimes' => 'El adjunto PDF debe ser un PDF.',
             'adjunto_xml.mimes' => 'El adjunto XML debe ser un XML.',
             'adjunto_xml.extensions' => 'El adjunto XML debe ser un XML.',
@@ -214,7 +292,150 @@ class CompraService
 
         $datos['observaciones'] = $datos['observaciones'] ?? null;
 
+        // Sin enviar queda en null: al editar se conserva lo guardado.
+        $datos['con_credito_fiscal'] = isset($datos['con_credito_fiscal']) ? (bool) $datos['con_credito_fiscal'] : null;
+        $datos['lineas'] = array_values($datos['lineas'] ?? []);
+
         return $datos;
+    }
+
+    // D2. Sin líneas en el pedido se conservan las guardadas. La compra que modifica una nota
+    // también queda fija: de ella salen los máximos de D3.
+    private function exigirSinCambiosDeStock(Compra $compra, array $datos, array $lineas): void
+    {
+        $guardadas = $compra->lineas()->get();
+        if ($guardadas->isEmpty()) {
+            if ($lineas) {
+                throw new CompraException(self::FIJA_CON_PRODUCTOS);
+            }
+
+            return;
+        }
+
+        $referencia = in_array($datos['tipo_comprobante_codigo'], Compra::TIPOS_NOTA, true)
+            ? (int) ($datos['compra_referencia_id'] ?? 0) : 0;
+        $mismoCambio = $datos['tipo_cambio'] === null || $compra->tipo_cambio === null
+            ? $datos['tipo_cambio'] === $compra->tipo_cambio
+            : BigDecimal::of((string) $datos['tipo_cambio'])->isEqualTo($compra->tipo_cambio);
+
+        $cambia = (int) $datos['proveedor_id'] !== (int) $compra->proveedor_id
+            || $datos['tipo_comprobante_codigo'] !== $compra->tipo_comprobante_codigo
+            || $datos['moneda'] !== $compra->moneda
+            || ! $mismoCambio
+            || $datos['con_credito_fiscal'] !== $compra->con_credito_fiscal
+            || $referencia !== (int) $compra->compra_referencia_id
+            || ($lineas && $this->firma($lineas) !== $this->firma($guardadas->all()));
+
+        if ($cambia) {
+            throw new CompraException(self::FIJA_CON_PRODUCTOS);
+        }
+    }
+
+    /** Las líneas en una forma comparable, venga cada número como venga escrito. */
+    private function firma(array $lineas): array
+    {
+        return array_map(fn ($linea) => implode('|', array_map(
+            fn (string $campo) => (string) BigDecimal::of((string) ($linea[$campo] ?? ($campo === 'factor' ? 1 : 0)))
+                ->toScale(6, RoundingMode::HALF_UP),
+            ['product_id', 'factor', 'cantidad', 'valor_unitario', 'valor_venta', 'igv', 'total'],
+        )), $lineas);
+    }
+
+    // Valida cada línea y calcula su costo por unidad base, en soles (D1, D5, D6).
+    private function prepararLineas(array $lineas, array $datos): array
+    {
+        $productos = Product::withTrashed()->whereIn('id', array_column($lineas, 'product_id'))->get()->keyBy('id');
+        $cambio = (string) ($datos['tipo_cambio'] ?? 1);
+        // Una devolución puede incluir un producto que ya se eliminó del catálogo.
+        $admiteEliminados = $datos['tipo_comprobante_codigo'] === Compra::TIPO_NOTA_CREDITO;
+
+        $preparadas = [];
+        foreach ($lineas as $i => $linea) {
+            $producto = $productos->get((int) $linea['product_id']);
+            if (! $producto || ($producto->trashed() && ! $admiteEliminados)) {
+                throw new CompraException('El producto de la línea '.($i + 1).' no existe.');
+            }
+
+            $factor = BigDecimal::of((string) ($linea['factor'] ?? 1));
+            $cantidad = BigDecimal::of((string) $linea['cantidad']);
+            $valorVenta = $cantidad->multipliedBy((string) $linea['valor_unitario'])->toScale(2, RoundingMode::HALF_UP);
+            if (! $valorVenta->isEqualTo((string) $linea['valor_venta'])) {
+                throw new CompraException("«{$producto->title}»: el valor de venta debe ser cantidad × valor unitario ({$valorVenta}).");
+            }
+
+            $monto = (string) ($datos['con_credito_fiscal'] ? $linea['valor_venta'] : $linea['total']);
+
+            $preparadas[] = [
+                'product_id' => $producto->id,
+                'factor' => (string) $factor,
+                'cantidad' => (string) $cantidad,
+                'valor_unitario' => (string) $linea['valor_unitario'],
+                'valor_venta' => (string) $linea['valor_venta'],
+                'igv' => (string) $linea['igv'],
+                'total' => (string) $linea['total'],
+                'costo_unitario_base' => (string) BigDecimal::of($monto)->multipliedBy($cambio)
+                    ->dividedBy($cantidad->multipliedBy($factor), 6, RoundingMode::HALF_UP),
+            ];
+        }
+
+        return $preparadas;
+    }
+
+    // D3: solo productos de la compra que modifica, sin pasar de lo que queda por devolver.
+    private function exigirDevolvible(array $lineas, int $referenciaId): void
+    {
+        $maximos = $this->devolvible($referenciaId);
+
+        $pedidas = [];
+        foreach ($lineas as $linea) {
+            $id = $linea['product_id'];
+            $pedidas[$id] = ($pedidas[$id] ?? BigDecimal::zero())
+                ->plus(BigDecimal::of($linea['cantidad'])->multipliedBy($linea['factor']));
+        }
+
+        foreach ($pedidas as $id => $pedida) {
+            $maximo = $maximos[$id] ?? BigDecimal::zero();
+            if ($pedida->isGreaterThan($maximo)) {
+                $titulo = Product::withTrashed()->find($id)->title;
+                $numero = (float) (string) $maximo->toScale(6, RoundingMode::HALF_UP);
+
+                throw new CompraException(
+                    "«{$titulo}»: de la compra que modifica se pueden devolver como máximo {$numero} unidades.",
+                    422,
+                    ['product_id' => $id, 'maximo' => $numero],
+                );
+            }
+        }
+    }
+
+    /**
+     * Unidades base que quedan por devolver de una compra: lo comprado menos lo de sus notas de
+     * crédito vigentes.
+     *
+     * @return array<int, BigDecimal> product_id => unidades
+     */
+    public function devolvible(int $compraId): array
+    {
+        $notas = Compra::vigentes()
+            ->where('compra_referencia_id', $compraId)
+            ->where('tipo_comprobante_codigo', Compra::TIPO_NOTA_CREDITO)
+            ->pluck('id');
+        $lineas = CompraLinea::whereIn('compra_id', $notas->push($compraId))->get();
+
+        $quedan = [];
+        // Primero lo comprado: un producto que no está en la compra no aparece.
+        foreach ($lineas->where('compra_id', $compraId) as $linea) {
+            $quedan[$linea->product_id] = ($quedan[$linea->product_id] ?? BigDecimal::zero())
+                ->plus(BigDecimal::of($linea->cantidad)->multipliedBy($linea->factor));
+        }
+        foreach ($lineas->where('compra_id', '!=', $compraId) as $linea) {
+            if (isset($quedan[$linea->product_id])) {
+                $quedan[$linea->product_id] = $quedan[$linea->product_id]
+                    ->minus(BigDecimal::of($linea->cantidad)->multipliedBy($linea->factor));
+            }
+        }
+
+        return $quedan;
     }
 
     private function exigirPeriodoAbierto(CompraPeriodo $periodo): void
