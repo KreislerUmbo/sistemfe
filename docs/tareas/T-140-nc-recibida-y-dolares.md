@@ -144,6 +144,10 @@ tc_pago = aplicación.tipo_cambio   si las monedas difieren (pago en soles)
         = pago.tipo_cambio          si el pago es en USD
 diferencia (S/) = round(monto_compra × (tc_pago − compra.tipo_cambio), 2)
 ```
+> **Cambiado en la revisión (`/code-review`, 27-nov):** con pago en soles, la diferencia es
+> `round(aplicación.monto − monto_compra × compra.tipo_cambio, 2)`: los soles que de verdad
+> salieron (ya redondeados al convertir). La fórmula de arriba podía dar un céntimo distinto. Con
+> pago en USD no cambia.
 Sin `tc_pago` → `null` («sin T.C.»). Compra en soles → no aplica.
 
 ## Alcance
@@ -463,6 +467,16 @@ permisos ni menú nuevos.
   `RegistrarPago.vue` y `AplicarPagoACuenta.vue`. El T.C. del pago, de la compra y del reembolso
   sigue con 4. Test: `PagoProveedorDolaresTest::test_seis_decimales_cancelan_exacto`; CA3 y CA4
   esperan ahora `3.752300` / `3.750000`.
+- **`/code-review` (4 hallazgos, todos corregidos):**
+  - *Orden de bloqueo del reembolso* (importante): bloqueaba el destino y después la cuenta o la
+    sesión; el pago lo hace al revés. Ahora `registrar()` bloquea primero la cuenta o la sesión, y
+    `anular()` de uno por Caja bloquea la sesión antes que el destino.
+  - *`AplicarPagoACuenta.vue`:* corregir el T.C. reemplazaba el monto escrito a mano por el
+    máximo. Ahora solo se propone mientras no se haya escrito; al elegir otro pago se vuelve a proponer.
+  - *Total de diferencia de cambio:* sumaba solo las filas con T.C. y parecía completo. Ahora es
+    null («sin T.C.») si a alguna aplicación activa de un pago vigente le falta; la ficha lo muestra.
+    Test: `test_total_sin_tc_si_a_una_fila_le_falta`.
+  - *Diferencia con los soles pagados* (ver D9 en «Cálculos»). Test: `test_diferencia_con_los_soles_pagados`.
 - **Trampa vista:** si la columna no se migra, Postgres redondea el T.C. a 4 decimales en silencio,
   mientras el monto ya se calculó con 6. La base de tests (`sistemafe_test_migrations`) se migra
   aparte: `migrate --database=pgsql --path=…` con `DB_DATABASE=sistemafe_test_migrations`.

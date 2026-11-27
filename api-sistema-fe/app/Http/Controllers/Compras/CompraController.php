@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Compras;
 use App\Http\Controllers\Controller;
 use App\Models\Cash\PaymentMethod;
 use App\Models\Compras\AplicacionPagoProveedor;
+use App\Models\Compras\PagoProveedor;
 use App\Models\Compras\Compra;
 use App\Models\Compras\CompraLinea;
 use App\Models\Compras\CompraPeriodo;
@@ -195,9 +196,12 @@ class CompraController extends Controller
 
         $datos = $this->datos($compra, $this->contexto([$compra->periodo]) + ['pagos' => $this->pagos->estados(collect([$compra]))]);
         $datos['aplicaciones_pago'] = $this->aplicacionesDe($compra);
-        // T-140: solo en compras en USD; null si ninguna aplicación tiene los dos tipos de cambio.
-        $diferencias = $datos['aplicaciones_pago']->pluck('diferencia_cambio')->filter(fn (?string $d) => $d !== null);
-        $datos['diferencia_cambio_total'] = $diferencias->isEmpty() ? null : (string) $diferencias
+        // T-140: solo en compras en USD, sobre las aplicaciones activas de pagos vigentes. null si no
+        // hay ninguna o si a alguna le falta el T.C.: un total parcial parecería completo.
+        $diferencias = $datos['aplicaciones_pago']
+            ->filter(fn (array $a) => $a['desaplicada_at'] === null && $a['pago']['estado'] === PagoProveedor::VIGENTE)
+            ->pluck('diferencia_cambio');
+        $datos['diferencia_cambio_total'] = $diferencias->isEmpty() || $diferencias->contains(null) ? null : (string) $diferencias
             ->reduce(fn (BigDecimal $suma, string $d) => $suma->plus($d), BigDecimal::of('0.00'));
         $datos += ReembolsoProveedor::paraFicha($compra->reembolsos()->get());
         $datos['lineas'] = $compra->lineas->map(fn (CompraLinea $l) => $l->only([

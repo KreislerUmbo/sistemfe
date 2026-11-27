@@ -198,13 +198,20 @@ class PagoProveedorService
             || $compra->moneda !== 'USD' || $compra->tipo_cambio === null) {
             return null;
         }
-        $tcPago = $pago->moneda === $compra->moneda ? $pago->tipo_cambio : $aplicacion->tipo_cambio;
-        if ($tcPago === null) {
+        $registrado = BigDecimal::of((string) $aplicacion->monto_compra)->multipliedBy((string) $compra->tipo_cambio);
+
+        // Pago en soles: los soles que de verdad salieron (`monto`, ya redondeado al convertir) menos
+        // lo registrado. Con monto_compra × (tc − tc compra) podía salir un céntimo distinto.
+        if ($pago->moneda !== $compra->moneda) {
+            return BigDecimal::of((string) $aplicacion->monto)->minus($registrado)->toScale(2, RoundingMode::HALF_UP);
+        }
+        if ($pago->tipo_cambio === null) {
             return null;
         }
 
         return BigDecimal::of((string) $aplicacion->monto_compra)
-            ->multipliedBy(BigDecimal::of((string) $tcPago)->minus((string) $compra->tipo_cambio))
+            ->multipliedBy((string) $pago->tipo_cambio)
+            ->minus($registrado)
             ->toScale(2, RoundingMode::HALF_UP);
     }
 

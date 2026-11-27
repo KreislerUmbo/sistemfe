@@ -18,7 +18,7 @@
                     <div :class="cruzada ? 'col-7' : 'col-12'">
                         <label class="form-label small mb-1" for="aplicar-monto">Monto a aplicar ({{ compra?.moneda }}) *</label>
                         <input id="aplicar-monto" v-model="monto" type="number" step="0.01" min="0.01"
-                            class="form-control form-control-sm text-end">
+                            class="form-control form-control-sm text-end" @input="montoEscrito = true">
                     </div>
                     <div v-if="cruzada" class="col-5">
                         <label class="form-label small mb-1" for="aplicar-tc">T.C. *</label>
@@ -61,6 +61,8 @@ const pagos = ref<PagoProveedor[]>([]);
 const pagoId = ref<number | null>(null);
 const monto = ref<string | number>('');
 const tipoCambio = ref('');
+// El monto escrito a mano no se reemplaza al corregir el T.C.; al elegir otro pago se vuelve a proponer.
+const montoEscrito = ref(false);
 const error = ref('');
 const cargando = ref(false);
 const guardando = ref(false);
@@ -83,6 +85,7 @@ const proponer = () => {
 // El del pago si es en dólares; si no, la venta SUNAT de su fecha.
 const elegirPago = async () => {
     tipoCambio.value = '';
+    montoEscrito.value = false;
     const elegido = pago.value;
     if (elegido && cruzada.value) {
         const propuesto = (elegido.moneda === 'USD' ? elegido.tipo_cambio : null) ?? await ventaSunat(elegido.fecha);
@@ -95,7 +98,7 @@ watch(pagoId, elegirPago);
 
 const escribirTc = (e: Event) => {
     tipoCambio.value = (e.target as HTMLInputElement).value;
-    proponer();
+    if (!montoEscrito.value) proponer();
 };
 
 watch(abierto, async (valor) => {

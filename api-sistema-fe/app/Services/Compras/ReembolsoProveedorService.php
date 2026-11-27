@@ -2,6 +2,7 @@
 
 namespace App\Services\Compras;
 
+use App\Models\Cash\CashSession;
 use App\Models\Compras\Compra;
 use App\Models\Compras\PagoProveedor;
 use App\Models\Compras\ReembolsoProveedor;
@@ -16,8 +17,8 @@ use Illuminate\Support\Facades\Validator;
 
 /**
  * T-140 — reembolsos del proveedor: devuelve el saldo a favor de una compra (D1, D6) o lo «a cuenta»
- * de un pago (D2). Cada reembolso bloquea solo su destino (una compra o un pago), así que no forma
- * ciclos con el orden de PagoProveedorService. Todo rechazo sale como CompraException.
+ * de un pago (D2). Orden de bloqueo, el de PagoProveedorService: primero la cuenta bancaria o la
+ * sesión de caja, después el destino (una compra o un pago). Todo rechazo sale como CompraException.
  */
 class ReembolsoProveedorService
 {
@@ -71,21 +72,27 @@ class ReembolsoProveedorService
 
         try {
             return DB::transaction(function () use ($datos, $usuario) {
+                $proveedor = Proveedor::findOrFail($datos['proveedor_id']);
+                $reembolso = new ReembolsoProveedor($datos + ['user_id' => $usuario->id, 'estado' => ReembolsoProveedor::VIGENTE]);
+
+                // Orden de bloqueo, el mismo del pago (registrarSalida y después crearAplicaciones):
+                // primero la cuenta o la sesión de caja, después el destino. Al revés, un pago y un
+                // reembolso a la vez sobre la misma cuenta y la misma compra se traban.
+                if ($reembolso->origen === PagoProveedor::ORIGEN_BANCO) {
+                    $this->origenDinero->exigirCuenta($reembolso);
+                } else {
+                    // Un ingreso no pasa por aprobación: nace confirmado. Si el destino no admite el
+                    // monto, la transacción se deshace con el movimiento.
+                    $this->origenDinero->moverEnCaja(
+                        $reembolso, 'in', "Reembolso de proveedor: {$proveedor->razon_social}", $proveedor, $usuario
+                    );
+                }
+
                 // El destino se bloquea antes de calcular lo que se puede reembolsar.
                 $datos['compra_id'] !== null
                     ? $this->exigirSaldoAFavor($datos)
                     : $this->exigirACuenta($datos);
 
-                $proveedor = Proveedor::findOrFail($datos['proveedor_id']);
-                $reembolso = new ReembolsoProveedor($datos + ['user_id' => $usuario->id, 'estado' => ReembolsoProveedor::VIGENTE]);
-                if ($reembolso->origen === PagoProveedor::ORIGEN_BANCO) {
-                    $this->origenDinero->exigirCuenta($reembolso);
-                } else {
-                    // Un ingreso no pasa por aprobación: nace confirmado.
-                    $this->origenDinero->moverEnCaja(
-                        $reembolso, 'in', "Reembolso de proveedor: {$proveedor->razon_social}", $proveedor, $usuario
-                    );
-                }
                 $reembolso->save();
 
                 return $reembolso;
@@ -112,6 +119,11 @@ class ReembolsoProveedorService
         }
 
         return DB::transaction(function () use ($reembolso, $motivo, $usuario) {
+            // La sesión de caja antes que el destino, como al registrar: revertirEnCaja() la bloquea
+            // otra vez (misma transacción) para validar que no quede en negativo.
+            if ($reembolso->origen === PagoProveedor::ORIGEN_CAJA) {
+                CashSession::where('opened_by', $usuario->id)->where('status', 'open')->lockForUpdate()->first();
+            }
             $reembolso->compra_id
                 ? Compra::whereKey($reembolso->compra_id)->lockForUpdate()->firstOrFail()
                 : PagoProveedor::whereKey($reembolso->pago_proveedor_id)->lockForUpdate()->firstOrFail();

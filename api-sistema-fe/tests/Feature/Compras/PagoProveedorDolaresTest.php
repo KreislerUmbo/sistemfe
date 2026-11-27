@@ -148,6 +148,35 @@ class PagoProveedorDolaresTest extends ComprasT140TestCase
         $this->assertNull($this->ficha($sinDato->id)['aplicaciones_pago'][0]['diferencia_cambio']);
     }
 
+    // /code-review: el total no suma solo las filas con T.C., porque parecería completo.
+    public function test_total_sin_tc_si_a_una_fila_le_falta(): void
+    {
+        $compra = $this->compraUsd('200.00', '3.7000');
+        $viejo = $this->porBanco('100.00', [[$compra, '100.00']], ['moneda' => 'USD', 'tipo_cambio' => '3.7500']);
+        DB::table('pagos_proveedor')->where('id', $viejo->id)->update(['tipo_cambio' => null]);
+        $this->porBanco('375.00', [[$compra, '100.00', '3.7500']]);
+
+        $ficha = $this->ficha($compra->id);
+        $this->assertSame([null, '5.00'], array_column($ficha['aplicaciones_pago'], 'diferencia_cambio'));
+        $this->assertNull($ficha['diferencia_cambio_total']);
+
+        // Sin la fila incompleta (desaplicada), el total vuelve.
+        $this->servicio()->desaplicar($viejo->aplicaciones()->sole(), 'Prueba', $this->user);
+        $this->assertSame('5.00', $this->ficha($compra->id)['diferencia_cambio_total']);
+    }
+
+    // /code-review: en un pago en soles, la diferencia sale de los soles que de verdad salieron.
+    public function test_diferencia_con_los_soles_pagados(): void
+    {
+        // 1.00 × 3.7051 = 3.71 pagados; registrado 1.00 × 3.7004 → 0.0096 → 0.01.
+        // Con 1.00 × (3.7051 − 3.7004) = 0.0047 daba 0.00.
+        $compra = $this->compraUsd('1.00', '3.7004');
+        $pago = $this->porBanco('3.71', [[$compra, '1.00', '3.7051']]);
+
+        $this->assertSame('3.71', $pago->aplicaciones()->sole()->monto);
+        $this->assertSame('0.01', $this->ficha($compra->id)['diferencia_cambio_total']);
+    }
+
     public function test_migracion_conserva_lo_aplicado(): void // CA9
     {
         $compra = $this->compra('1000.00');

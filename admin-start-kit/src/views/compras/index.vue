@@ -302,7 +302,9 @@
                                 </td>
                             </tr>
                         </tbody>
-                        <tfoot v-if="detalle.moneda === 'USD' && detalle.diferencia_cambio_total != null" class="fw-semibold">
+                        <!-- T-140: total null con filas activas = a alguna le falta el T.C. («sin T.C.») -->
+                        <tfoot v-if="detalle.moneda === 'USD' && detalle.aplicaciones_pago.some((a) => !a.desaplicada_at && a.pago.estado === 'vigente')"
+                            class="fw-semibold">
                             <tr>
                                 <td colspan="3" class="text-end">Diferencia de cambio total</td>
                                 <td class="text-end">{{ textoDiferencia(detalle.diferencia_cambio_total) }}</td>
