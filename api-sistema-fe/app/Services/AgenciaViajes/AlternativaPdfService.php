@@ -100,7 +100,7 @@ class AlternativaPdfService
         $alternativa->setRelation('items', $alternativa->items->whereNull('ajuste_de_item_id')->values());
 
         $config = \App\Models\AgenciaViajes\ConfiguracionAgencia::first();
-        $cuentasBancarias = \App\Models\AgenciaViajes\CuentaBancaria::where('activo', true)
+        $cuentasBancarias = \App\Models\CuentaBancaria::where('activo', true)
             ->orderBy('orden')->orderBy('id')->get();
 
         $pasajeros = \App\Models\AgenciaViajes\CotizacionPasajero::where('cotizacion_id', $alternativa->cotizacion_id)->get();

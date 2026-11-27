@@ -57,6 +57,7 @@
                                 <th>Moneda</th>
                                 <th class="text-end">Total</th>
                                 <th>Condición</th>
+                                <th>Pago</th>
                                 <th class="text-end">Acciones</th>
                             </tr>
                         </thead>
@@ -77,6 +78,18 @@
                                         :class="!c.anulada_at && estaVencida(c.fecha_vencimiento, hoy) ? 'text-danger fw-semibold' : 'text-muted'">
                                         Vence {{ formatFecha(c.fecha_vencimiento) }}
                                     </small>
+                                </td>
+                                <td>
+                                    <template v-if="c.estado_pago">
+                                        <span class="badge" :class="ESTADOS_PAGO[c.estado_pago].clase">{{ ESTADOS_PAGO[c.estado_pago].texto }}</span>
+                                        <small v-if="esSaldoAFavor(c.saldo)" class="d-block text-muted">
+                                            A favor {{ formatMonto(-Number(c.saldo), c.moneda) }}
+                                        </small>
+                                        <small v-else-if="c.estado_pago !== 'pagado'" class="d-block text-muted">
+                                            Saldo {{ formatMonto(c.saldo ?? 0, c.moneda) }}
+                                        </small>
+                                    </template>
+                                    <span v-else class="text-muted">—</span>
                                 </td>
                                 <td class="text-end text-nowrap">
                                     <button type="button" class="btn btn-sm btn-link p-1" title="Ver" @click="verDetalle(c.id)">
@@ -101,7 +114,7 @@
                                 </td>
                             </tr>
                             <tr v-if="!compras.length">
-                                <td colspan="8" class="text-center text-muted py-4">No hay compras con estos filtros.</td>
+                                <td colspan="9" class="text-center text-muted py-4">No hay compras con estos filtros.</td>
                             </tr>
                         </tbody>
                         <tfoot v-if="totales && total" class="table-light">
@@ -114,7 +127,7 @@
                                     </small>
                                 </th>
                                 <th class="text-end">{{ formatMonto(totales.total, 'PEN') }}</th>
-                                <th colspan="2"></th>
+                                <th colspan="3"></th>
                             </tr>
                         </tfoot>
                     </table>
@@ -226,6 +239,54 @@
                         </tbody>
                     </table>
                 </div>
+                <!-- T-136: las anuladas y las notas de crédito no se pagan. -->
+                <div v-if="detalle.estado_pago || detalle.aplicaciones_pago?.length" class="mb-2">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-1 mb-1">
+                        <h6 class="small fw-semibold mb-0">
+                            Pagos
+                            <template v-if="detalle.estado_pago">
+                                <span class="badge ms-1" :class="ESTADOS_PAGO[detalle.estado_pago].clase">
+                                    {{ ESTADOS_PAGO[detalle.estado_pago].texto }}
+                                </span>
+                                <span class="text-muted fw-normal ms-1">
+                                    {{ esSaldoAFavor(detalle.saldo)
+                                        ? `Saldo a favor ${formatMonto(-Number(detalle.saldo), detalle.moneda)}`
+                                        : `Saldo ${formatMonto(detalle.saldo ?? 0, detalle.moneda)}` }}
+                                </span>
+                            </template>
+                        </h6>
+                        <div v-if="puede('compras.pagar') && porPagar" class="d-flex gap-1">
+                            <button type="button" class="btn btn-sm btn-outline-primary" @click="pagar">Registrar pago</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" @click="aplicarACuenta">
+                                Aplicar pago a cuenta
+                            </button>
+                        </div>
+                    </div>
+                    <div v-if="Number(detalle.por_aprobar) > 0" class="small text-warning">
+                        {{ formatMonto(detalle.por_aprobar!, detalle.moneda) }} esperan la aprobación del egreso en Caja.
+                    </div>
+                    <div v-if="!detalle.aplicaciones_pago?.length" class="small text-muted fst-italic">Sin pagos aplicados</div>
+                    <table v-else class="table table-sm small mb-0">
+                        <tbody>
+                            <tr v-for="a in detalle.aplicaciones_pago" :key="a.id" :class="{ 'text-muted': a.desaplicada_at }">
+                                <td>{{ formatFecha(a.pago.fecha) }}</td>
+                                <td>
+                                    {{ a.pago.origen === 'caja' ? `Caja · ${a.pago.metodo_pago}` : `${a.pago.cuenta} · op. ${a.pago.numero_operacion}` }}
+                                    <span v-if="a.pago.estado === 'pendiente_aprobacion' && !a.desaplicada_at"
+                                        class="badge bg-warning text-dark ms-1">Por aprobar</span>
+                                    <small v-if="a.desaplicada_at" class="d-block">Desaplicado: {{ a.motivo_desaplicacion }}</small>
+                                </td>
+                                <td class="text-end" :class="{ 'text-decoration-line-through': a.desaplicada_at }">
+                                    {{ formatMonto(a.monto, detalle.moneda) }}
+                                </td>
+                                <td class="text-end">
+                                    <button v-if="puede('compras.pagar') && !a.desaplicada_at" type="button"
+                                        class="btn btn-sm btn-link p-0" @click="desaplicar(a.id)">Desaplicar</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
                 <div class="d-flex gap-2">
                     <button v-if="detalle.tiene_pdf" type="button" class="btn btn-sm btn-outline-primary" @click="abrirAdjunto('pdf')">
                         <i class="far fa-file-pdf me-1"></i>Ver PDF
@@ -238,6 +299,8 @@
             </template>
         </b-modal>
         <AsignarCompra :compra-id="compraAsignar" @cerrar="alCerrarAsignar" @guardado="alAsignar" />
+        <RegistrarPago v-model="modalPago" :compra="detalle" />
+        <AplicarPagoACuenta v-model="modalAplicar" :compra="detalle" />
     </DefaultLayout>
 </template>
 
@@ -248,6 +311,10 @@ import Swal from 'sweetalert2/dist/sweetalert2.js';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import ProveedorSelector from '@/components/Compras/ProveedorSelector.vue';
 import AsignarCompra from '@/components/Compras/AsignarCompra.vue';
+import AplicarPagoACuenta from '@/components/Compras/AplicarPagoACuenta.vue';
+import RegistrarPago from '@/components/Compras/RegistrarPago.vue';
+import { ESTADOS_PAGO, esSaldoAFavor } from '@/helpers/pagosProveedor';
+import { pedirMotivo } from '@/helpers/pedirMotivo';
 import httpClient from '@/helpers/http-client';
 import { AFECTACIONES_COMPRA, estaVencida, formatMonto } from '@/helpers/compras';
 import { formatFecha, formatFechaHora, hoyPeru } from '@/helpers/fecha';
@@ -369,6 +436,40 @@ const alCerrarAsignar = () => {
     compraAsignar.value = null;
     if (desdeDetalle.value && id !== null) verDetalle(id);
     desdeDetalle.value = false;
+};
+
+// T-136 — un modal a la vez: se cierra la ficha y, al terminar o cancelar, se vuelve a abrir.
+const modalPago = ref(false);
+const modalAplicar = ref(false);
+const porPagar = computed(() => Number(detalle.value?.saldo ?? 0) - Number(detalle.value?.por_aprobar ?? 0) > 0);
+
+const pagar = () => {
+    modalDetalle.value = false;
+    modalPago.value = true;
+};
+const aplicarACuenta = () => {
+    modalDetalle.value = false;
+    modalAplicar.value = true;
+};
+// Al cerrarse cualquiera de los dos (guardado o cancelado) se recargan la ficha y el listado: una vez.
+watch([modalPago, modalAplicar], ([pago, aplicar], [antesPago, antesAplicar]) => {
+    if (((antesPago && !pago) || (antesAplicar && !aplicar)) && detalle.value) {
+        verDetalle(detalle.value.id);
+        listar();
+    }
+});
+
+const desaplicar = async (aplicacionId: number) => {
+    const compraId = detalle.value!.id;
+    modalDetalle.value = false;
+    const hecho = await pedirMotivo(
+        'Desaplicar pago',
+        'El monto vuelve a quedar a cuenta del proveedor.',
+        'Desaplicar',
+        (motivo) => httpClient.post(`compras/aplicaciones/${aplicacionId}/desaplicar`, { motivo }),
+    );
+    if (hecho) listar();
+    verDetalle(compraId);
 };
 
 const abrirAdjunto = async (archivo: 'pdf' | 'xml') => {

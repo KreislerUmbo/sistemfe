@@ -125,6 +125,15 @@
                             <CampoFecha id="compra-vencimiento" v-model="form.fecha_vencimiento" :min="form.fecha_emision || undefined"
                                 etiqueta="vencimiento" />
                         </div>
+                        <!-- T-136 (D3): al contado se paga al registrar, salvo que se desmarque. -->
+                        <div v-if="puedePagarAhora" class="col-12">
+                            <div class="form-check form-switch mb-1">
+                                <input id="compra-pagada" v-model="pagadaAhora" class="form-check-input" type="checkbox">
+                                <label class="form-check-label small fw-semibold" for="compra-pagada">Pagada ahora</label>
+                            </div>
+                            <CamposOrigenPago v-if="pagadaAhora" v-model="origenPago" :moneda="form.moneda" :cuentas="cuentas"
+                                :metodos="metodos" />
+                        </div>
                         <div class="col-12">
                             <div class="form-check">
                                 <input id="compra-credito-fiscal" v-model="creditoFiscal" class="form-check-input" type="checkbox"
@@ -182,6 +191,9 @@ import { useRoute, useRouter } from 'vue-router';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import CampoFecha from '@/components/CampoFecha.vue';
+import CamposOrigenPago from '@/components/Compras/CamposOrigenPago.vue';
+import { datosDeOrigen, faltaEnOrigen, origenVacio } from '@/helpers/pagosProveedor';
+import type { CuentaParaPagar, MetodoDeCaja } from '@/types/pagosProveedor';
 import CompletarDocumentoProveedor from '@/components/Compras/CompletarDocumentoProveedor.vue';
 import LineasCompra from '@/components/Compras/LineasCompra.vue';
 import ProveedorSelector from '@/components/Compras/ProveedorSelector.vue';
@@ -254,6 +266,14 @@ const notaTipoCambio = ref('');
 let sugerido = '';
 
 const esNota = computed(() => TIPOS_NOTA.includes(form.tipo_comprobante_codigo));
+
+// T-136 — «Pagada ahora»: solo al registrar una compra al contado, y con compras.pagar.
+const pagadaAhora = ref(true);
+const origenPago = ref(origenVacio());
+const cuentas = ref<CuentaParaPagar[]>([]);
+const metodos = ref<MetodoDeCaja[]>([]);
+const puedePagarAhora = computed(() => !compraId && puede('compras.pagar')
+    && form.condicion === 'contado' && form.tipo_comprobante_codigo !== '07');
 
 // T-154/T-162 — líneas de la compra. Ya registrada, las líneas quedan fijas (D2); si tiene
 // productos (movieron stock), también lo que afecta al stock.
@@ -408,7 +428,17 @@ const guardar = async () => {
         return;
     }
 
+    const pagar = puedePagarAhora.value && pagadaAhora.value && enCentimos(form.total) > 0;
+    if (pagar && faltaEnOrigen(origenPago.value)) {
+        error.value = faltaEnOrigen(origenPago.value);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+    }
+
     const datos = new FormData();
+    if (pagar) {
+        for (const [campo, valor] of Object.entries(datosDeOrigen(origenPago.value))) datos.append(`pago[${campo}]`, String(valor));
+    }
     datos.append('proveedor_id', String(proveedor.value.id));
     for (const [campo, valor] of Object.entries(form)) {
         const esMonto = campo === 'total' || MONTOS.some(([m]) => m === campo);
@@ -490,6 +520,8 @@ onMounted(async () => {
             compraId ? cargarCompra() : Promise.resolve(),
         ]);
         tipos.value = data.tipos;
+        cuentas.value = data.cuentas_bancarias;
+        metodos.value = data.metodos_pago;
     } catch (e: any) {
         error.value = e.response?.data?.message ?? 'No se pudo cargar el formulario.';
     } finally {

@@ -10,11 +10,12 @@ use App\Models\Cash\CashMovement;
 use App\Models\Cash\CashSession;
 use App\Models\Cash\PaymentMethod;
 use App\Models\Client\Client;
-use App\Models\Company;
+use App\Models\Compras\PagoProveedor;
 use App\Models\Proveedor;
+use App\Services\Cash\EgresoCajaService;
 use App\Services\CashCorrectionService;
+use App\Services\Compras\PagoProveedorService;
 use App\Services\CashVisibilityResolver;
-use App\Services\ExpectedCashCalculator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -31,7 +32,8 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 class CashMovementController extends Controller
 {
     public function __construct(
-        private ExpectedCashCalculator $expectedCashCalculator,
+        private EgresoCajaService $egresoCaja,
+        private PagoProveedorService $pagos,
         private CashVisibilityResolver $visibility,
         private CashCorrectionService $cashCorrection,
     ) {
@@ -63,26 +65,8 @@ class CashMovementController extends Controller
         $direccion = $tipo === 'manual_income' ? 'in' : 'out';
         $amount    = round((float) $request->amount, 2);
 
-        $company = Company::first();
-        $status  = 'confirmed';
-
-        // Aprobación condicional — solo egresos, solo si la empresa la exige
-        // y el monto supera el umbral configurado (companies, Fase 1).
-        if ($tipo === 'manual_expense'
-            && $company?->require_expense_approval
-            && $company->max_expense_without_approval !== null
-            && $amount > (float) $company->max_expense_without_approval) {
-            $status = 'pending_approval';
-        }
-
-        // "No negativo" (regla #4) solo se valida si el movimiento queda
-        // confirmado AHORA — uno pending_approval se revalida recién al
-        // aprobarse (Paso 2), no debe bloquear su propia creación.
-        if ($status === 'confirmed') {
-            $this->validarNoNegativo($sesion, [
-                ['metodo' => $metodo, 'direction' => $direccion, 'amount' => $amount, 'currency' => $moneda],
-            ]);
-        }
+        // Aprobación condicional y «no negativo»: las mismas reglas que un pago a proveedor (T-136).
+        $status = $this->egresoCaja->estadoInicial($sesion, $metodo, $direccion, $amount, $moneda);
 
         $attachmentPath = null;
         if ($request->hasFile('attachment')) {
@@ -156,7 +140,7 @@ class CashMovementController extends Controller
             // Bloquea la sesión para que dos cambios simultáneos no validen contra el mismo saldo.
             $sesion = CashSession::where('id', $sesion->id)->lockForUpdate()->first();
 
-            $this->validarNoNegativo($sesion, [
+            $this->egresoCaja->validarNoNegativo($sesion, [
                 ['metodo' => $efectivo, 'direction' => 'out', 'amount' => $salida, 'currency' => $origen],
             ]);
 
@@ -190,36 +174,57 @@ class CashMovementController extends Controller
     // ── Aprobar/rechazar un egreso pendiente ─────────────────────────
     public function approve(string $id)
     {
-        $movimiento = CashMovement::with(['cashSession', 'paymentMethod'])->findOrFail($id);
+        $movimiento = DB::transaction(function () use ($id) {
+            $movimiento = $this->pendienteDeAprobacion($id);
 
-        if ($movimiento->type !== 'manual_expense' || $movimiento->status !== 'pending_approval') {
-            throw new HttpException(422, 'Este movimiento no está pendiente de aprobación.');
-        }
+            // Recién ahora se ejercita la validación de "no negativo" (Paso 1) —
+            // pudo haber cambiado desde que se creó la solicitud.
+            $this->egresoCaja->validarNoNegativo($movimiento->cashSession, [
+                ['metodo' => $movimiento->paymentMethod, 'direction' => $movimiento->direction, 'amount' => (float) $movimiento->amount, 'currency' => $movimiento->currency],
+            ]);
 
-        // Recién ahora se ejercita la validación de "no negativo" (Paso 1) —
-        // pudo haber cambiado desde que se creó la solicitud.
-        $this->validarNoNegativo($movimiento->cashSession, [
-            ['metodo' => $movimiento->paymentMethod, 'direction' => $movimiento->direction, 'amount' => (float) $movimiento->amount, 'currency' => $movimiento->currency],
-        ]);
+            $movimiento->update(['status' => 'confirmed']);
+            if ($movimiento->type === PagoProveedor::TIPO_MOVIMIENTO) {
+                $this->pagos->aprobado($movimiento);
+            }
 
-        $movimiento->update(['status' => 'confirmed']);
+            return $movimiento;
+        });
 
         return response()->json(['code' => 200, 'message' => 'Egreso aprobado.', 'movement' => $movimiento->fresh()]);
     }
 
     public function reject(string $id)
     {
-        $movimiento = CashMovement::findOrFail($id);
+        $movimiento = DB::transaction(function () use ($id) {
+            $movimiento = $this->pendienteDeAprobacion($id);
 
-        if ($movimiento->type !== 'manual_expense' || $movimiento->status !== 'pending_approval') {
+            // rejected queda fuera de ExpectedCashCalculator (status='confirmed'
+            // únicamente) — no requiere ningún ajuste adicional.
+            $movimiento->update(['status' => 'rejected']);
+            if ($movimiento->type === PagoProveedor::TIPO_MOVIMIENTO) {
+                $this->pagos->rechazado($movimiento, auth('api')->user());
+            }
+
+            return $movimiento;
+        });
+
+        return response()->json(['code' => 200, 'message' => 'Egreso rechazado.', 'movement' => $movimiento->fresh()]);
+    }
+
+    // Egreso manual o pago a proveedor (T-136). Solo dentro de una transacción: se bloquea
+    // primero el pago y luego el movimiento, el mismo orden que al anular el pago.
+    private function pendienteDeAprobacion(string $id): CashMovement
+    {
+        PagoProveedor::where('cash_movement_id', (int) $id)->lockForUpdate()->first();
+        $movimiento = CashMovement::with(['cashSession', 'paymentMethod'])->lockForUpdate()->findOrFail($id);
+
+        if (! in_array($movimiento->type, ['manual_expense', PagoProveedor::TIPO_MOVIMIENTO], true)
+            || $movimiento->status !== 'pending_approval') {
             throw new HttpException(422, 'Este movimiento no está pendiente de aprobación.');
         }
 
-        // rejected queda fuera de ExpectedCashCalculator (status='confirmed'
-        // únicamente) — no requiere ningún ajuste adicional.
-        $movimiento->update(['status' => 'rejected']);
-
-        return response()->json(['code' => 200, 'message' => 'Egreso rechazado.', 'movement' => $movimiento->fresh()]);
+        return $movimiento;
     }
 
     // ── Editar/eliminar un movimiento manual (corrección, Fase 3 reusada) ──
@@ -252,7 +257,7 @@ class CashMovementController extends Controller
         // Simula el efecto combinado (reversión del original + el nuevo
         // monto) ANTES de tocar la base — evita dejar una corrección a medio
         // aplicar si el resultado daría negativo.
-        $this->validarNoNegativo($sesionDestino, [
+        $this->egresoCaja->validarNoNegativo($sesionDestino, [
             ['metodo' => $original->paymentMethod, 'direction' => $original->direction === 'in' ? 'out' : 'in', 'amount' => (float) $original->amount, 'currency' => $original->currency],
             ['metodo' => $metodo, 'direction' => $direccion, 'amount' => $amount, 'currency' => $moneda],
         ]);
@@ -297,7 +302,7 @@ class CashMovementController extends Controller
 
         // Solo la reversión del original puede empujar a negativo acá (no
         // hay movimiento nuevo que sumar) — mismo helper, un solo efecto.
-        $this->validarNoNegativo($sesionDestino, [
+        $this->egresoCaja->validarNoNegativo($sesionDestino, [
             ['metodo' => $original->paymentMethod, 'direction' => $original->direction === 'in' ? 'out' : 'in', 'amount' => (float) $original->amount, 'currency' => $original->currency],
         ]);
 
@@ -403,15 +408,7 @@ class CashMovementController extends Controller
 
     private function resolverSesionCajaPropia(): CashSession
     {
-        $sesion = CashSession::where('opened_by', auth('api')->user()->id)
-            ->where('status', 'open')
-            ->first();
-
-        if (!$sesion) {
-            throw new HttpException(422, 'No hay una sesión de caja abierta.');
-        }
-
-        return $sesion;
+        return $this->egresoCaja->sesionAbierta(auth('api')->user());
     }
 
     private function resolverConcepto(int $conceptId, string $tipo): CashConcept
@@ -435,13 +432,7 @@ class CashMovementController extends Controller
 
     private function resolverMetodoPago(int $paymentMethodId): PaymentMethod
     {
-        $metodo = PaymentMethod::where('id', $paymentMethodId)->where('is_active', true)->first();
-
-        if (!$metodo) {
-            throw new HttpException(422, 'payment_method_id no existe o está inactivo.');
-        }
-
-        return $metodo;
+        return $this->egresoCaja->metodoPago($paymentMethodId);
     }
 
     // Si counterparty_id viene, el nombre/documento SIEMPRE se resuelve del
@@ -490,29 +481,6 @@ class CashMovementController extends Controller
         }
 
         throw new HttpException(422, "counterparty_id requiere counterparty_type='cliente' o 'proveedor'.");
-    }
-
-    // Simula el efecto combinado de una o más operaciones propuestas sobre
-    // el efectivo esperado ANTES de persistir nada (regla de integridad #4).
-    // $efectos = [['metodo' => PaymentMethod, 'direction' => 'in'|'out', 'amount' => float, 'currency' => 'PEN'|'USD'], ...]
-    // T-013: se proyecta cada moneda por separado.
-    private function validarNoNegativo(CashSession $sesion, array $efectos): void
-    {
-        $proyectado = $this->expectedCashCalculator->computePorMoneda($sesion);
-
-        foreach ($efectos as $efecto) {
-            if (!$efecto['metodo']->affects_cash_count) {
-                continue;
-            }
-            $moneda = $efecto['currency'] ?? 'PEN';
-            $proyectado[$moneda] += $efecto['direction'] === 'in' ? $efecto['amount'] : -$efecto['amount'];
-        }
-
-        foreach ($proyectado as $moneda => $total) {
-            if (round($total, 2) < 0) {
-                throw new HttpException(422, 'Esta operación dejaría el efectivo esperado en negativo (' . $moneda . ').');
-            }
-        }
     }
 
     // Resuelve y valida el movimiento a corregir — compartido por update()/

@@ -60,6 +60,8 @@ class PermissionsDemoSeeder extends Seeder
         'proveedores.ver', 'proveedores.gestionar',
         // T-135: Compras. Igual: sin rol operativo.
         'compras.ver', 'compras.registrar', 'compras.anular', 'compras.cerrar_periodo',
+        // T-136: pagos a proveedor y cuentas bancarias del sistema base. Sin rol operativo.
+        'compras.pagar', 'cuentas_bancarias.gestionar',
         'can_switch_branch', 'emitir_factura', 'emitir_boleta', 'emitir_nota_venta',
         // T-109: ningún rol operativo lo recibe solo; el Propietario, con roles:sync-propietario.
         'cambiar_precio_venta',

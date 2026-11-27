@@ -90,7 +90,9 @@ class RetirarPagoProveedorViejoTest extends TestCase
                 continue;
             }
             $texto = file_get_contents($archivo->getPathname());
-            if (preg_match('/PagoProveedor|cronograma_pago_proveedor|[\'"]pago_proveedor[\'"]/', $texto)) {
+            // T-136: el nombre PagoProveedor y el texto 'pago_proveedor' (tipo de movimiento de Caja)
+            // vuelven a usarse en el modelo nuevo; lo prohibido es lo viejo.
+            if (preg_match('/AgenciaViajes\\\\(Cronograma)?PagoProveedor|CronogramaPagoProveedor|cronograma_pago_proveedor|(table\(|\$table = )[\'"]pago_proveedor[\'"]/', $texto)) {
                 $conReferencia[] = str_replace(app_path(), 'app', $archivo->getPathname());
             }
         }

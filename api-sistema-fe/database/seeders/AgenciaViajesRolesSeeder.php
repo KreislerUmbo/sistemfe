@@ -67,6 +67,8 @@ class AgenciaViajesRolesSeeder extends Seeder implements RolesCatalogProvider
         'proveedores.ver', 'proveedores.gestionar',
         // T-109 — cambiar el precio de una línea en la venta (solo el Administrador de agencia).
         'cambiar_precio_venta',
+        // T-136 — cuentas bancarias del sistema base: las recibe quien tiene agencia.configuracion.
+        'cuentas_bancarias.gestionar',
         // T-078 — Clientes, Anticipos y Manuales y videos (el menú de T-063 los gatea con estos).
         'register_client', 'list_client', 'edit_client',
         'list_advance', 'register_advance', 'refund_advance',
@@ -89,6 +91,7 @@ class AgenciaViajesRolesSeeder extends Seeder implements RolesCatalogProvider
             'reportes_comerciales.ver',
             'reservas.ver', 'reservas.ver_todas', 'reservas.crear', 'reservas.editar', 'reservas.modificar', 'agencia.reservas',
             'agencia.proveedores', 'agencia.destinos', 'agencia.temporadas', 'agencia.guias', 'agencia.paquetes', 'agencia.configuracion',
+            'cuentas_bancarias.gestionar',
             'proveedores.ver', 'proveedores.gestionar',
             'nota_electronica', 'list_nota_electronica',
             'cash.open_session', 'cash.view_all',

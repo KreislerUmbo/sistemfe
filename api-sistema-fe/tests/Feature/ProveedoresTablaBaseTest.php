@@ -109,6 +109,9 @@ class ProveedoresTablaBaseTest extends TestCase
 
         $tenant->run(function () {
             // T-135 y T-154: compras (posterior, con FK a proveedores) y sus líneas no existían todavía.
+            // T-136: pagos y aplicaciones dependen de compras y de proveedores.
+            Schema::drop('aplicaciones_pago_proveedor');
+            Schema::drop('pagos_proveedor');
             Schema::drop('compra_lineas');
             Schema::drop('compras');
             Schema::drop('proveedores');
@@ -197,6 +200,8 @@ class ProveedoresTablaBaseTest extends TestCase
 
         $agencia->run(fn () => $this->migracionCore()->down());
         // Un rollback va en orden inverso: lo que apunta a proveedores (T-135) sale antes.
+        $retail->run(fn () => Schema::drop('aplicaciones_pago_proveedor'));
+        $retail->run(fn () => Schema::drop('pagos_proveedor'));
         $retail->run(fn () => Schema::drop('compra_lineas'));
         $retail->run(fn () => Schema::drop('compras'));
         $retail->run(fn () => $this->migracionCore()->down());

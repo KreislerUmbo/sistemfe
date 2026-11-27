@@ -8,6 +8,11 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // T-136: en un tenant nuevo ya la creó core/, que corre antes (mismo caso que `proveedores`).
+        if (Schema::hasTable('cuentas_bancarias')) {
+            return;
+        }
+
         Schema::create('cuentas_bancarias', function (Blueprint $table) {
             $table->id();
             $table->string('banco');
