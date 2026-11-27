@@ -273,8 +273,8 @@ cotización arriba), se decidió:
 - **Encabezados con resumen:** cada día, plegable, con «3 servicios · USD 120»; el bloque del
   paquete, con «4 hoteles · desde USD 779 por persona · falta Condiciones», sin totales por rubro
   (en el paquete los tours y el vuelo no tienen precio).
-- **Resumen financiero al costado y fijo** (venta, costo, margen, por persona, moneda; interno);
-  en pantallas angostas pasa abajo.
+- **«Resumen económico»** (antes «Precio») al costado y fijo; en pantallas angostas pasa abajo.
+  Ver «Revisión de la maqueta (26-nov)».
 - **Sin pestañas de tipo de cotización.** Una cotización cambia de forma («solo hotel» que después
   suma tours). Más adelante, como atajos al crear («¿Qué vas a cotizar?»): solo vuelo abre el
   pasaje aéreo, solo hotel abre el panel en Hoteles, paquete abre el del mayorista. El tipo no se
@@ -283,6 +283,42 @@ cotización arriba), se decidió:
   analizar» del backlog (privacidad y costo si se usa un servicio externo).
 
 Van en T-159, salvo los atajos al crear (sin tarea todavía).
+
+### Revisión de la maqueta (26-nov)
+
+Con la maqueta a la vista (`docs/maquetas/servicio-agencia.html`), el usuario pidió y aprobó:
+
+**Lista del panel**
+- **Tres franjas:** arriba, fija, el buscador con «Filtros ▾» al lado (proveedor), los botones de
+  tipo con ícono (se mantienen como estaban: en pastillas parecían etiquetas de un hotel, «wifi»,
+  «parqueo») y una línea con el conteo y los filtros activos, cada uno con su ✕; en el medio,
+  recientes y resultados con scroll propio; abajo, fijos, **+ Sin catálogo** y **+ Hotel nuevo**
+  (antes había que bajar hasta el final de la lista).
+- **Búsqueda sin resultados:** ofrece «+ Crear «texto» sin catálogo» con el nombre ya puesto.
+- **Por tandas, no por páginas:** el servidor devuelve 30 por vez, con la búsqueda y los filtros
+  resueltos allí; arriba «Mostrando 30 de 1.000», al final «Ver 30 más». Cambiar búsqueda, tipo o
+  filtro vuelve a empezar; «Ver más» no mueve el scroll.
+
+**Lienzo**
+- **Una línea por servicio:** ícono del tipo, nombre, detalle corto, marcas («A elegir», «Sin
+  costo», «En el paquete», «Repetido») y total. Clic: proveedor, costo (si se ve lo interno),
+  «Mover a día ▾» y Quitar. Arrastrar entre días, más adelante y solo como extra.
+- **Días plegables** con «N servicios · USD» en el encabezado; los días vacíos, en una línea con
+  «Agregar». «Expandir todo / Plegar todo».
+- **Barra de vistazo:** «7 servicios · 5 días · 3 pasajeros · ⚠ 1 por resolver», junto a
+  «Por día / Por tipo».
+
+**Resumen económico**
+- **Para el cliente:** desglose **siempre por tipo de servicio** (Hoteles, Tours, Traslados, Guías,
+  Otros), aunque el lienzo esté por día; clic en una línea pasa el lienzo a «Por tipo» y lleva a
+  ese grupo. Total y promedio por pasajero.
+- **Interno · solo la agencia:** costo, margen (USD y %), gravado y exonerado (Amazonía), con
+  **Ocultar** para compartir pantalla con el cliente. Aviso si hay servicios sin costo (el margen
+  sale más alto de lo real).
+- **Por resolver:** hotel a elegir, servicio sin costo, cobro doble con el paquete, servicio
+  repetido; cada aviso lleva a su servicio. Sin alertas emergentes.
+
+Todo va en T-159.
 
 ### Riesgos
 
@@ -297,6 +333,6 @@ Van en T-159, salvo los atajos al crear (sin tarea todavía).
 
 ## 3. Resultado
 
-- **Decisiones:** §2, «Decidido (25-nov)», «Decidido (26-nov)» y «Mejoras de diseño del lienzo».
+- **Decisiones:** §2, «Decidido (25-nov)», «Decidido (26-nov)», «Mejoras de diseño del lienzo» y «Revisión de la maqueta».
 - **Tareas:** T-158 (ficha del hotel), T-159 («Servicio de la agencia»), T-160 (paquete de la
   agencia), en `docs/backlog.md`.

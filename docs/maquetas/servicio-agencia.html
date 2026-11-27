@@ -46,12 +46,45 @@ button, input, select, textarea { font: inherit; color: inherit }
 .btn.aviso-btn { background: var(--warn-soft); border-color: var(--warn); color: var(--warn) }
 .btn.link { border: 0; background: none; color: var(--accent); padding: 2px 4px; }
 .btn.chico { padding: 3px 8px; font-size: 12px }
+.btn.activo { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600 }
 .btn[disabled] { opacity: .5; cursor: not-allowed }
 .badge { display: inline-block; border-radius: 999px; padding: 1px 8px; font-size: 11px; font-weight: 600; white-space: nowrap }
 .b-ok { background: var(--ok-soft); color: var(--ok) } .b-warn { background: var(--warn-soft); color: var(--warn) }
 .b-muted { background: var(--soft); color: var(--muted) } .b-info { background: var(--info-soft); color: var(--info) }
 .item { border: 1px solid var(--line); border-radius: var(--r); padding: 8px 12px; margin-bottom: 6px; display: flex; justify-content: space-between; gap: 10px; align-items: center }
 .item.nuevo { border-color: var(--ok); box-shadow: 0 0 0 2px var(--ok-soft) }
+/* Lienzo compacto: una línea por servicio, grupos plegables con resumen */
+.lz-barra { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; margin-bottom: 10px }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden }
+.seg button { border: 0; background: var(--card); padding: 3px 10px; font-size: 12px; cursor: pointer }
+.seg button.activo { background: var(--accent); color: var(--accent-fg); font-weight: 600 }
+.grupo { border: 1px solid var(--line); border-radius: var(--r); margin-bottom: 8px; overflow: hidden; scroll-margin-top: 12px }
+.grupo-head { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--soft); flex-wrap: wrap }
+.grupo.vacio .grupo-head { background: var(--card) }
+.grupo.vacio .grupo-head b { font-weight: 500; color: var(--muted) }
+.plegar { border: 0; background: none; cursor: pointer; display: flex; gap: 6px; align-items: center; flex: 1; min-width: 0; text-align: left; padding: 0; font-size: 13px }
+.chev { display: inline-flex; transition: transform .15s } .chev.abierto { transform: rotate(90deg) }
+.grupo-head .res { font-size: 12px; color: var(--muted); white-space: nowrap }
+.fila { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto auto; gap: 8px; align-items: center; padding: 6px 10px; width: 100%;
+  border: 0; border-top: 1px solid var(--line); background: var(--card); cursor: pointer; text-align: left }
+.fila:hover { background: var(--soft) }
+.fila.nuevo { box-shadow: inset 3px 0 0 var(--ok) }
+.fila.flash { box-shadow: inset 3px 0 0 var(--warn); background: var(--warn-soft) }
+.fila .ic-t { color: var(--muted); display: inline-flex }
+.fila .nom { font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.fila .nom small { font-weight: 400; color: var(--muted); margin-left: 8px; font-size: 12px }
+.fila .bdg { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end }
+@media (max-width: 600px) { .fila { grid-template-columns: 20px minmax(0, 1fr) auto } .fila .bdg { grid-column: 2 / 4; grid-row: 2; justify-content: flex-start } }
+.fila-det { padding: 6px 10px 10px 38px; font-size: 12.5px; background: var(--soft); display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center }
+.fila-det select { width: auto; display: inline-block; padding: 2px 6px; font-size: 12px }
+@media (min-width: 901px) { .resumen { position: sticky; top: 12px } }
+.rz-tit { display: flex; justify-content: space-between; align-items: center; gap: 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; margin-bottom: 6px }
+.rz-tit .btn { text-transform: none; letter-spacing: 0; font-weight: 500 }
+.rz-sec { border-top: 1px solid var(--line); padding-top: 10px; margin-top: 12px; scroll-margin-top: 12px }
+.rz-link { display: flex; justify-content: space-between; gap: 8px; width: 100%; border: 0; background: none; padding: 4px 0; font-size: 13px; cursor: pointer; text-align: left; border-radius: 4px }
+.rz-link:hover { color: var(--accent) }
+.rz-link.warn { color: var(--warn); font-size: 12.5px; justify-content: flex-start }
+.margen { color: var(--ok); font-weight: 600 }
 .bloque { border: 1px solid var(--accent); border-radius: var(--r); overflow: hidden; margin-bottom: 12px }
 .bloque-head { background: var(--accent-soft); padding: 8px 12px; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; align-items: center }
 .bloque-body { padding: 8px 12px; font-size: 13px }
@@ -75,7 +108,14 @@ button, input, select, textarea { font: inherit; color: inherit }
 .dia-btn.activo { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); font-weight: 600 }
 .panel-cuerpo { flex: 1; display: grid; grid-template-columns: 360px 1fr; min-height: 0 }
 @media (max-width: 820px) { .panel-cuerpo { grid-template-columns: 1fr; grid-template-rows: minmax(0, 45%) 1fr } }
-.lista { border-right: 1px solid var(--line); overflow: auto; padding: 12px; background: var(--card); min-width: 0 }
+.lista { border-right: 1px solid var(--line); background: var(--card); min-width: 0; min-height: 0; display: flex; flex-direction: column }
+.lista-top { padding: 10px 12px 8px; border-bottom: 1px solid var(--line) }
+.lista-res { flex: 1; overflow: auto; padding: 4px 12px 12px; min-height: 0 }
+.lista-pie { display: flex; gap: 6px; padding: 8px 12px; border-top: 1px solid var(--line); background: var(--soft) }
+.lista-pie .btn { flex: 1; justify-content: center; font-size: 12px }
+.buscar-fila { display: flex; gap: 6px }
+.buscar-fila .ctrl { flex: 1 }
+.meta-fila { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; font-size: 12px; color: var(--muted) }
 .detalle { overflow: auto; padding: 16px; min-width: 0 }
 .panel-foot { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; align-items: center; padding: 10px 16px; border-top: 1px solid var(--line); background: var(--card) }
 
@@ -171,8 +211,8 @@ details.trib summary { cursor: pointer; color: var(--muted) }
       </div>
       <div class="card-body" id="lienzo"></div>
     </div>
-    <div class="card">
-      <div class="card-header">Precio</div>
+    <div class="card resumen">
+      <div class="card-header">Resumen económico</div>
       <div class="card-body" id="precio"></div>
     </div>
   </div>
@@ -216,7 +256,11 @@ details.trib summary { cursor: pointer; color: var(--muted) }
       <li><b>Panel lateral</b> abierto desde <b>+ Agregar al día N</b>: la lista queda siempre a la izquierda y el detalle a la derecha. Hoy un modal centrado reemplaza la lista con cada paso (matriz de hotel, «¿cómo se cobra?», manual).</li>
       <li><b>Agregar varios sin cerrar</b>, también tours y paquetes del catálogo (hoy cierran el modal). La barra de abajo cuenta lo agregado y permite deshacer el último.</li>
       <li><b>Día visible y cambiable</b> arriba del panel.</li>
-      <li><b>Filtros por tipo con íconos</b> y conteo. Guías es un tipo más, y el paquete de mayorista tiene su propia entrada (T-155). Servicio y proveedor van en «Más filtros» y avisan cuando ocultan tours.</li>
+      <li><b>Filtros por tipo con íconos</b> y conteo. Guías es un tipo más, y el paquete de mayorista tiene su propia entrada (T-155). Servicio y proveedor van en «Filtros ▾» y avisan cuando ocultan tours.</li>
+      <li><b>Columna de la lista en tres franjas:</b> arriba, fija y compacta (buscar con «Filtros ▾» al lado, botones de tipo con ícono, conteo y filtros activos con ✕); en el medio, los resultados con scroll propio; abajo, fijo, <b>+ Sin catálogo</b> y <b>+ Hotel nuevo</b>, siempre a la vista. Si la búsqueda no encuentra nada, ofrece crear el servicio con ese nombre.</li>
+      <li><b>Lista por tandas, no por páginas:</b> se traen 30 del servidor (búsqueda y filtros en el servidor), «Mostrando 30 de 1.000» arriba y «Ver 30 más» al final; cambiar búsqueda, tipo o filtro vuelve a empezar. En la maqueta, de a 6.</li>
+      <li><b>Lienzo compacto:</b> una línea por servicio (ícono, nombre, detalle corto, marcas, total); clic para ver proveedor, costo, «Mover a día» y Quitar. Días plegables con «N servicios · USD» en el encabezado; los vacíos en una sola línea. Barra de vistazo arriba («7 servicios · 5 días · 3 pasajeros · ⚠ 1 por resolver»), «Por día / Por tipo», «Expandir / Plegar todo».</li>
+      <li><b>Resumen económico</b> (antes «Precio»), fijo al costado: «Para el cliente» (desglose por tipo de servicio, siempre, aunque el lienzo esté por día; clic lleva a ese tipo en el lienzo; total, promedio por pasajero) e «Interno» (costo, margen, gravado/exonerado) con <b>Ocultar</b> para compartir pantalla. Abajo, <b>Por resolver</b>: hotel a elegir, sin costo, cobro doble con el paquete, repetidos; cada uno lleva a su servicio.</li>
       <li>Cada fila muestra el <b>nombre del servicio</b> y el precio con su unidad (por persona, por noche, por servicio, por día), y marca lo que ya está en el día.</li>
       <li><b>Usados recientemente</b> en este destino.</li>
       <li><b>Hotel:</b> la misma ficha que el mayorista (estrellas, régimen, calificación, descripción, 3 fotos) y precio <b>por noche</b> por habitación. <b>Comparar hoteles</b> con una bandeja que no se pierde al elegir el siguiente.</li>
@@ -250,6 +294,7 @@ const DIAS = [
   { n: 1, fecha: 'Sáb 12 dic', titulo: 'Arribo a Cusco' }, { n: 2, fecha: 'Dom 13 dic', titulo: '' },
   { n: 3, fecha: 'Lun 14 dic', titulo: '' }, { n: 4, fecha: 'Mar 15 dic', titulo: '' }, { n: 5, fecha: 'Mié 16 dic', titulo: 'Retorno' }];
 const NOCHES = 4;
+const POR_PAGINA = 6; /* en la maqueta 6 para que se vea; en el sistema, 30 */
 const PAQUETE = { nombre: 'Cusco Maravilloso 5D/4N', incluidos: { 'city-tour': 4, 'valle': 2 } };
 
 const svg = (d, s = 16) => `<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
@@ -262,7 +307,11 @@ const ICONOS = {
   otro: svg('<circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>'),
   reloj: svg('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', 13),
   mas: svg('<path d="M12 5v14M5 12h14"/>'),
+  ojo: svg('<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>', 14),
+  ojoNo: svg('<path d="M3 3l18 18"/><path d="M10.6 5.1A10 10 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 4.1M6.6 6.6A17 17 0 0 0 2 12s3.5 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>', 14),
+  chev: svg('<path d="M9 6l6 6-6 6"/>', 14),
 };
+const chico = (k) => ICONOS[k].replace('width="16" height="16"', 'width="14" height="14"');
 const FILTROS = [['todos', 'Todos'], ['tour', 'Tours'], ['traslado', 'Traslados'], ['hotel', 'Hoteles'], ['guia', 'Guías'], ['otro', 'Otro']];
 const UNIDAD = { pp: 'por persona', servicio: 'por servicio', noche: 'por noche', dia: 'por día' };
 
@@ -322,8 +371,16 @@ const RECIENTES_INICIO = ['tr-aero', 'city-tour', 'xima', 'guia-juan'];
 let estado = {
   abierto: false, dia: 2, filtro: 'todos', q: '', sel: 'city-tour', masFiltros: false, filtroDestino: true, filtroProveedor: '',
   conPaquete: false, sesion: [], comparar: [],
-  lienzo: { 1: [{ id: 'tr-aero', nombre: 'Traslado aeropuerto – hotel', detalle: 'Por servicio · 3 pasajeros', total: 15 }],
-            2: [], 3: [], 4: [], 5: [] },
+  /* Ejemplo con varios días cargados; el día 2 queda vacío para probar el panel. */
+  lienzo: { 1: [{ id: 'tr-aero', nombre: 'Traslado aeropuerto – hotel', detalle: 'Por servicio · 3 pasajeros', total: 15 },
+                { id: 'xima', nombre: 'Xima Cusco Kenamari', detalle: '1 superior matrimonial · 4 noches · cama adicional niño', total: 378 }],
+            2: [],
+            3: [{ id: 'tr-ollanta', nombre: 'Traslado Cusco – estación Ollantaytambo', detalle: 'Por servicio · 3 pasajeros', total: 40 },
+                { id: 'machu', nombre: 'Machu Picchu full day en tren', detalle: '2 adultos + 1 niño', total: 890 }],
+            4: [{ id: 'city-tour', nombre: 'City Tour Cusco', detalle: '2 adultos + 1 niño', total: 68 },
+                { id: 'manual', nombre: 'Cena show en Aguas Calientes', detalle: 'Sin catálogo · por persona · 3 pasajeros', total: 105, costo: null }],
+            5: [{ id: 'tr-hotel-aero', nombre: 'Traslado hotel – aeropuerto', detalle: 'Por servicio · 3 pasajeros', total: 15 }] },
+  vista: 'dia', plegados: new Set(), expandidos: new Set(), verInterno: true,
   form: {},
   recientes: leerRecientes(),
 };
@@ -384,22 +441,100 @@ function renderLienzo() {
       <div class="bloque-body"><div class="small muted">Hotel a elegir · Xima Cusco Kenamari o San Francisco Plaza · USD 779 por adulto en doble</div>
       <div class="small muted">Incluye: Valle Sagrado (día 2), Machu Picchu (día 3), City Tour (día 4), traslados</div></div></div>`;
   }
-  for (const d of DIAS) {
-    const items = estado.lienzo[d.n];
-    h += `<div class="dia"><div class="dia-head"><b>Día ${d.n} · ${d.fecha}${d.titulo ? ` · ${d.titulo}` : ''}</b>
-      <button class="btn chico" data-act="abrir" data-dia="${d.n}">${ICONOS.mas.replace('width="16" height="16"', 'width="13" height="13"')} Agregar al día ${d.n}</button></div>`;
-    h += items.length ? items.map((x) => {
-      const s = serv(x.id); const doble = s && avisoDoble(s) && s.tipo !== 'hotel';
-      return `<div class="item ${x.nuevo ? 'nuevo' : ''}"><div><b>${esc(x.nombre)}</b><div class="small muted">${esc(x.detalle)}</div>
-        ${doble ? '<div class="marca-doble">⚠ También incluido en el paquete</div>' : ''}</div><div class="num">${usd(x.total)}</div></div>`;
-    }).join('') : '<div class="dia-vacio">Sin servicios</div>';
-    h += '</div>';
+  const todos = itemsLienzo(), pend = pendientes();
+  const enDiaVista = estado.vista === 'dia';
+  h += `<div class="lz-barra"><span class="small"><b class="num">${todos.length}</b> servicios · ${DIAS.length} días · ${PAX.length} pasajeros${pend.length
+      ? ` · <button class="btn link chico" style="color:var(--warn)" data-act="ir" data-k="por-resolver">⚠ ${pend.length} por resolver</button>` : ''}</span>
+    <span style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+      <span class="seg" role="group" aria-label="Ver el lienzo"><button type="button" class="${enDiaVista ? 'activo' : ''}" data-act="vista" data-v="dia" aria-pressed="${enDiaVista}">Por día</button><button type="button" class="${enDiaVista ? '' : 'activo'}" data-act="vista" data-v="tipo" aria-pressed="${!enDiaVista}">Por tipo</button></span>
+      <button class="btn link chico" data-act="expandir">Expandir todo</button><button class="btn link chico" data-act="plegar-todo">Plegar todo</button></span></div>`;
+  if (enDiaVista) {
+    h += DIAS.map((d) => htmlGrupo(`dia-${d.n}`, `Día ${d.n} · ${d.fecha}${d.titulo ? ` · ${esc(d.titulo)}` : ''}`, estado.lienzo[d.n],
+      `<button class="btn chico" data-act="abrir" data-dia="${d.n}" title="Agregar al día ${d.n}">${chico('mas')} Agregar</button>`, false)).join('');
+  } else {
+    h += TIPOS_LIENZO.map(([t, l]) => [t, l, todos.filter((x) => tipoDe(x) === t)]).filter((g) => g[2].length)
+      .map(([t, l, lista]) => htmlGrupo(`tipo-${t}`, `${chico(t)} ${l}`, lista, '', true)).join('');
   }
   $('lienzo').innerHTML = h;
-  const total = Object.values(estado.lienzo).flat().reduce((t, x) => t + x.total, 0) + (estado.conPaquete ? 779 * 2 : 0);
-  $('precio').innerHTML = (estado.conPaquete ? `<div class="precio-linea"><span>Paquete × 2 adultos</span><span class="num">${usd(1558)}</span></div>` : '')
-    + DIAS.map((d) => { const t = estado.lienzo[d.n].reduce((a, x) => a + x.total, 0); return t ? `<div class="precio-linea"><span>Día ${d.n}</span><span class="num">${usd(t)}</span></div>` : ''; }).join('')
-    + `<div class="total"><span>Total</span><span class="num">${usd(total)}</span></div>`;
+  renderResumen(todos, pend);
+}
+
+/* ---------- Lienzo: datos derivados ---------- */
+const FACTOR_COSTO = { hotel: 0.8, tour: 0.75, traslado: 0.65, guia: 0.7, otro: 0.7 }; /* solo para el ejemplo */
+const TIPOS_LIENZO = [['hotel', 'Hoteles'], ['tour', 'Tours'], ['traslado', 'Traslados'], ['guia', 'Guías'], ['otro', 'Otros']];
+let uidSeq = 0;
+const itemsLienzo = () => DIAS.flatMap((d) => estado.lienzo[d.n].map((x) => { x.dia = d.n; x.uid ||= ++uidSeq; return x; }));
+const tipoDe = (x) => x.id === 'grupo' ? 'hotel' : (serv(x.id)?.tipo || 'otro');
+const proveedorDe = (x) => x.id === 'manual' ? 'Sin catálogo' : x.id === 'grupo' ? 'Proveedores' : (serv(x.id)?.proveedor || '');
+const costoDe = (x) => x.costo !== undefined ? x.costo : Math.round(x.total * FACTOR_COSTO[tipoDe(x)]);
+const sumar = (l, f = (x) => x.total) => l.reduce((t, x) => t + (f(x) || 0), 0);
+const claveGrupo = (x) => estado.vista === 'dia' ? `dia-${x.dia}` : `tipo-${tipoDe(x)}`;
+function repetidos() {
+  const m = {}; itemsLienzo().forEach((x) => { if (serv(x.id)) (m[x.id] ||= []).push(x); });
+  return Object.values(m).filter((l) => l.length > 1);
+}
+function pendientes() {
+  const p = [];
+  itemsLienzo().forEach((x) => {
+    if (x.id === 'grupo') p.push({ uid: x.uid, txt: `Día ${x.dia}: hotel a elegir, el cliente aún no decide` });
+    if (costoDe(x) == null) p.push({ uid: x.uid, txt: `«${x.nombre}» sin costo: el margen no es real` });
+    const s = serv(x.id); if (s && s.tipo !== 'hotel' && avisoDoble(s)) p.push({ uid: x.uid, txt: `«${x.nombre}» también está en el paquete: se cobra dos veces` });
+  });
+  repetidos().forEach((l) => p.push({ uid: l[1].uid, txt: `«${l[0].nombre}» repetido (días ${l.map((x) => x.dia).join(' y ')})` }));
+  return p;
+}
+function htmlFila(x, conDia) {
+  const abierto = estado.expandidos.has(x.uid), costo = costoDe(x);
+  const s = serv(x.id), doble = s && s.tipo !== 'hotel' && avisoDoble(s), rep = repetidos().some((l) => l.includes(x));
+  const badges = [conDia ? `<span class="badge b-muted">Día ${x.dia}</span>` : '', x.id === 'grupo' ? '<span class="badge b-warn">A elegir</span>' : '',
+    costo == null ? '<span class="badge b-warn">Sin costo</span>' : '', doble ? '<span class="badge b-warn">En el paquete</span>' : '',
+    rep ? '<span class="badge b-info">Repetido</span>' : ''].join('');
+  return `<div id="item-${x.uid}"><button type="button" class="fila ${x.nuevo ? 'nuevo' : ''}" data-act="item" data-uid="${x.uid}" aria-expanded="${abierto}">
+      <span class="ic-t">${chico(tipoDe(x))}</span><span class="nom">${esc(x.nombre)}<small>${esc(x.detalle)}</small></span>
+      <span class="bdg">${badges}</span><span class="num">${usd(x.total)}</span></button>
+    ${abierto ? `<div class="fila-det"><span>${esc(x.detalle)}</span><span class="muted">${esc(proveedorDe(x))}</span>
+      ${estado.verInterno ? `<span class="muted">Costo: <span class="num">${costo == null ? '—' : usd(costo)}</span></span>` : ''}
+      <label class="muted">Mover a <select class="ctrl" data-act="mover" data-uid="${x.uid}">${DIAS.map((d) => `<option value="${d.n}" ${d.n === x.dia ? 'selected' : ''}>Día ${d.n} · ${d.fecha}</option>`).join('')}</select></label>
+      <button class="btn link chico" data-act="quitar-item" data-uid="${x.uid}">Quitar</button></div>` : ''}</div>`;
+}
+function htmlGrupo(key, titulo, lista, extra, conDia) {
+  if (!lista.length) return `<div class="grupo vacio" id="${key}"><div class="grupo-head"><span class="plegar"><b>${titulo}</b><span class="res">· sin servicios</span></span>${extra}</div></div>`;
+  const pleg = estado.plegados.has(key);
+  return `<div class="grupo" id="${key}"><div class="grupo-head">
+      <button type="button" class="plegar" data-act="plegar" data-k="${key}" aria-expanded="${!pleg}"><span class="chev ${pleg ? '' : 'abierto'}">${ICONOS.chev}</span><b>${titulo}</b></button>
+      <span class="res num">${lista.length} ${lista.length === 1 ? 'servicio' : 'servicios'} · ${usd(sumar(lista))}</span>${extra}</div>
+    ${pleg ? '' : lista.map((x) => htmlFila(x, conDia)).join('')}</div>`;
+}
+function renderResumen(todos, pend) {
+  const venta = sumar(todos) + (estado.conPaquete ? 1558 : 0);
+  const costo = sumar(todos, costoDe) + (estado.conPaquete ? 1250 : 0);
+  const sinCosto = todos.filter((x) => costoDe(x) == null).length;
+  const margen = venta - costo, pct = venta ? Math.round((margen / venta) * 1000) / 10 : 0;
+  /* Siempre por tipo de servicio, sea cual sea la vista del lienzo. */
+  const grupos = TIPOS_LIENZO.map(([t, l]) => [`tipo-${t}`, `${chico(t)} ${l}`, todos.filter((x) => tipoDe(x) === t)]);
+  let h = `<div class="rz-tit">Para el cliente</div>`;
+  if (estado.conPaquete) h += `<div class="precio-linea"><span>Paquete × 2 adultos</span><span class="num">${usd(1558)}</span></div>`;
+  h += grupos.filter((g) => g[2].length).map(([k, l, lista]) => `<button type="button" class="rz-link" data-act="ir" data-k="${k}" title="Ver en el lienzo">
+      <span style="display:inline-flex;gap:6px;align-items:center">${l} <span class="muted small">· ${lista.length}</span></span><span class="num">${usd(sumar(lista))}</span></button>`).join('');
+  h += `<div class="total"><span>Total</span><span class="num">${usd(venta)}</span></div>
+    <div class="precio-linea small muted"><span>Por pasajero (promedio de ${PAX.length})</span><span class="num">${usd(Math.round(venta / PAX.length))}</span></div>`;
+  h += `<div class="rz-sec"><div class="rz-tit"><span>Interno · solo la agencia</span>
+      <button class="btn link chico" data-act="ojo" aria-pressed="${!estado.verInterno}">${estado.verInterno ? `${ICONOS.ojoNo} Ocultar` : `${ICONOS.ojo} Mostrar`}</button></div>`;
+  h += estado.verInterno
+    ? `<div class="precio-linea"><span>Costo</span><span class="num">${usd(costo)}</span></div>
+       <div class="precio-linea"><span>Margen</span><span class="num margen">${usd(margen)} · ${pct} %</span></div>
+       <div class="precio-linea small muted"><span>Gravado</span><span class="num">${usd(venta)}</span></div>
+       <div class="precio-linea small muted"><span>Exonerado (Amazonía)</span><span class="num">${usd(0)}</span></div>
+       ${sinCosto ? `<div class="small" style="color:var(--warn);margin-top:4px">${sinCosto} ${sinCosto === 1 ? 'servicio' : 'servicios'} sin costo: el margen sale más alto de lo real.</div>` : ''}`
+    : '<div class="small muted">Costo y margen ocultos, para compartir la pantalla con el cliente.</div>';
+  h += `</div><div class="rz-sec" id="por-resolver"><div class="rz-tit"><span>Por resolver</span>${pend.length ? `<span class="badge b-warn">${pend.length}</span>` : ''}</div>`;
+  h += pend.length ? pend.map((p) => `<button type="button" class="rz-link warn" data-act="ir-item" data-uid="${p.uid}">⚠ ${esc(p.txt)}</button>`).join('')
+    : '<div class="small" style="color:var(--ok)">✓ Nada por resolver</div>';
+  $('precio').innerHTML = h + '</div>';
+}
+function irA(id, uid) {
+  const el = $(id); if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (uid) { const f = el?.querySelector('.fila'); if (f) { f.classList.add('flash'); setTimeout(() => f.classList.remove('flash'), 1600); } }
 }
 
 /* ---------- Panel ---------- */
@@ -421,32 +556,42 @@ function filaServ(s) {
 function renderLista() {
   const base = CATALOGO.filter((s) => !estado.filtroProveedor || s.proveedor === estado.filtroProveedor);
   const cuenta = (k) => k === 'todos' ? base.length : base.filter((s) => s.tipo === k).length;
-  const lista = visibles();
+  const todos = visibles();
+  /* De a POR_PAGINA (en el sistema, 30 desde el servidor). Cambiar búsqueda, tipo o filtro vuelve al inicio. */
+  const firma = [estado.filtro, estado.q, estado.filtroProveedor, estado.filtroDestino].join('|');
+  if (firma !== estado.firma) { estado.firma = firma; estado.limite = POR_PAGINA; }
+  const lista = todos.slice(0, estado.limite);
+  const quedan = todos.length - lista.length;
   const proveedores = [...new Set(CATALOGO.map((s) => s.proveedor))];
-  let h = `<label class="lbl" for="buscar">Buscar</label>
-    <input class="ctrl" id="buscar" data-act="buscar" placeholder="Tour, hotel, traslado, proveedor…" value="${esc(estado.q)}" autocomplete="off">
+  /* Arriba, fijo y compacto: buscar + tipos en una o dos líneas + conteo y destino.
+     En el medio, con scroll propio: recientes y resultados. Abajo, fijo: crear lo que no está. */
+  const nMas = estado.filtroProveedor ? 1 : 0;
+  let h = `<div class="lista-top">
+    <div class="buscar-fila"><input class="ctrl" id="buscar" data-act="buscar" aria-label="Buscar" placeholder="Buscar tour, hotel, traslado, proveedor…" value="${esc(estado.q)}" autocomplete="off">
+      <button class="btn chico ${estado.masFiltros || nMas ? 'activo' : ''}" data-act="mas-filtros" aria-expanded="${estado.masFiltros}" title="Más filtros (proveedor)">Filtros${nMas ? ` · ${nMas}` : ''} ${estado.masFiltros ? '▴' : '▾'}</button></div>
     <div class="filtros" role="tablist">${FILTROS.map(([k, t]) => `<button type="button" class="filtro ${estado.filtro === k ? 'activo' : ''}" data-act="filtro" data-f="${k}" aria-pressed="${estado.filtro === k}">
-      ${ICONOS[k]}<span>${t}</span><span class="n num">${cuenta(k)}</span></button>`).join('')}</div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-      ${estado.filtroDestino ? `<span class="filtro-activo">Cusco y sus lugares <button class="btn link chico" data-act="quitar-destino" aria-label="Quitar filtro de destino">✕</button></span>` : '<button class="btn link chico" data-act="poner-destino">+ Solo Cusco</button>'}
-      <button class="btn link chico" data-act="mas-filtros">${estado.masFiltros ? '▾' : '▸'} Más filtros</button>
-    </div>`;
+      ${ICONOS[k]}<span>${t}</span><span class="n num">${cuenta(k)}</span></button>`).join('')}</div>`;
   if (estado.masFiltros) {
-    h += `<div class="campo" style="margin-top:8px"><label class="lbl" for="f-prov">Proveedor</label>
-      <select class="ctrl" id="f-prov" data-act="f-prov"><option value="">Cualquiera</option>${proveedores.map((p) => `<option ${estado.filtroProveedor === p ? 'selected' : ''}>${esc(p)}</option>`).join('')}</select></div>`;
+    h += `<div class="campo" style="margin:0 0 6px"><select class="ctrl" id="f-prov" data-act="f-prov" aria-label="Proveedor"><option value="">Proveedor: cualquiera</option>${proveedores.map((p) => `<option value="${esc(p)}" ${estado.filtroProveedor === p ? 'selected' : ''}>${esc(p)}</option>`).join('')}</select></div>`;
   }
-  if (estado.filtroProveedor) h += `<div class="alerta info" style="margin-top:8px">Filtrando por «${esc(estado.filtroProveedor)}»: solo aparecen sus servicios.</div>`;
+  h += `<div class="meta-fila">${quedan ? `Mostrando <b class="num">${lista.length}</b> de <b class="num">${todos.length}</b>` : `<b class="num">${todos.length}</b> ${todos.length === 1 ? 'servicio' : 'servicios'}`}
+      ${estado.filtroDestino ? `<span class="filtro-activo">Cusco y sus lugares <button class="btn link chico" data-act="quitar-destino" aria-label="Quitar filtro de destino">✕</button></span>` : '<button class="btn link chico" data-act="poner-destino">+ Solo Cusco</button>'}
+      ${estado.filtroProveedor ? `<span class="filtro-activo">${esc(estado.filtroProveedor)} <button class="btn link chico" data-act="quitar-prov" aria-label="Quitar filtro de proveedor">✕</button></span>` : ''}
+    </div></div><div class="lista-res">`;
   if (!estado.q && estado.filtro === 'todos' && estado.recientes.length) {
     h += `<div class="sec-tit">Usados recientemente</div><div class="recientes">${estado.recientes.slice(0, 8).map(serv).filter(Boolean).map((s) =>
-      `<button type="button" class="rec" data-act="sel" data-id="${s.id}">${ICONOS.reloj}${esc(s.nombre)}</button>`).join('')}</div>`;
-  }
-  h += `<div class="sec-tit">${lista.length} ${lista.length === 1 ? 'servicio' : 'servicios'}</div>`;
-  h += lista.length ? lista.map(filaServ).join('') : `<div class="vacio small">Sin resultados para «${esc(estado.q)}».</div>`;
-  h += `<div class="sec-tit">¿No está en el catálogo?</div>
-    <button type="button" class="fila-serv ${estado.sel === 'manual' ? 'sel' : ''}" data-act="sel" data-id="manual"><span class="ic">${ICONOS.mas}</span><span class="txt"><span class="nom">Servicio sin catálogo</span><span class="sub">Nombre, precio y cómo se cobra</span></span></button>
-    <button type="button" class="fila-serv ${estado.sel === 'hotel-nuevo' ? 'sel' : ''}" data-act="sel" data-id="hotel-nuevo"><span class="ic">${ICONOS.hotel}</span><span class="txt"><span class="nom">Hotel nuevo</span><span class="sub">Ficha de hotel y precio por noche</span></span></button>`;
+      `<button type="button" class="rec" data-act="sel" data-id="${s.id}">${ICONOS.reloj}${esc(s.nombre)}</button>`).join('')}</div><div class="sec-tit">Catálogo</div>`;
+  } else h += '<div style="height:8px"></div>';
+  h += lista.length ? lista.map(filaServ).join('') : `<div class="vacio small">Sin resultados para «${esc(estado.q)}».
+      <div style="margin-top:8px"><button class="btn chico" data-act="sel" data-id="manual">+ Crear «${esc(estado.q)}» sin catálogo</button></div></div>`;
+  if (quedan) h += `<button type="button" class="btn" style="width:100%;justify-content:center" data-act="ver-mas">Ver ${Math.min(POR_PAGINA, quedan)} más <span class="muted small">(quedan ${quedan})</span></button>`;
+  h += `</div><div class="lista-pie">
+    <button type="button" class="btn chico ${estado.sel === 'manual' ? 'activo' : ''}" data-act="sel" data-id="manual" title="Nombre, precio y cómo se cobra">${ICONOS.mas.replace('width="16" height="16"', 'width="13" height="13"')} Sin catálogo</button>
+    <button type="button" class="btn chico ${estado.sel === 'hotel-nuevo' ? 'activo' : ''}" data-act="sel" data-id="hotel-nuevo" title="Ficha de hotel y precio por noche">${ICONOS.hotel.replace('width="16" height="16"', 'width="13" height="13"')} Hotel nuevo</button></div>`;
   const foco = document.activeElement?.id === 'buscar'; const pos = foco ? document.activeElement.selectionStart : 0;
+  const scroll = $('lista').querySelector('.lista-res')?.scrollTop || 0;
   $('lista').innerHTML = h;
+  $('lista').querySelector('.lista-res').scrollTop = scroll;
   if (foco) { const b = $('buscar'); b.focus(); b.setSelectionRange(pos, pos); }
 }
 
@@ -540,7 +685,7 @@ function resumenCobro(s, f) {
 }
 function htmlManual() {
   return `<div class="det-tit"><h3>Servicio sin catálogo</h3></div>
-    <div class="dos"><div class="campo"><label class="lbl" for="m-nombre">Nombre para el cliente</label><input class="ctrl" id="m-nombre" placeholder="Cena show en Aguas Calientes"></div>
+    <div class="dos"><div class="campo"><label class="lbl" for="m-nombre">Nombre para el cliente</label><input class="ctrl" id="m-nombre" placeholder="Cena show en Aguas Calientes" value="${esc(estado.q)}"></div>
     <div class="campo"><label class="lbl" for="m-precio">Precio de venta (USD)</label><input class="ctrl num" id="m-precio" type="number" min="0" placeholder="0"></div></div>
     <label class="lbl">Cómo se cobra</label><div class="opciones-precio"><label><input type="radio" name="m-modo" checked>Por persona</label><label><input type="radio" name="m-modo">Por servicio</label></div>
     <div class="campo"><label class="lbl" for="m-costo">Costo (opcional, interno)</label><input class="ctrl num" id="m-costo" type="number" min="0" placeholder="0"></div>
@@ -626,6 +771,8 @@ document.addEventListener('click', (e) => {
     case 'quitar-destino': estado.filtroDestino = false; renderLista(); break;
     case 'poner-destino': estado.filtroDestino = true; renderLista(); break;
     case 'mas-filtros': estado.masFiltros = !estado.masFiltros; renderLista(); break;
+    case 'quitar-prov': estado.filtroProveedor = ''; renderLista(); break;
+    case 'ver-mas': estado.limite += POR_PAGINA; renderLista(); break;
     case 'paso': {
       const s = serv(estado.sel), f = formDe(s), c = el.dataset.c, d = Number(el.dataset.d);
       if (c.startsWith('hab:')) { const t = c.slice(4); f.habs[t] = Math.max(0, (f.habs[t] || 0) + d); }
@@ -650,8 +797,27 @@ document.addEventListener('click', (e) => {
       const nombre = $('m-nombre').value.trim() || 'Servicio sin catálogo', precio = Number($('m-precio').value) || 0;
       if (!precio) { toast('Escribe el precio de venta'); $('m-precio').focus(); break; }
       Object.values(estado.lienzo).flat().forEach((x) => { x.nuevo = false; });
-      const it = { id: 'manual', nombre, detalle: 'Sin catálogo · por persona · 3 pasajeros', total: precio * 3, nuevo: true, dia: estado.dia };
+      const it = { id: 'manual', nombre, detalle: 'Sin catálogo · por persona · 3 pasajeros', total: precio * 3, costo: Number($('m-costo').value) || null, nuevo: true, dia: estado.dia };
       estado.lienzo[estado.dia].push(it); estado.sesion.push(it); toast(`${nombre} agregado al día ${estado.dia}`); renderTodo(); break;
+    }
+    case 'item': { const u = Number(el.dataset.uid); estado.expandidos.has(u) ? estado.expandidos.delete(u) : estado.expandidos.add(u); renderLienzo(); break; }
+    case 'plegar': { const k = el.dataset.k; estado.plegados.has(k) ? estado.plegados.delete(k) : estado.plegados.add(k); renderLienzo(); break; }
+    case 'vista': estado.vista = el.dataset.v; renderLienzo(); break;
+    case 'expandir': estado.plegados.clear(); renderLienzo(); break;
+    case 'plegar-todo': [...DIAS.map((d) => `dia-${d.n}`), ...TIPOS_LIENZO.map(([t]) => `tipo-${t}`)].forEach((k) => estado.plegados.add(k)); estado.expandidos.clear(); renderLienzo(); break;
+    case 'ojo': estado.verInterno = !estado.verInterno; renderLienzo(); break;
+    case 'ir': {
+      const k = el.dataset.k; if (k.startsWith('tipo-')) estado.vista = 'tipo';
+      estado.plegados.delete(k); renderLienzo(); irA(k); break;
+    }
+    case 'ir-item': {
+      const x = itemsLienzo().find((i) => i.uid === Number(el.dataset.uid)); if (!x) break;
+      estado.plegados.delete(claveGrupo(x)); renderLienzo(); irA(`item-${x.uid}`, x.uid); break;
+    }
+    case 'quitar-item': {
+      const x = itemsLienzo().find((i) => i.uid === Number(el.dataset.uid)); if (!x) break;
+      const l = estado.lienzo[x.dia]; l.splice(l.indexOf(x), 1); estado.expandidos.delete(x.uid);
+      toast(`Quitado: ${x.nombre}`); renderLienzo(); break;
     }
     case 'guardar-hotel': toast('En el sistema: se guarda la ficha y se eligen las habitaciones aquí mismo'); break;
     case 'deshacer': {
@@ -671,6 +837,10 @@ document.addEventListener('change', (e) => {
   if (act === 'modo') { formDe(serv(estado.sel)).modo = e.target.value; renderDetalle(); }
   if (act === 'cama-nino') { formDe(serv(estado.sel)).camaNino[e.target.dataset.p] = e.target.checked; renderDetalle(); }
   if (act === 'con-paquete') { estado.conPaquete = e.target.checked; renderTodo(); }
+  if (act === 'mover') {
+    const x = itemsLienzo().find((i) => i.uid === Number(e.target.dataset.uid)), d = Number(e.target.value);
+    if (x && d !== x.dia) { const l = estado.lienzo[x.dia]; l.splice(l.indexOf(x), 1); estado.lienzo[d].push(x); toast(`${x.nombre} movido al día ${d}`); renderLienzo(); }
+  }
 });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && estado.abierto) document.querySelector('[data-act="cerrar"]').click(); });
 $('fondo').addEventListener('click', (e) => { if (e.target.id === 'fondo') document.querySelector('.panel [data-act="cerrar"]').click(); });
