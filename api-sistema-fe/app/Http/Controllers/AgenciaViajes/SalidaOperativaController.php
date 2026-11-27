@@ -10,6 +10,7 @@ use App\Models\AgenciaViajes\SalidaOperativa;
 use App\Models\AgenciaViajes\SalidaServicio;
 use App\Models\AgenciaViajes\SalidaVehiculo;
 use App\Models\Company;
+use App\Services\AgenciaViajes\CompraAsignacionService;
 use App\Services\AgenciaViajes\CruceSalidasService;
 use App\Services\AgenciaViajes\SalidaEngancheService;
 use App\Services\AgenciaViajes\SalidaOperacionService;
@@ -302,9 +303,13 @@ class SalidaOperativaController extends Controller
         try {
             $resultado = DB::transaction(function () use (
                 $salida, $reservas, $aCancelar, $fechaNueva, $fechaVieja, $request, $reservaController, $enganche, $antes, $datosSalida
-            ) {
-                $movidas = [];
+            ) {                $movidas = [];
                 $noTocados = [];
+
+                // T-152: compras primero y después la salida, el mismo orden que al repartir.
+                $asignaciones = app(CompraAsignacionService::class);
+                $asignaciones->bloquearComprasDeSalida($salida->id);
+                SalidaOperativa::whereKey($salida->id)->lockForUpdate()->first(['id']);
 
                 foreach ($reservas as $reserva) {
                     if ($aCancelar->contains($reserva->id)) {
@@ -340,6 +345,13 @@ class SalidaOperativaController extends Controller
 
                 if ($nueva) {
                     $this->llevarConfiguracion($antes, $nueva, $movidas, $datosSalida);
+
+                    // T-152 (Q9): solo si alguna reserva llegó de verdad a la salida nueva
+                    // (lo ya facturado no se mueve). Sin compras, la vieja ya puede borrarse.
+                    if ($nueva->reservaItems()->whereIn('reserva_id', $movidas)->exists()) {
+                        $asignaciones->trasladarSalida($salida->id, $nueva->id);
+                        SalidaOperativa::eliminarSiQuedoVacia($salida->id);
+                    }
                 }
 
                 return ['nueva' => $nueva, 'movidas' => $movidas, 'no_tocados' => $noTocados];

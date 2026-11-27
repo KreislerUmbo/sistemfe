@@ -2,6 +2,7 @@
 
 namespace App\Services\Compras;
 
+use App\Models\AgenciaViajes\CompraAsignacion;
 use App\Models\Compras\Compra;
 use App\Models\Compras\CompraLinea;
 use App\Models\Compras\CompraPeriodo;
@@ -11,6 +12,7 @@ use App\Models\Sale\TipoComprobante;
 use App\Rules\ArchivoSubido;
 use App\Services\HoraPeru;
 use App\Services\Stock\StockService;
+use App\Services\Tenancy\GiroActual;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -108,6 +110,10 @@ class CompraService
                 $actual = $compra->exists ? Compra::whereKey($compra->id)->lockForUpdate()->firstOrFail() : $compra;
                 if ($actual->estaAnulada()) {
                     throw new CompraException('Una compra anulada no se puede editar.');
+                }
+
+                if ($actual->exists) {
+                    $this->exigirSinReparto($actual, $datos);
                 }
 
                 $lineas = $datos['lineas'];
@@ -297,6 +303,19 @@ class CompraService
         $datos['lineas'] = array_values($datos['lineas'] ?? []);
 
         return $datos;
+    }
+
+    // T-152 (Q5, Q13): el reparto suma el total en la moneda de la compra. Solo Agencia tiene la
+    // tabla; con la compra ya bloqueada, no se cruza con quien la esté repartiendo.
+    private function exigirSinReparto(Compra $compra, array $datos): void
+    {
+        $cambia = $datos['moneda'] !== $compra->moneda
+            || ! BigDecimal::of((string) $datos['total'])->isEqualTo($compra->total);
+
+        if ($cambia && app(GiroActual::class)->es('agencia_viajes')
+            && CompraAsignacion::where('compra_id', $compra->id)->exists()) {
+            throw new CompraException('Esta compra tiene reparto: quita el reparto antes de cambiar el total o la moneda.');
+        }
     }
 
     // D2. Sin líneas en el pedido se conservan las guardadas. La compra que modifica una nota

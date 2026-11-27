@@ -35,6 +35,8 @@ export interface Compra {
     /** Solo en el detalle (`GET compras/{id}`). */
     lineas?: CompraLinea[];
     devolvible?: { product_id: number; maximo: number }[];
+    /** T-152: solo en el detalle y solo en Agencia. */
+    asignaciones?: CompraAsignacion[];
     referencia: { id: number; tipo_comprobante_codigo: string; serie: string; numero: string } | null;
     tiene_pdf: boolean;
     tiene_xml: boolean;
@@ -80,6 +82,8 @@ export interface ComprasListado {
     paginate: number;
     compras: Compra[];
     totales_pen: MontosCompra;
+    /** T-152: giro Agencia. */
+    permite_asignar: boolean;
 }
 
 export interface TipoComprobanteCompra {
@@ -114,4 +118,30 @@ export interface CompraPeriodo {
     reabierto_por: string | null;
     motivo_reapertura: string | null;
     historial: { accion: 'cierre' | 'reapertura'; usuario: string | null; at: string; motivo: string | null }[];
+}
+
+// T-152 — reparto de una compra entre reservas, salidas y «general».
+export type DestinoAsignacion = 'reserva' | 'salida' | 'general';
+
+export interface CompraAsignacion {
+    destino: DestinoAsignacion;
+    reserva_id: number | null;
+    salida_operativa_id: number | null;
+    monto: string;
+    titulo: string;
+    usuario: string | null;
+}
+
+/** Bloque «Compras» de la ficha de una reserva o salida. */
+export interface CompraDeFicha {
+    compra_id: number;
+    fecha_emision: string;
+    tipo_comprobante_codigo: string;
+    tipo_nombre: string;
+    serie: string;
+    numero: string;
+    proveedor: { razon_social: string; ciudad: string | null } | null;
+    moneda: 'PEN' | 'USD';
+    monto: string;
+    total: string;
 }

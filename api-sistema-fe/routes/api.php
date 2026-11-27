@@ -57,6 +57,7 @@ use App\Http\Controllers\AgenciaViajes\TipoCambioAgenciaController;
 use App\Http\Controllers\AgenciaViajes\TourItinerarioItemController;
 use App\Http\Controllers\AgenciaViajes\TraspasoTrabajoController;
 use App\Http\Controllers\AgenciaViajes\VentaDirectaController;
+use App\Http\Controllers\AgenciaViajes\CompraAsignacionController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\Cash\BranchController;
 use App\Http\Controllers\Cash\CashConceptController;
@@ -423,7 +424,14 @@ Route::group([
         });
         Route::get('compras/catalogos', [CompraController::class, 'catalogos'])
             ->middleware('permission:compras.ver|compras.registrar');
+        // T-152 — reparto de la compra (solo giro Agencia: lo corta el controller con 404).
+        Route::middleware('permission:compras.ver')->group(function () {
+            Route::get('reservas/{id}/compras', [CompraAsignacionController::class, 'deReserva'])->whereNumber('id');
+            Route::get('salidas-operativas/{id}/compras', [CompraAsignacionController::class, 'deSalida'])->whereNumber('id');
+        });
         Route::middleware('permission:compras.registrar')->group(function () {
+            Route::get('compras/destinos', [CompraAsignacionController::class, 'destinos']);
+            Route::put('compras/{id}/asignaciones', [CompraAsignacionController::class, 'guardar'])->whereNumber('id');
             Route::post('compras', [CompraController::class, 'store']);
             // POST y no PUT: el formulario va en multipart, por los adjuntos.
             Route::post('compras/{id}', [CompraController::class, 'update'])->whereNumber('id');

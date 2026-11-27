@@ -82,6 +82,11 @@
                                     <button type="button" class="btn btn-sm btn-link p-1" title="Ver" @click="verDetalle(c.id)">
                                         <i class="las la-eye text-secondary fs-20"></i>
                                     </button>
+                                    <!-- T-152: también con el periodo cerrado (Q6). -->
+                                    <button v-if="puedeAsignar && !c.anulada_at" type="button" class="btn btn-sm btn-link p-1"
+                                        title="Asignar" @click="asignar(c.id)">
+                                        <i class="las la-sitemap text-secondary fs-20"></i>
+                                    </button>
                                     <template v-if="!c.anulada_at && !c.periodo_cerrado">
                                         <router-link v-if="puede('compras.registrar')" :to="{ name: 'compras.editar', params: { id: c.id } }"
                                             class="btn btn-sm btn-link p-1" title="Editar">
@@ -186,6 +191,31 @@
                     </small>
                     <div v-if="aviso" class="text-warning small">{{ aviso }}</div>
                 </div>
+                <!-- T-152: la clave solo llega en Agencia. -->
+                <div v-if="detalle.asignaciones" class="mb-2">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <h6 class="small fw-semibold mb-0">Reparto</h6>
+                        <button v-if="puedeAsignar && !detalle.anulada_at" type="button" class="btn btn-sm btn-outline-primary"
+                            @click="asignar(detalle.id)">
+                            <i class="las la-sitemap me-1"></i>Asignar
+                        </button>
+                    </div>
+                    <div v-if="!detalle.asignaciones.length" class="small text-muted fst-italic">Sin asignar</div>
+                    <table v-else class="table table-sm small mb-0">
+                        <tbody>
+                            <tr v-for="a in detalle.asignaciones" :key="`${a.destino}:${a.reserva_id ?? a.salida_operativa_id}`">
+                                <td>
+                                    <router-link v-if="a.reserva_id" :to="`/agencia-viajes/reservas/${a.reserva_id}`">{{ a.titulo }}</router-link>
+                                    <router-link v-else-if="a.salida_operativa_id"
+                                        :to="{ name: 'agencia.salidas.detalle', params: { id: a.salida_operativa_id } }">{{ a.titulo }}</router-link>
+                                    <template v-else>{{ a.titulo }}</template>
+                                    <small v-if="a.usuario" class="d-block text-muted">Ingresado por {{ a.usuario }}</small>
+                                </td>
+                                <td class="text-end">{{ formatMonto(a.monto, detalle.moneda) }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
                 <div class="d-flex gap-2">
                     <button v-if="detalle.tiene_pdf" type="button" class="btn btn-sm btn-outline-primary" @click="abrirAdjunto('pdf')">
                         <i class="far fa-file-pdf me-1"></i>Ver PDF
@@ -197,15 +227,17 @@
                 </div>
             </template>
         </b-modal>
+        <AsignarCompra :compra-id="compraAsignar" @cerrar="compraAsignar = null" @guardado="alAsignar" />
     </DefaultLayout>
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref, watch } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import ProveedorSelector from '@/components/Compras/ProveedorSelector.vue';
+import AsignarCompra from '@/components/Compras/AsignarCompra.vue';
 import httpClient from '@/helpers/http-client';
 import { estaVencida, formatMonto } from '@/helpers/compras';
 import { formatFecha, formatFechaHora, hoyPeru } from '@/helpers/fecha';
@@ -245,6 +277,11 @@ const detalle = ref<Compra | null>(null);
 const aviso = ref('');
 const modalDetalle = ref(false);
 
+// T-152
+const permiteAsignar = ref(false);
+const puedeAsignar = computed(() => permiteAsignar.value && puede('compras.registrar'));
+const compraAsignar = ref<number | null>(null);
+
 const mensajeDe = (e: any) => e.response?.data?.message ?? 'No se pudo completar la operación.';
 const mostrarError = (e: any) => (Swal as TVueSwalInstance).fire('Error', mensajeDe(e), 'error');
 
@@ -265,6 +302,7 @@ const listar = async () => {
         totales.value = data.totales_pen;
         total.value = data.total;
         porPagina.value = data.paginate;
+        permiteAsignar.value = data.permite_asignar;
     } catch (e) {
         compras.value = [];
         totales.value = null;
@@ -294,6 +332,17 @@ const verDetalle = async (id: number) => {
     } catch (e) {
         mostrarError(e);
     }
+};
+
+// Un modal a la vez: se cierra el detalle y se vuelve a abrir con el reparto guardado.
+const asignar = (id: number) => {
+    modalDetalle.value = false;
+    compraAsignar.value = id;
+};
+
+const alAsignar = (id: number) => {
+    compraAsignar.value = null;
+    verDetalle(id);
 };
 
 const abrirAdjunto = async (archivo: 'pdf' | 'xml') => {

@@ -5,7 +5,7 @@
 | **Módulo** | COM + AGE |
 | **Depende de** | T-135 (comprobante de compra) |
 | **Reglas** | `docs/planning/agencia-de-viajes/plan-tours-venta-simple-costo-real.md` §3.7 (`compra_asignaciones`), §3.7d, §3.9b, §6 fase 3 |
-| **Decisiones** | Q1-Q11 de «Decisiones aprobadas» (usuario, 26-nov-2026) |
+| **Decisiones** | Q1-Q14 de «Decisiones aprobadas» (usuario, 26-nov-2026) |
 | **Rama** | `feat/T-152-asignacion-compra` |
 
 ## Contexto
@@ -47,7 +47,7 @@ Verificado el 26-nov-2026 en `main` (`c2477245`).
 - El detalle de la compra muestra su reparto, o «Sin asignar».
 - Ficha de la reserva y ficha de la salida: bloque «Compras» con fecha, tipo, serie-número, proveedor, monto asignado a ese destino, total del comprobante y enlace a la compra. Solo compras vigentes.
 - NC y ND se asignan igual que cualquier compra, con montos positivos; el modal propone los destinos de la compra que modifican (Q7).
-- Editar el total de una compra con reparto se rechaza (Q5). Anular conserva las filas, visibles en el detalle de la compra, y la saca de las fichas (Q8).
+- Editar el total o la moneda de una compra con reparto se rechaza (Q5, Q13). Anular conserva las filas, visibles en el detalle de la compra, y la saca de las fichas (Q8).
 - Una salida con asignaciones no se borra; al reprogramar la salida completa, las asignaciones pasan a la nueva (Q9).
 - Método de lectura para T-143 y T-145: las reservas asignadas a una compra con su monto, y las compras vigentes asignadas a una reserva.
 - Agregar `compra_asignaciones` a `LimpiarOperacionPrueba` (ver Hallazgos).
@@ -90,19 +90,20 @@ Tests en `tests/Feature/AgenciaViajes/CompraAsignacionTest.php`.
 - [ ] **CA6** — `GET reservas/{id}/compras` y `salidas-operativas/{id}/compras` traen solo las vigentes, con el monto asignado a ese destino → `test_fichas_muestran_solo_su_parte`
 - [ ] **CA7** — Anular una compra con reparto funciona, conserva las filas y la quita de las fichas; asignar una anulada → 422 → `test_anulada`
 - [ ] **CA8** — Con el periodo de anotación cerrado se puede cambiar el reparto (Q6) → `test_periodo_cerrado_permite_reasignar`
-- [ ] **CA9** — Editar el total de una compra con reparto → 422 «quita el reparto antes»; editar la serie o las observaciones sí se puede → `test_no_cambia_el_total_con_reparto`
+- [ ] **CA9** — Editar el total o la moneda de una compra con reparto → 422 «quita el reparto antes»; editar la serie o las observaciones sí se puede → `test_no_cambia_el_total_con_reparto`
 - [ ] **CA10** — Una NC se asigna a dos reservas, y el método de lectura devuelve ambas con su monto → `test_nota_de_credito_entre_reservas`
 - [ ] **CA11** — Reservas canceladas, salidas canceladas o realizadas se pueden asignar → `test_destinos_cancelados_o_realizados`
 - [ ] **CA12** — Al quitar la última línea de una salida con asignaciones, la salida no se borra; sin asignaciones, se borra como hoy → `test_salida_con_compras_no_se_borra`
 - [ ] **CA13** — Al reprogramar la salida completa, sus asignaciones pasan a la salida nueva; si ya había una fila de esa compra para la nueva, se suman los montos. Si no se movió ninguna reserva, se quedan → `test_reprogramar_salida_lleva_las_compras`
 - [ ] **CA14** — Sin `compras.registrar` → 403 al guardar; sin `compras.ver` → 403 en las fichas; módulo apagado → 403 → `test_permisos_y_modulo`
-- [ ] **CA15** — Sin `reservas.ver_todas`, el buscador no ofrece reservas ajenas, asignarlas → 403 y su ficha → 403 (Q10) → `test_respeta_reserva_policy`
+- [ ] **CA15** — Sin `reservas.ver_todas` se puede buscar y repartir entre reservas de cualquier vendedor; la ficha de una reserva ajena → 403 (Q12) → `test_reparte_reservas_de_otro_vendedor`
+- [ ] **CA15b** — Cada fila guarda quién la ingresó: al volver a guardar, las filas sin cambios conservan su usuario (Q12) → `test_guarda_quien_ingreso_cada_fila`
 - [ ] **CA16** — En un tenant que no es Agencia, las rutas nuevas responden 404, y registrar, editar y anular compras sigue igual → `ComprasMigracionesPorGiroTest` + `test_otro_giro`
 - [ ] **CA17** — `LimpiarOperacionPrueba::tablasSinClasificar()` no incluye `compra_asignaciones` → `test_limpieza_clasifica_la_tabla`
 - [ ] **CA18** (manual, `agencia-demo`) — Registrar una factura, asignarla, verla en la ficha de la reserva y en la de la salida, volver a la compra desde el enlace. En un tenant retail no aparece «Asignar».
 
 ## Seguridad y correctitud
-- [ ] Permisos / Policy en rutas nuevas: `modulo:compras` + permiso en todas; `ReservaPolicy::view` por cada reserva leída o asignada (la seguridad de fila depende de llamarla en el controller).
+- [ ] Permisos / Policy en rutas nuevas: `modulo:compras` + permiso en todas; `ReservaPolicy::view` en la ficha de la reserva (la seguridad de fila depende de llamarla en el controller). Asignar y buscar destinos no filtran por vendedor (Q12).
 - [ ] Aislamiento de tenant: todo en la base del tenant; sin consultas centrales nuevas.
 - [ ] Validación de entrada / archivos: `destino` con lista cerrada, ids existentes, `decimal:0,2`, tope de filas (100, mismo criterio que las líneas de T-154). Sin archivos.
 - [ ] Concurrencia (`lockForUpdate`): bloquear la compra antes de reemplazar el reparto (serializa con `editar` y `anular`); la suma se valida contra el total **bloqueado**. Bloquear también las salidas de destino para que no se borren a la vez.
@@ -132,16 +133,28 @@ Usuario, 26-nov-2026.
 - **Q7 — NC y ND:** reparto propio con montos positivos; se proponen los destinos de la compra que modifican, sin guardar hasta confirmar.
 - **Q8 — Anular:** no se bloquea; las filas se conservan, se ven en el detalle de la anulada y salen de las fichas.
 - **Q9 — Salidas:** una salida con asignaciones (también de compras anuladas) no se borra. Al reprogramarla completa y moverse alguna reserva, las asignaciones pasan a la nueva. Mover o quitar líneas sueltas no mueve asignaciones.
-- **Q10 — Permisos:** asigna `compras.registrar`; las fichas piden además `compras.ver`; se respeta `ReservaPolicy`. Las salidas no tienen dueño.
+- **Q10 — Permisos:** asigna `compras.registrar`; las fichas piden además `compras.ver`; la ficha de la reserva respeta `ReservaPolicy` (para asignar, ver Q12). Las salidas no tienen dueño.
 - **Q11 — Comprobantes y destinos:** todos los tipos, con o sin líneas; reservas en cualquier estado, también de venta directa o con facturación externa; salidas en cualquier estado.
+- **Q12 — Reservas de otro vendedor:** cualquiera con `compras.registrar` reparte entre cualquier reserva (el buscador muestra código y cliente de todas), para ganar tiempo. Se guarda el usuario que ingresó cada fila y se ve en el detalle de la compra. La ficha de una reserva ajena sigue cerrada.
+- **Q13 — Moneda:** con reparto tampoco se cambia la moneda.
+- **Q14 — Montos propuestos en NC/ND:** vacíos; con un solo destino, el total de la nota.
 
 ---
 
 ## Resultado
 <!-- Lo completa quien construye, al terminar. -->
-- **Commits:**
-- **Tests:** (nuevos / suite completa)
+- **Commits:** en `feat/T-152-asignacion-compra` (ver `git log main..`).
+- **Tests:** nuevos `tests/Feature/AgenciaViajes/CompraAsignacionTest.php` (18, CA1-CA17 y CA15b); ajustados `CompraTest` (rutas nuevas) y `ComprasMigracionesPorGiroTest` (la tabla solo en Agencia). Suite completa: 2530 de 2532; los 2 que fallaron eran el escenario simulado de `ProveedoresTablaBaseTest` (borraba `compras` dejándola como migrada). Ajustado el test, pasan ese archivo, `CompraAsignacionTest` y `ComprasMigracionesPorGiroTest` (23); la suite completa no se volvió a correr después del ajuste. `type-check`, `build` y Vitest (366) en verde.
+- **Prueba en pantalla (CA18, `agencia-demo`):** factura de S/ 1 000 repartida entre una reserva, una salida y «general»; con S/ 999.99 el botón queda bloqueado; se ve en el detalle y en las dos fichas; el enlace vuelve a la compra; una NC propone los mismos destinos con montos vacíos. La factura y la NC se registraron por la API (el formulario no cambió). Los datos de prueba se borraron y el módulo quedó apagado, como estaba.
+- **Sin verificar en pantalla:** que en un tenant retail no aparezca «Asignar» (no hay credencial documentada de uno). Lo cubre `test_otro_giro` (`permite_asignar` = false, rutas en 404).
 - **Desviaciones de la tarea y por qué:**
+  - CA15 y Q10 cambiaron antes de construir, por decisión del usuario (Q12-Q14).
+  - El permiso `reservas.ver|ver_todas` de las fichas se comprueba en el controller y no en la ruta, para que otro giro reciba 404 y no 403.
+  - El detalle de la compra muestra el reparto con código y cliente a quien tenga `compras.ver`, aunque la reserva sea de otro vendedor (consecuencia de Q12).
+- **No corrido:** `/code-review` y `/security-review`.
+- **Al desplegar:** `php artisan tenants:migrate-verticales`.
 
 ## Hallazgos fuera de alcance
+- Cuando un test de migraciones falla a mitad (`ProveedoresTablaBaseTest`, `ComprasMigracionesPorGiroTest`), su tenant descartable queda en `sistemafe_test_migrations` y hace fallar las corridas siguientes. Se borraron los 4 que dejó esta tarea; hay 14 más antiguos.
+- Una salida que queda sin reservas pero con compras sigue en el tablero con 0 pasajeros (es lo que pide Q9). Si se junta mucha, puede convenir marcarla o cerrarla de otra forma.
 - `LimpiarOperacionPrueba` no nombra `compras`, `compra_lineas`, `compra_periodos` ni `stock_movimientos` en ninguna de sus listas: según `motivosParaNoLimpiar()`, el comando se negaría a limpiar un tenant que tenga esas tablas. Visto al leer el código, sin ejecutarlo. Al construir T-152 hay que clasificar `compra_asignaciones` y, como apunta a `reserva` y `salidas_operativas` (que se borran), va en las que se borran; clasificar las otras cuatro es una decisión aparte.

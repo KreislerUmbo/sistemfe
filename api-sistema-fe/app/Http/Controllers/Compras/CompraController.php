@@ -8,9 +8,11 @@ use App\Models\Compras\CompraLinea;
 use App\Models\Compras\CompraPeriodo;
 use App\Models\Proveedor;
 use App\Models\Sale\TipoComprobante;
+use App\Services\AgenciaViajes\CompraAsignacionService;
 use App\Services\BusquedaLike;
 use App\Services\Compras\CompraService;
 use App\Services\HoraPeru;
+use App\Services\Tenancy\GiroActual;
 use App\Services\TipoCambio\TipoCambioSunatResolver;
 use Brick\Math\BigDecimal;
 use Illuminate\Database\Eloquent\Builder;
@@ -45,7 +47,13 @@ class CompraController extends Controller
             'paginate' => $perPage,
             'compras' => $compras->getCollection()->map(fn (Compra $c) => $this->datos($c, $contexto))->values(),
             'totales_pen' => $totales,
+            'permite_asignar' => $this->repartoActivo(),
         ]);
+    }
+
+    private function repartoActivo(): bool
+    {
+        return app(GiroActual::class)->es('agencia_viajes');
     }
 
     public function show(string $id)
@@ -180,6 +188,10 @@ class CompraController extends Controller
         $datos['devolvible'] = collect($this->service->devolvible($compra->id))
             ->map(fn (BigDecimal $maximo, int $id) => ['product_id' => $id, 'maximo' => $maximo->toFloat()])
             ->values();
+        // T-152: el reparto solo existe en Agencia; en otros giros la clave no sale.
+        if ($this->repartoActivo()) {
+            $datos['asignaciones'] = app(CompraAsignacionService::class)->detalle($compra);
+        }
 
         return response()->json(array_filter(['code' => 200, 'message' => $mensaje, 'aviso' => $this->aviso($compra)])
             + ['compra' => $datos]);

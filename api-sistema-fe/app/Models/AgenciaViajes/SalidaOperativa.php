@@ -135,6 +135,7 @@ class SalidaOperativa extends Model
     // Se llama cada vez que un ítem deja la salida. T-082: una reserva que ya no
     // tiene ningún ítem en la salida sale también de sus vehículos (antes la
     // fila quedaba y, si la reserva volvía, reaparecía sola en el vehículo).
+    // T-152 (Q9): con compras cargadas (también anuladas) no se borra.
     public static function eliminarSiQuedoVacia(?int $salidaId): void
     {
         if ($salidaId === null) {
@@ -146,9 +147,14 @@ class SalidaOperativa extends Model
             ->whereNotIn('reserva_id', ReservaItem::where('salida_operativa_id', $salidaId)->select('reserva_id'))
             ->delete();
 
-        $salida = self::withCount('reservaItems')->find($salidaId);
-        if ($salida && $salida->reserva_items_count === 0) {
-            $salida->delete();
-        }
+        // Bloqueada: así no se le carga una compra entre la comprobación y el borrado.
+        DB::transaction(function () use ($salidaId) {
+            $salida = self::lockForUpdate()->find($salidaId);
+            if ($salida
+                && ! $salida->reservaItems()->exists()
+                && ! CompraAsignacion::where('salida_operativa_id', $salidaId)->exists()) {
+                $salida->delete();
+            }
+        });
     }
 }

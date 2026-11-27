@@ -21,6 +21,8 @@ class ComprasMigracionesPorGiroTest extends TestCase
         '2026_11_28_100000_create_compras_tables', '2026_11_28_100100_add_compras_permissions',
         // T-154: dependen de compras.
         '2026_11_29_100000_create_compra_lineas_table', '2026_11_29_100100_add_con_credito_fiscal_to_compras',
+        // T-152: solo en Agencia, y con FK a compras.
+        '2026_11_30_100000_create_compra_asignaciones_table',
     ];
 
     /** @var Tenant[] */
@@ -71,6 +73,7 @@ class ComprasMigracionesPorGiroTest extends TestCase
 
             // Como un tenant anterior a T-135: le faltan y se las trae el comando del deploy.
             $tenant->run(function () {
+                Schema::dropIfExists('compra_asignaciones');
                 Schema::drop('compra_periodos');
                 Schema::drop('compra_lineas');
                 Schema::drop('compras');
@@ -93,6 +96,8 @@ class ComprasMigracionesPorGiroTest extends TestCase
             $this->assertTrue(Schema::hasTable('compra_periodos'), $giro);
             // T-154
             $this->assertTrue(Schema::hasTable('compra_lineas'), $giro);
+            // T-152 (Q1): el reparto es propio de Agencia.
+            $this->assertSame($giro === 'agencia_viajes', Schema::hasTable('compra_asignaciones'), $giro);
             $this->assertTrue(Schema::hasColumn('compras', 'con_credito_fiscal'), $giro);
             $this->assertTrue(Schema::hasColumn('products', 'costo_promedio'), $giro);
             $this->assertSame(

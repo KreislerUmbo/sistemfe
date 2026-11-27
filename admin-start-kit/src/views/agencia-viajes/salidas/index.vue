@@ -260,6 +260,8 @@
                         <SalidaOrdenesServicio v-if="enCurso(detalle)" :key="`ordenes-${detalle.id}`" class="mb-3" :salida-id="detalle.id" />
                         <SalidaReprogramar v-if="reprogramando && enCurso(detalle)" class="mb-3" :salida="detalle"
                             @cerrar="reprogramando = false" @reprogramada="alReprogramar" />
+                        <!-- T-152 -->
+                        <ComprasAsignadas destino="salida" :id="detalle.id" />
                         <h6 class="small fw-semibold text-secondary text-uppercase">Reservas</h6>
                         <ul class="list-group">
                             <li v-for="r in detalle.reservas ?? []" :key="r.id" class="list-group-item d-flex justify-content-between align-items-center py-2">
@@ -306,6 +308,7 @@ import CampoFecha from '@/components/CampoFecha.vue';
 import SalidaServiciosVehiculos from '@/components/AgenciaViajes/SalidaServiciosVehiculos.vue';
 import SalidaOrdenesServicio from '@/components/AgenciaViajes/SalidaOrdenesServicio.vue';
 import SalidaReprogramar from '@/components/AgenciaViajes/SalidaReprogramar.vue';
+import ComprasAsignadas from '@/components/AgenciaViajes/ComprasAsignadas.vue';
 import { computed, ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
