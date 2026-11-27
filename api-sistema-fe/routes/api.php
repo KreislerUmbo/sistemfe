@@ -73,6 +73,7 @@ use App\Http\Controllers\Central\TenantAdminController;
 use App\Http\Controllers\Central\TenantModuloController;
 use App\Http\Controllers\Compras\CompraController;
 use App\Http\Controllers\Compras\CompraPeriodoController;
+use App\Http\Controllers\Compras\CuentasPorPagarController;
 use App\Http\Controllers\Compras\PagoProveedorController;
 use App\Http\Controllers\Central\TenantCorreoController;
 use App\Http\Controllers\Central\TenantBackupController;
@@ -437,6 +438,10 @@ Route::group([
         Route::post('compras/pagos/{id}/anular', [PagoProveedorController::class, 'anular'])
             ->whereNumber('id')->middleware('permission:compras.anular');
         Route::middleware('permission:compras.ver')->group(function () {
+            // T-137 — cuentas por pagar (solo lectura).
+            Route::get('compras/cuentas-por-pagar', [CuentasPorPagarController::class, 'index']);
+            Route::get('compras/cuentas-por-pagar/detalle', [CuentasPorPagarController::class, 'detalle']);
+            Route::get('compras/cuentas-por-pagar/excel', [CuentasPorPagarController::class, 'excel']);
             Route::get('compras', [CompraController::class, 'index']);
             Route::get('compras/{id}', [CompraController::class, 'show'])->whereNumber('id');
             Route::get('compras/{id}/adjunto/{archivo}', [CompraController::class, 'adjuntoUrl'])

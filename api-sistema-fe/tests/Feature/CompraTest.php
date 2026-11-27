@@ -444,6 +444,10 @@ class CompraTest extends TestCase
             'POST api/compras/pagos/{id}/anular' => 'compras.anular',
             'POST api/compra-periodos/{periodo}/cerrar' => 'compras.cerrar_periodo',
             'POST api/compra-periodos/{periodo}/reabrir' => 'compras.cerrar_periodo',
+            // T-137
+            'GET api/compras/cuentas-por-pagar' => 'compras.ver',
+            'GET api/compras/cuentas-por-pagar/detalle' => 'compras.ver',
+            'GET api/compras/cuentas-por-pagar/excel' => 'compras.ver',
         ];
 
         $reales = [];
