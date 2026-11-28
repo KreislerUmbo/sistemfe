@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { datosDeOrigen, esSaldoAFavor, faltaEnOrigen, filasAplicadas, origenVacio, quedaACuenta } from './pagosProveedor';
+import {
+    datosDeOrigen, enMonedaDeLaCompra, enMonedaDelPago, esSaldoAFavor, faltaEnOrigen, filasAplicadas, origenVacio, textoDiferencia,
+} from './pagosProveedor';
 
 describe('pagos a proveedores', () => {
     it('envía solo lo del origen elegido', () => {
@@ -21,8 +23,24 @@ describe('pagos a proveedores', () => {
     it('reparte sin arrastrar decimales', () => {
         const montos = { 3: '0.10', 4: 0.2, 5: '', 6: '0' };
         expect(filasAplicadas(montos)).toEqual([{ compra_id: 3, monto: '0.10' }, { compra_id: 4, monto: '0.20' }]);
-        expect(quedaACuenta('1.00', montos)).toBe('0.70');
-        expect(quedaACuenta('0.20', montos)).toBe('-0.10');
+        // Solo las compras en otra moneda llevan tipo de cambio.
+        expect(filasAplicadas(montos, { 4: '3.75' })[1]).toEqual({ compra_id: 4, monto: '0.20', tipo_cambio: '3.75' });
+    });
+
+    it('convierte entre soles y dólares sin pasarse del pago', () => {
+        expect(enMonedaDelPago(100000, 'USD', '3.7523')).toBe(375230);
+        expect(enMonedaDelPago(10000, 'PEN', '3.3333')).toBe(3000);
+        expect(enMonedaDelPago(10000, 'USD', '')).toBe(0);
+        expect(enMonedaDeLaCompra(375230, 'USD', '3.7523')).toBe(100000);
+        // Lo propuesto, convertido de vuelta, nunca supera lo que le queda al pago.
+        const propuesto = enMonedaDeLaCompra(20000, 'USD', '3.7');
+        expect(enMonedaDelPago(propuesto, 'USD', '3.7')).toBeLessThanOrEqual(20000);
+    });
+
+    it('nombra la diferencia de cambio', () => {
+        expect(textoDiferencia('52.30')).toMatch(/^Pérdida .*52\.30$/);
+        expect(textoDiferencia('-50.00')).toMatch(/^Ganancia .*50\.00$/);
+        expect(textoDiferencia(null)).toBe('sin T.C.');
     });
 
     it('reconoce el saldo a favor', () => {

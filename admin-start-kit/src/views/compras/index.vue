@@ -261,12 +261,23 @@
                                 Aplicar pago a cuenta
                             </button>
                         </div>
+                        <button v-if="puede('compras.pagar') && !detalle.anulada_at && esSaldoAFavor(detalle.saldo)" type="button"
+                            class="btn btn-sm btn-outline-primary" @click="reembolsar">Registrar reembolso</button>
                     </div>
                     <div v-if="Number(detalle.por_aprobar) > 0" class="small text-warning">
                         {{ formatMonto(detalle.por_aprobar!, detalle.moneda) }} esperan la aprobación del egreso en Caja.
                     </div>
                     <div v-if="!detalle.aplicaciones_pago?.length" class="small text-muted fst-italic">Sin pagos aplicados</div>
                     <table v-else class="table table-sm small mb-0">
+                        <thead v-if="detalle.moneda === 'USD'" class="table-light">
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Origen</th>
+                                <th class="text-end">Aplicado</th>
+                                <th class="text-end">Dif. cambio</th>
+                                <th></th>
+                            </tr>
+                        </thead>
                         <tbody>
                             <tr v-for="a in detalle.aplicaciones_pago" :key="a.id" :class="{ 'text-muted': a.desaplicada_at }">
                                 <td>{{ formatFecha(a.pago.fecha) }}</td>
@@ -277,7 +288,13 @@
                                     <small v-if="a.desaplicada_at" class="d-block">Desaplicado: {{ a.motivo_desaplicacion }}</small>
                                 </td>
                                 <td class="text-end" :class="{ 'text-decoration-line-through': a.desaplicada_at }">
-                                    {{ formatMonto(a.monto, detalle.moneda) }}
+                                    {{ formatMonto(a.monto_compra, detalle.moneda) }}
+                                    <small v-if="a.pago.moneda !== detalle.moneda" class="d-block text-muted">
+                                        {{ formatMonto(a.monto, a.pago.moneda) }} a T.C. {{ Number(a.tipo_cambio) }}
+                                    </small>
+                                </td>
+                                <td v-if="detalle.moneda === 'USD'" class="text-end">
+                                    {{ !a.desaplicada_at && a.pago.estado === 'vigente' ? textoDiferencia(a.diferencia_cambio) : '—' }}
                                 </td>
                                 <td class="text-end">
                                     <button v-if="puede('compras.pagar') && !a.desaplicada_at" type="button"
@@ -285,8 +302,18 @@
                                 </td>
                             </tr>
                         </tbody>
+                        <!-- T-140: total null con filas activas = a alguna le falta el T.C. («sin T.C.») -->
+                        <tfoot v-if="detalle.moneda === 'USD' && detalle.aplicaciones_pago.some((a) => !a.desaplicada_at && a.pago.estado === 'vigente')"
+                            class="fw-semibold">
+                            <tr>
+                                <td colspan="3" class="text-end">Diferencia de cambio total</td>
+                                <td class="text-end">{{ textoDiferencia(detalle.diferencia_cambio_total) }}</td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
                     </table>
                 </div>
+                <ListaReembolsos v-if="detalle.reembolsos?.length" :reembolsos="detalle.reembolsos" @anular="anularReembolso" />
                 <div class="d-flex gap-2">
                     <button v-if="detalle.tiene_pdf" type="button" class="btn btn-sm btn-outline-primary" @click="abrirAdjunto('pdf')">
                         <i class="far fa-file-pdf me-1"></i>Ver PDF
@@ -301,6 +328,7 @@
         <AsignarCompra :compra-id="compraAsignar" @cerrar="alCerrarAsignar" @guardado="alAsignar" />
         <RegistrarPago v-model="modalPago" :compra="detalle" />
         <AplicarPagoACuenta v-model="modalAplicar" :compra="detalle" />
+        <RegistrarReembolso v-model="modalReembolso" :destino="destinoReembolso" />
     </DefaultLayout>
 </template>
 
@@ -312,8 +340,11 @@ import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import ProveedorSelector from '@/components/Compras/ProveedorSelector.vue';
 import AsignarCompra from '@/components/Compras/AsignarCompra.vue';
 import AplicarPagoACuenta from '@/components/Compras/AplicarPagoACuenta.vue';
+import ListaReembolsos from '@/components/Compras/ListaReembolsos.vue';
+import RegistrarReembolso from '@/components/Compras/RegistrarReembolso.vue';
 import RegistrarPago from '@/components/Compras/RegistrarPago.vue';
-import { ESTADOS_PAGO, esSaldoAFavor } from '@/helpers/pagosProveedor';
+import { ESTADOS_PAGO, esSaldoAFavor, textoDiferencia } from '@/helpers/pagosProveedor';
+import type { DestinoReembolso, Reembolso } from '@/types/pagosProveedor';
 import { pedirMotivo } from '@/helpers/pedirMotivo';
 import httpClient from '@/helpers/http-client';
 import { AFECTACIONES_COMPRA, estaVencida, formatMonto } from '@/helpers/compras';
@@ -451,13 +482,41 @@ const aplicarACuenta = () => {
     modalDetalle.value = false;
     modalAplicar.value = true;
 };
-// Al cerrarse cualquiera de los dos (guardado o cancelado) se recargan la ficha y el listado: una vez.
-watch([modalPago, modalAplicar], ([pago, aplicar], [antesPago, antesAplicar]) => {
-    if (((antesPago && !pago) || (antesAplicar && !aplicar)) && detalle.value) {
+// T-140
+const modalReembolso = ref(false);
+const destinoReembolso = ref<DestinoReembolso | null>(null);
+const reembolsar = () => {
+    const compra = detalle.value!;
+    destinoReembolso.value = {
+        proveedor_id: compra.proveedor_id,
+        compra_id: compra.id,
+        moneda: compra.moneda,
+        maximo: Math.abs(Number(compra.saldo)).toFixed(2),
+        titulo: `Saldo a favor de ${compra.serie}-${compra.numero}`,
+    };
+    modalDetalle.value = false;
+    modalReembolso.value = true;
+};
+// Al cerrarse cualquiera de los tres (guardado o cancelado) se recargan la ficha y el listado: una vez.
+watch([modalPago, modalAplicar, modalReembolso], (ahora, antes) => {
+    if (antes.some((estaba, i) => estaba && !ahora[i]) && detalle.value) {
         verDetalle(detalle.value.id);
         listar();
     }
 });
+
+const anularReembolso = async (reembolso: Reembolso) => {
+    const compraId = detalle.value!.id;
+    modalDetalle.value = false;
+    const hecho = await pedirMotivo(
+        `Anular reembolso de ${formatMonto(reembolso.monto, reembolso.moneda)}`,
+        reembolso.origen === 'caja' ? 'No se borra: el ingreso se corrige en tu turno de caja.' : 'No se borra: queda anulado.',
+        'Anular',
+        (motivo) => httpClient.post(`compras/reembolsos/${reembolso.id}/anular`, { motivo }),
+    );
+    if (hecho) listar();
+    verDetalle(compraId);
+};
 
 const desaplicar = async (aplicacionId: number) => {
     const compraId = detalle.value!.id;

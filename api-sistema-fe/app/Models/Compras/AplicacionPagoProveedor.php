@@ -13,12 +13,14 @@ class AplicacionPagoProveedor extends Model
     protected $table = 'aplicaciones_pago_proveedor';
 
     protected $fillable = [
-        'pago_proveedor_id', 'compra_id', 'monto', 'user_id',
+        'pago_proveedor_id', 'compra_id', 'monto', 'monto_compra', 'tipo_cambio', 'user_id',
         'desaplicada_at', 'desaplicada_por', 'motivo_desaplicacion',
     ];
 
     protected $casts = [
         'monto' => 'decimal:2',
+        'monto_compra' => 'decimal:2',
+        'tipo_cambio' => 'decimal:6', // 6 decimales: así un pago cancela exacto en la otra moneda
         'desaplicada_at' => 'datetime',
     ];
 

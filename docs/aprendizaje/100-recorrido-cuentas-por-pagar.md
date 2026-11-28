@@ -104,7 +104,7 @@ compra y `compras-pendientes`.
 
 Las cifras viven en `$cifras[proveedor_id][moneda]`: soles y dólares nunca se suman. La pantalla
 muestra una línea por moneda dentro de cada proveedor, y el pie, un total por moneda (soles
-primero). Convertir es T-140.
+primero). T-140 decidió no convertir: los totales siguen por moneda.
 
 ## 6. El Excel
 
@@ -126,6 +126,8 @@ igual.
 
 ## 8. Lo que queda afuera (ver backlog)
 
-- Fecha de corte → T-164. Dólares y reembolso del saldo a favor → T-140.
+- Fecha de corte → T-164. ~~Dólares y reembolso del saldo a favor~~ → hecho en T-140 (recorrido
+  101): «A favor» y «a cuenta» bajan con los reembolsos, y una aplicación cruzada baja lo
+  pendiente por `monto_compra` y lo «a cuenta» por `monto`, sin mezclar monedas.
 - El badge «vencido» de una compra cuyo pago espera aprobación (sigue en «Por analizar»).
 - Recorrer menos compras en cada carga (anotado en «Por analizar»).

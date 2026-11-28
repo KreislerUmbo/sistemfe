@@ -86,6 +86,8 @@ class CompraService
             'proveedor_id' => $compra->proveedor_id,
             'moneda' => $compra->moneda,
             'monto' => $compra->total,
+            // En USD, el pago usa el T.C. de la compra: sin diferencia de cambio.
+            'tipo_cambio' => $compra->tipo_cambio,
             'aplicaciones' => [['compra_id' => $compra->id, 'monto' => $compra->total]],
         ], $usuario);
     }
@@ -111,7 +113,19 @@ class CompraService
             if ($actual->estaAnulada()) {
                 throw new CompraException('La compra ya está anulada.');
             }
+            // T-140: la compra que modifica la nota, bloqueada: un reembolso no puede apoyarse en la
+            // nota mientras se anula. Antes que el periodo, el mismo orden que guardar() (compras,
+            // periodos y productos): al revés, anular la nota y editar esa compra a la vez se traban.
+            $referencia = $actual->tipo_comprobante_codigo === Compra::TIPO_NOTA_CREDITO && $actual->compra_referencia_id
+                ? Compra::whereKey($actual->compra_referencia_id)->lockForUpdate()->firstOrFail()
+                : null;
             $this->exigirPeriodoAbierto(CompraPeriodo::bloquear($actual->periodo));
+
+            // T-140: primero los reembolsos, que a su vez traban los pagos.
+            $this->exigirSinReembolsos($actual);
+            if ($referencia) {
+                $this->exigirSinReembolsos($referencia);
+            }
 
             // T-136: con pagos aplicados (o por aprobar) no se anula hasta desaplicarlos.
             if ($actual->aplicaciones()->activas()->exists()) {
@@ -157,6 +171,7 @@ class CompraService
 
                 if ($actual->exists) {
                     $this->exigirSinReparto($actual, $datos);
+                    $this->exigirQueRespeteSusReembolsos($actual, $datos);
                     $this->exigirQueRespeteSusPagos($actual, $datos);
                 }
 
@@ -173,8 +188,13 @@ class CompraService
 
                 // Orden de bloqueo: compras, periodos y productos. La compra que modifica una nota
                 // se bloquea para que dos notas no devuelvan lo mismo, ni se anule a la vez.
-                if (in_array($datos['tipo_comprobante_codigo'], Compra::TIPOS_NOTA, true) && ! empty($datos['compra_referencia_id'])) {
-                    Compra::whereKey($datos['compra_referencia_id'])->lockForUpdate()->first();
+                // T-140: también la que modificaba hasta ahora (puede tener reembolsos).
+                $referencias = array_filter([
+                    in_array($datos['tipo_comprobante_codigo'], Compra::TIPOS_NOTA, true) ? ($datos['compra_referencia_id'] ?? null) : null,
+                    $actual->exists ? $actual->compra_referencia_id : null,
+                ]);
+                if ($referencias) {
+                    Compra::whereIn('id', $referencias)->orderBy('id')->lockForUpdate()->get();
                 }
 
                 // Se bloquean el periodo de antes y el nuevo, siempre en el mismo orden.
@@ -191,6 +211,11 @@ class CompraService
                 $datos['proveedor_documento'] = $documento === '' ? null : $documento;
                 $datos['clave_proveedor'] = $proveedor->claveDocumento();
                 $datos['compra_referencia_id'] = $this->referencia($datos, $actual);
+                // T-140: la nota que sostiene un reembolso no cambia lo que acredita.
+                if ($actual->exists && $actual->tipo_comprobante_codigo === Compra::TIPO_NOTA_CREDITO
+                    && $actual->compra_referencia_id && $this->cambiaLoQueAcredita($actual, $datos)) {
+                    $this->exigirSinReembolsos(Compra::findOrFail($actual->compra_referencia_id));
+                }
 
                 if ($existente = $this->duplicada($datos, $actual->id)) {
                     throw $this->yaRegistrada($existente);
@@ -402,6 +427,27 @@ class CompraService
         if ($cambia && app(GiroActual::class)->es('agencia_viajes')
             && CompraAsignacion::where('compra_id', $compra->id)->exists()) {
             throw new CompraException('Esta compra tiene reparto: quita el reparto antes de cambiar el total o la moneda.');
+        }
+    }
+
+    // T-140: con un reembolso vigente la compra no cambia lo que sostiene su saldo a favor.
+    private function exigirQueRespeteSusReembolsos(Compra $compra, array $datos): void
+    {
+        $cambia = (int) $datos['proveedor_id'] !== (int) $compra->proveedor_id
+            || $datos['moneda'] !== $compra->moneda
+            || ! BigDecimal::of((string) $datos['total'])->isEqualTo($compra->total)
+            || ($datos['tipo_comprobante_codigo'] === Compra::TIPO_NOTA_CREDITO
+                && $compra->tipo_comprobante_codigo !== Compra::TIPO_NOTA_CREDITO);
+
+        if ($cambia) {
+            $this->exigirSinReembolsos($compra);
+        }
+    }
+
+    private function exigirSinReembolsos(Compra $compra): void
+    {
+        if ($compra->reembolsos()->vigentes()->exists()) {
+            throw new CompraException("La compra {$compra->serie}-{$compra->numero} tiene reembolsos: anúlalos primero.");
         }
     }
 

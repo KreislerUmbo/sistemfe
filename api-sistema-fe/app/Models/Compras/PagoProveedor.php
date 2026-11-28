@@ -35,7 +35,7 @@ class PagoProveedor extends Model
     public const ESTADOS = [self::PENDIENTE, self::VIGENTE, self::ANULADO];
 
     protected $fillable = [
-        'proveedor_id', 'fecha', 'moneda', 'monto', 'origen',
+        'proveedor_id', 'fecha', 'moneda', 'monto', 'tipo_cambio', 'origen',
         'cash_movement_id', 'payment_method_id', 'cuenta_bancaria_id', 'numero_operacion',
         'estado', 'anulado_at', 'anulado_por', 'motivo_anulacion', 'observaciones', 'user_id',
     ];
@@ -43,6 +43,7 @@ class PagoProveedor extends Model
     protected $casts = [
         'fecha' => 'date:Y-m-d',
         'monto' => 'decimal:2',
+        'tipo_cambio' => 'decimal:4',
         'anulado_at' => 'datetime',
     ];
 
@@ -54,6 +55,11 @@ class PagoProveedor extends Model
     public function aplicaciones(): HasMany
     {
         return $this->hasMany(AplicacionPagoProveedor::class)->orderBy('id');
+    }
+
+    public function reembolsos(): HasMany
+    {
+        return $this->hasMany(ReembolsoProveedor::class)->orderBy('id');
     }
 
     public function movimiento(): BelongsTo

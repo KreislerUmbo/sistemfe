@@ -101,12 +101,16 @@
                                             {{ a.compra?.serie }}-{{ a.compra?.numero }}
                                         </router-link>
                                         · {{ formatMonto(a.monto, p.moneda) }}
+                                        <small v-if="a.tipo_cambio" class="text-muted">(T.C. {{ Number(a.tipo_cambio) }})</small>
                                     </div>
                                     <small v-if="p.motivo_anulacion" class="d-block text-danger">{{ p.motivo_anulacion }}</small>
                                 </td>
                                 <td class="text-end">{{ p.estado === 'anulado' ? '—' : formatMonto(p.a_cuenta, p.moneda) }}</td>
                                 <td><span class="badge" :class="ESTADOS_DEL_PAGO[p.estado].clase">{{ ESTADOS_DEL_PAGO[p.estado].texto }}</span></td>
-                                <td class="text-end">
+                                <td class="text-end text-nowrap">
+                                    <button type="button" class="btn btn-sm btn-link p-1" title="Ver pago" @click="fichaId = p.id">
+                                        <i class="las la-eye fs-20"></i>
+                                    </button>
                                     <button v-if="puede('compras.anular') && p.estado !== 'anulado'" type="button"
                                         class="btn btn-sm btn-link p-1" title="Anular pago" @click="anular(p)">
                                         <i class="las la-ban text-danger fs-20"></i>
@@ -125,6 +129,7 @@
         </div>
 
         <RegistrarPago v-model="nuevo" @guardado="listar" />
+        <FichaPagoProveedor v-model="fichaId" @cambiado="listar" />
     </DefaultLayout>
 </template>
 
@@ -132,6 +137,7 @@
 import { onMounted, reactive, ref, watch } from 'vue';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import CampoFecha from '@/components/CampoFecha.vue';
+import FichaPagoProveedor from '@/components/Compras/FichaPagoProveedor.vue';
 import ProveedorSelector from '@/components/Compras/ProveedorSelector.vue';
 import RegistrarPago from '@/components/Compras/RegistrarPago.vue';
 import CuentasBancarias from '@/components/CuentasBancarias.vue';
@@ -159,6 +165,7 @@ const porPagina = ref(15);
 const pagina = ref(1);
 const error = ref('');
 const nuevo = ref(false);
+const fichaId = ref<number | null>(null);
 
 const listar = async () => {
     error.value = '';

@@ -5,9 +5,11 @@ namespace App\Http\Controllers\Compras;
 use App\Http\Controllers\Controller;
 use App\Models\Cash\PaymentMethod;
 use App\Models\Compras\AplicacionPagoProveedor;
+use App\Models\Compras\PagoProveedor;
 use App\Models\Compras\Compra;
 use App\Models\Compras\CompraLinea;
 use App\Models\Compras\CompraPeriodo;
+use App\Models\Compras\ReembolsoProveedor;
 use App\Models\CuentaBancaria;
 use App\Models\Proveedor;
 use App\Models\Sale\TipoComprobante;
@@ -194,6 +196,14 @@ class CompraController extends Controller
 
         $datos = $this->datos($compra, $this->contexto([$compra->periodo]) + ['pagos' => $this->pagos->estados(collect([$compra]))]);
         $datos['aplicaciones_pago'] = $this->aplicacionesDe($compra);
+        // T-140: solo en compras en USD, sobre las aplicaciones activas de pagos vigentes. null si no
+        // hay ninguna o si a alguna le falta el T.C.: un total parcial parecería completo.
+        $diferencias = $datos['aplicaciones_pago']
+            ->filter(fn (array $a) => $a['desaplicada_at'] === null && $a['pago']['estado'] === PagoProveedor::VIGENTE)
+            ->pluck('diferencia_cambio');
+        $datos['diferencia_cambio_total'] = $diferencias->isEmpty() || $diferencias->contains(null) ? null : (string) $diferencias
+            ->reduce(fn (BigDecimal $suma, string $d) => $suma->plus($d), BigDecimal::of('0.00'));
+        $datos += ReembolsoProveedor::paraFicha($compra->reembolsos()->get());
         $datos['lineas'] = $compra->lineas->map(fn (CompraLinea $l) => $l->only([
             'id', 'product_id', 'descripcion', 'unidad_medida', 'codigo_proveedor', 'tipo_afectacion_igv',
             'factor', 'cantidad', 'valor_unitario', 'valor_venta', 'igv', 'total', 'costo_unitario_base',
@@ -218,12 +228,17 @@ class CompraController extends Controller
             ->map(fn (AplicacionPagoProveedor $a) => [
                 'id' => $a->id,
                 'monto' => $a->monto,
+                'monto_compra' => $a->monto_compra,
+                'tipo_cambio' => $a->tipo_cambio,
+                'diferencia_cambio' => $this->pagos->diferenciaDeCambio($a, $compra, $a->pago)?->__toString(),
                 'desaplicada_at' => $a->desaplicada_at?->toISOString(),
                 'motivo_desaplicacion' => $a->motivo_desaplicacion,
                 'pago' => [
                     'id' => $a->pago->id,
                     'fecha' => $a->pago->fecha->toDateString(),
                     'monto' => $a->pago->monto,
+                    'moneda' => $a->pago->moneda,
+                    'tipo_cambio' => $a->pago->tipo_cambio,
                     'origen' => $a->pago->origen,
                     'estado' => $a->pago->estado,
                     'numero_operacion' => $a->pago->numero_operacion,

@@ -3,17 +3,16 @@
 namespace App\Services\Compras;
 
 use App\Models\Cash\CashMovement;
-use App\Models\Cash\CashSession;
 use App\Models\Compras\AplicacionPagoProveedor;
 use App\Models\Compras\Compra;
 use App\Models\Compras\PagoProveedor;
+use App\Models\Compras\ReembolsoProveedor;
 use App\Models\CuentaBancaria;
 use App\Models\Proveedor;
 use App\Models\User;
-use App\Services\Cash\EgresoCajaService;
-use App\Services\CashCorrectionService;
 use App\Services\HoraPeru;
 use Brick\Math\BigDecimal;
+use Brick\Math\RoundingMode;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -28,14 +27,12 @@ class PagoProveedorService
 {
     private const MAX_APLICACIONES = 100;
 
-    public function __construct(
-        private EgresoCajaService $egresoCaja,
-        private CashCorrectionService $correccion,
-    ) {}
+    public function __construct(private OrigenDineroService $origenDinero) {}
 
     /**
      * El único cálculo de saldo, en lote:
-     * saldo = total − notas de crédito vigentes que la modifican − aplicado de pagos vigentes.
+     * saldo = total − notas de crédito vigentes que la modifican − aplicado de pagos vigentes
+     * (`monto_compra`, en la moneda de la compra) + reembolsos vigentes de la compra.
      * `por_aprobar` es lo aplicado desde pagos pendientes de aprobación: no cambia el saldo
      * mostrado, pero no se puede volver a aplicar (`limite`).
      *
@@ -64,9 +61,11 @@ class PagoProveedorService
             ->whereNull('a.desaplicada_at')
             ->where('p.estado', '<>', PagoProveedor::ANULADO)
             ->groupBy('a.compra_id', 'p.estado')
-            ->selectRaw('a.compra_id, p.estado, sum(a.monto) as monto')
+            ->selectRaw('a.compra_id, p.estado, sum(a.monto_compra) as monto')
             ->get()
             ->groupBy('compra_id');
+
+        $reembolsado = ReembolsoProveedorService::totalesPorCompra($compraIds);
 
         $cero = BigDecimal::of('0.00');
         $monto = fn ($valor) => $valor === null ? $cero : BigDecimal::of((string) $valor);
@@ -77,7 +76,7 @@ class PagoProveedorService
             $acreditado = $monto($notas->get($id));
             $pagado = $monto($porEstado->get(PagoProveedor::VIGENTE));
             $porAprobar = $monto($porEstado->get(PagoProveedor::PENDIENTE));
-            $saldo = $total->minus($acreditado)->minus($pagado);
+            $saldo = $total->minus($acreditado)->minus($pagado)->plus($reembolsado[$id] ?? $cero);
 
             $saldos[$id] = [
                 'total' => $total,
@@ -115,7 +114,7 @@ class PagoProveedorService
 
             $fila = $saldos[$compra->id];
             $estado = match (true) {
-                ! $fila['saldo']->isPositive() => 'pagado', // saldo negativo: a favor (T-140)
+                ! $fila['saldo']->isPositive() => 'pagado', // saldo negativo: a favor, se reembolsa
                 $this->vencimiento($compra) < $hoy => 'vencido',
                 $fila['aplicado']->isPositive() => 'parcial',
                 default => 'pendiente',
@@ -142,15 +141,84 @@ class PagoProveedorService
         return ! $compra->estaAnulada() && $compra->tipo_comprobante_codigo !== Compra::TIPO_NOTA_CREDITO;
     }
 
-    /** Monto aplicado y no desaplicado de un pago: lo demás queda «a cuenta». */
+    /** Monto aplicado y no desaplicado de un pago, en la moneda del pago. */
     public function aplicadoDe(PagoProveedor $pago): BigDecimal
     {
         return $this->sumar($pago->aplicaciones()->activas()->pluck('monto'));
     }
 
     /**
+     * T-140 — lo que cada pago todavía tiene sin usar, en su moneda: monto − aplicado activo −
+     * reembolsos vigentes. No mira el estado: un pago anulado o por aprobar lo decide quien llama.
+     *
+     * @param  array<int, int>  $pagoIds
+     * @return array<int, BigDecimal>
+     */
+    public function disponibles(array $pagoIds): array
+    {
+        $disponibles = [];
+        // Por bloques: no pasar el límite de parámetros de PDO.
+        foreach (array_chunk($pagoIds, 1000) as $bloque) {
+            $aplicado = DB::table('aplicaciones_pago_proveedor')
+                ->whereIn('pago_proveedor_id', $bloque)
+                ->whereNull('desaplicada_at')
+                ->groupBy('pago_proveedor_id')
+                ->selectRaw('pago_proveedor_id, sum(monto) as monto')
+                ->pluck('monto', 'pago_proveedor_id');
+            $reembolsado = ReembolsoProveedorService::totalesPorPago($bloque);
+
+            foreach (PagoProveedor::whereIn('id', $bloque)->pluck('monto', 'id') as $id => $monto) {
+                $disponibles[$id] = BigDecimal::of((string) $monto)
+                    ->minus((string) ($aplicado[$id] ?? '0'))
+                    ->minus($reembolsado[$id] ?? BigDecimal::of('0.00'))
+                    ->toScale(2);
+            }
+        }
+
+        return $disponibles;
+    }
+
+    /** T-140 (D7) — el único punto de conversión entre soles y dólares: $tc = soles por dólar. */
+    public function convertir(BigDecimal $monto, string $de, string $a, BigDecimal $tc): BigDecimal
+    {
+        return match (true) {
+            $de === $a => $monto->toScale(2, RoundingMode::HALF_UP),
+            $de === 'USD' => $monto->multipliedBy($tc)->toScale(2, RoundingMode::HALF_UP),
+            default => $monto->dividedBy($tc, 2, RoundingMode::HALF_UP),
+        };
+    }
+
+    /**
+     * T-140 (D9) — diferencia de cambio en soles de una aplicación activa de un pago vigente a una
+     * compra en USD: positiva = pérdida. null si no corresponde o si falta el T.C. del pago.
+     */
+    public function diferenciaDeCambio(AplicacionPagoProveedor $aplicacion, Compra $compra, PagoProveedor $pago): ?BigDecimal
+    {
+        if ($aplicacion->desaplicada_at !== null || $pago->estado !== PagoProveedor::VIGENTE
+            || $compra->moneda !== 'USD' || $compra->tipo_cambio === null) {
+            return null;
+        }
+        $registrado = BigDecimal::of((string) $aplicacion->monto_compra)->multipliedBy((string) $compra->tipo_cambio);
+
+        // Pago en soles: los soles que de verdad salieron (`monto`, ya redondeado al convertir) menos
+        // lo registrado. Con monto_compra × (tc − tc compra) podía salir un céntimo distinto.
+        if ($pago->moneda !== $compra->moneda) {
+            return BigDecimal::of((string) $aplicacion->monto)->minus($registrado)->toScale(2, RoundingMode::HALF_UP);
+        }
+        if ($pago->tipo_cambio === null) {
+            return null;
+        }
+
+        return BigDecimal::of((string) $aplicacion->monto_compra)
+            ->multipliedBy((string) $pago->tipo_cambio)
+            ->minus($registrado)
+            ->toScale(2, RoundingMode::HALF_UP);
+    }
+
+    /**
      * T-137 — por proveedor y moneda, en una sola consulta: lo «a cuenta» (monto de los pagos
-     * vigentes menos lo aplicado) y lo que espera aprobación en Caja (aplicado o no).
+     * vigentes menos lo aplicado y lo reembolsado) y lo que espera aprobación en Caja (aplicado o
+     * no). Es lo mismo que disponibles(), agregado.
      *
      * @param  array<int, int>|null  $proveedorIds  null = todos
      * @return array<int, array<string, array{a_cuenta: BigDecimal, por_aprobar: BigDecimal}>>
@@ -161,13 +229,19 @@ class PagoProveedorService
             ->whereNull('desaplicada_at')
             ->groupBy('pago_proveedor_id')
             ->selectRaw('pago_proveedor_id, sum(monto) as monto');
+        $reembolsado = DB::table('reembolsos_proveedor')
+            ->where('estado', ReembolsoProveedor::VIGENTE)
+            ->whereNotNull('pago_proveedor_id')
+            ->groupBy('pago_proveedor_id')
+            ->selectRaw('pago_proveedor_id, sum(monto) as monto');
 
         $filas = DB::table('pagos_proveedor as p')
             ->leftJoinSub($aplicado, 'a', 'a.pago_proveedor_id', '=', 'p.id')
+            ->leftJoinSub($reembolsado, 'r', 'r.pago_proveedor_id', '=', 'p.id')
             ->where('p.estado', '<>', PagoProveedor::ANULADO)
             ->when($proveedorIds !== null, fn ($q) => $q->whereIn('p.proveedor_id', $proveedorIds))
             ->groupBy('p.proveedor_id', 'p.moneda', 'p.estado')
-            ->selectRaw('p.proveedor_id, p.moneda, p.estado, sum(p.monto) as monto, sum(coalesce(a.monto, 0)) as aplicado')
+            ->selectRaw('p.proveedor_id, p.moneda, p.estado, sum(p.monto) as monto, sum(coalesce(a.monto, 0) + coalesce(r.monto, 0)) as usado')
             ->get();
 
         $cero = BigDecimal::of('0.00');
@@ -177,7 +251,7 @@ class PagoProveedorService
             $monto = BigDecimal::of((string) $fila->monto);
             $parte = &$resultado[$fila->proveedor_id][$fila->moneda];
             if ($fila->estado === PagoProveedor::VIGENTE) {
-                $parte['a_cuenta'] = $monto->minus((string) $fila->aplicado);
+                $parte['a_cuenta'] = $monto->minus((string) $fila->usado);
             } else {
                 $parte['por_aprobar'] = $monto;
             }
@@ -210,8 +284,8 @@ class PagoProveedorService
             });
         } catch (UniqueConstraintViolationException $e) {
             // Carrera: dos registros a la vez con la misma operación.
-            if ($existente = $this->operacionRegistrada($datos)) {
-                throw $this->yaRegistrada($existente);
+            if ($existente = $this->origenDinero->operacionRegistrada(PagoProveedor::class, $datos)) {
+                throw $this->origenDinero->yaRegistrada($existente);
             }
 
             throw $e;
@@ -246,6 +320,9 @@ class PagoProveedorService
             if ($actual->desaplicada_at !== null) {
                 throw new CompraException('Ese pago ya está desaplicado de la compra.');
             }
+            if ($pago->estado === PagoProveedor::VIGENTE) {
+                $this->exigirComprasSinReembolsos([$actual->compra_id]);
+            }
             $this->marcarDesaplicada($actual, $motivo, $usuario);
 
             return $pago;
@@ -262,7 +339,19 @@ class PagoProveedorService
             if ($actual->estaAnulado()) {
                 throw new CompraException('El pago ya está anulado.');
             }
-            $this->revertirSalida($actual, $usuario);
+            // T-140: ni lo que se devolvió de este pago ni el saldo a favor que ayudó a crear.
+            if ($actual->reembolsos()->vigentes()->exists()) {
+                throw new CompraException('Este pago tiene reembolsos: anúlalos primero.');
+            }
+            if ($actual->estado === PagoProveedor::VIGENTE) {
+                $compraIds = $actual->aplicaciones()->activas()->pluck('compra_id')->all();
+                $this->bloquearCompras($compraIds);
+                $this->exigirComprasSinReembolsos($compraIds);
+            }
+            // Solo Caja movió dinero que haya que devolver: Banco solo se marca.
+            if ($actual->origen === PagoProveedor::ORIGEN_CAJA) {
+                $this->origenDinero->revertirEnCaja($actual->cash_movement_id, $usuario);
+            }
             $this->marcarAnulado($actual, $motivo, $usuario);
 
             return $actual;
@@ -298,6 +387,16 @@ class PagoProveedorService
         return Compra::whereIn('id', $ids)->orderBy('id')->lockForUpdate()->get()->keyBy('id');
     }
 
+    // T-140: con un reembolso vigente en la compra, lo pagado que lo sostiene no se mueve.
+    // Con las compras ya bloqueadas.
+    private function exigirComprasSinReembolsos(array $compraIds): void
+    {
+        $reembolso = ReembolsoProveedor::vigentes()->whereIn('compra_id', $compraIds)->with('compra')->first();
+        if ($reembolso) {
+            throw new CompraException("La compra {$reembolso->compra->serie}-{$reembolso->compra->numero} tiene reembolsos: anúlalos primero.");
+        }
+    }
+
     // Marca anulado y desaplica, con las compras bloqueadas.
     private function marcarAnulado(PagoProveedor $pago, string $motivo, User $usuario): void
     {
@@ -324,12 +423,13 @@ class PagoProveedorService
         ]);
     }
 
-    // Con el pago ya bloqueado (o recién creado en esta transacción).
+    // Con el pago ya bloqueado (o recién creado en esta transacción). El `monto` que llega es lo que
+    // se cancela de la compra, en su moneda.
     private function crearAplicaciones(PagoProveedor $pago, array $aplicaciones, User $usuario): void
     {
         $compras = $this->bloquearCompras(array_column($aplicaciones, 'compra_id'));
         $saldos = $this->saldos($compras->keys()->all());
-        $disponible = BigDecimal::of($pago->monto)->minus($this->aplicadoDe($pago));
+        $disponible = $this->disponibles([$pago->id])[$pago->id];
 
         foreach ($aplicaciones as $aplicacion) {
             $compra = $compras->get((int) $aplicacion['compra_id']);
@@ -337,7 +437,7 @@ class PagoProveedorService
                 throw new CompraException('Una de las compras no existe.');
             }
             $nombre = "{$compra->serie}-{$compra->numero}";
-            $monto = BigDecimal::of((string) $aplicacion['monto'])->toScale(2);
+            $montoCompra = BigDecimal::of((string) $aplicacion['monto'])->toScale(2);
 
             if ((int) $compra->proveedor_id !== (int) $pago->proveedor_id) {
                 throw new CompraException("La compra {$nombre} es de otro proveedor.");
@@ -348,11 +448,23 @@ class PagoProveedorService
             if ($compra->tipo_comprobante_codigo === Compra::TIPO_NOTA_CREDITO) {
                 throw new CompraException("{$nombre} es una nota de crédito: no se paga.");
             }
+
+            // Otra moneda (D3): la conversión es explícita y queda guardada.
+            $tipoCambio = null;
+            $monto = $montoCompra;
             if ($compra->moneda !== $pago->moneda) {
-                throw new CompraException("La compra {$nombre} está en {$compra->moneda} y el pago en {$pago->moneda}: todavía no se puede pagar en otra moneda.");
+                $tipoCambio = (string) ($aplicacion['tipo_cambio'] ?? '');
+                if ($tipoCambio === '') {
+                    throw new CompraException("La compra {$nombre} está en {$compra->moneda}: indica el tipo de cambio.");
+                }
+                $monto = $this->convertir($montoCompra, $compra->moneda, $pago->moneda, BigDecimal::of($tipoCambio));
+                if ($monto->isZero()) {
+                    throw new CompraException("Con ese tipo de cambio, lo aplicado a la compra {$nombre} no llega a 0.01 {$pago->moneda}.");
+                }
             }
+
             $limite = $saldos[$compra->id]['limite'];
-            if ($monto->isGreaterThan($limite)) {
+            if ($montoCompra->isGreaterThan($limite)) {
                 $queda = $limite->isNegative() ? BigDecimal::of('0.00') : $limite;
                 throw new CompraException("A la compra {$nombre} solo se le pueden aplicar {$queda->toScale(2)}.", 422, [
                     'compra_id' => $compra->id, 'maximo' => (string) $queda->toScale(2),
@@ -366,6 +478,8 @@ class PagoProveedorService
             $pago->aplicaciones()->create([
                 'compra_id' => $compra->id,
                 'monto' => (string) $monto,
+                'monto_compra' => (string) $montoCompra,
+                'tipo_cambio' => $tipoCambio,
                 'user_id' => $usuario->id,
             ]);
         }
@@ -374,120 +488,23 @@ class PagoProveedorService
     // Origen del dinero: valida y deja en el pago lo que ese origen necesita, antes de guardarlo.
     private function registrarSalida(PagoProveedor $pago, Proveedor $proveedor, User $usuario): void
     {
-        match ($pago->origen) {
-            PagoProveedor::ORIGEN_BANCO => $this->exigirCuenta($pago),
-            PagoProveedor::ORIGEN_CAJA => $this->egresarDeCaja($pago, $proveedor, $usuario),
-        };
-    }
+        if ($pago->origen === PagoProveedor::ORIGEN_BANCO) {
+            $this->origenDinero->exigirCuenta($pago);
 
-    // El egreso sale de la sesión abierta de quien paga, con las reglas del egreso manual (D2).
-    private function egresarDeCaja(PagoProveedor $pago, Proveedor $proveedor, User $usuario): void
-    {
-        // Sesión bloqueada: dos salidas a la vez no validan contra el mismo efectivo.
-        $sesion = CashSession::whereKey($this->egresoCaja->sesionAbierta($usuario)->id)->lockForUpdate()->firstOrFail();
-        // Pudo cerrarse entre la lectura y el bloqueo: un egreso nunca entra a una sesión ya cuadrada.
-        if ($sesion->status !== 'open') {
-            throw new CompraException('Tu sesión de caja se acaba de cerrar: abre una nueva para pagar desde Caja.');
+            return;
         }
-        $metodo = $this->egresoCaja->metodoPago((int) $pago->payment_method_id);
-        $estado = $this->egresoCaja->estadoInicial($sesion, $metodo, 'out', (float) $pago->monto, $pago->moneda);
 
-        // El movimiento apunta al pago y el pago exige su movimiento: se reserva el id antes, para
-        // no tener que modificar después un movimiento de dinero.
-        $pago->id = (int) DB::selectOne("select nextval(pg_get_serial_sequence('pagos_proveedor', 'id')) as id")->id;
-
-        $pago->cash_movement_id = CashMovement::create([
-            'cash_session_id' => $sesion->id,
-            'type' => PagoProveedor::TIPO_MOVIMIENTO,
-            'payment_method_id' => $metodo->id,
-            'direction' => 'out',
-            'amount' => $pago->monto,
-            'currency' => $pago->moneda,
-            'reference_type' => PagoProveedor::TIPO_MOVIMIENTO,
-            'reference_id' => $pago->id,
-            'description' => "Pago a proveedor: {$proveedor->razon_social}",
-            'counterparty_type' => 'proveedor',
-            'counterparty_id' => $proveedor->id,
-            'counterparty_name' => $proveedor->razon_social,
-            'counterparty_document' => $proveedor->numero_documento,
-            'status' => $estado,
-            'created_by' => $usuario->id,
-        ])->id;
-
+        // Caja: las reglas del egreso manual, con la aprobación (D2 de T-136).
+        $estado = $this->origenDinero->moverEnCaja($pago, 'out', "Pago a proveedor: {$proveedor->razon_social}", $proveedor, $usuario);
         if ($estado === 'pending_approval') {
             $pago->estado = PagoProveedor::PENDIENTE;
         }
     }
 
-    // Solo Caja movió dinero que haya que devolver: Banco solo se marca.
-    private function revertirSalida(PagoProveedor $pago, User $usuario): void
-    {
-        if ($pago->origen !== PagoProveedor::ORIGEN_CAJA) {
-            return;
-        }
-
-        $movimiento = CashMovement::with('cashSession')->lockForUpdate()->findOrFail($pago->cash_movement_id);
-        if ($movimiento->status === 'pending_approval') {
-            $movimiento->update(['status' => 'rejected']);
-
-            return;
-        }
-        if ($movimiento->status === 'confirmed') {
-            $this->correccion->revertirMovimiento($movimiento, $usuario);
-        }
-    }
-
-    private function exigirCuenta(PagoProveedor $pago): void
-    {
-        $cuenta = CuentaBancaria::whereKey($pago->cuenta_bancaria_id)->lockForUpdate()->first();
-        if (! $cuenta || ! $cuenta->activo) {
-            throw new CompraException('La cuenta bancaria no existe o está inactiva.');
-        }
-        if ($cuenta->moneda === null) {
-            throw new CompraException("Completa la moneda de la cuenta {$cuenta->banco} {$cuenta->numero_cuenta} antes de pagar con ella.", 422, [
-                'cuenta_sin_moneda' => $cuenta->id,
-            ]);
-        }
-        if ($cuenta->moneda !== $pago->moneda) {
-            throw new CompraException("La cuenta es en {$cuenta->moneda} y el pago en {$pago->moneda}.");
-        }
-        if ($existente = $this->operacionRegistrada($pago->only(['cuenta_bancaria_id', 'numero_operacion']))) {
-            throw $this->yaRegistrada($existente);
-        }
-    }
-
-    private function operacionRegistrada(array $datos): ?PagoProveedor
-    {
-        if (empty($datos['cuenta_bancaria_id']) || empty($datos['numero_operacion'])) {
-            return null;
-        }
-
-        return PagoProveedor::with('proveedor')
-            ->where('cuenta_bancaria_id', $datos['cuenta_bancaria_id'])
-            ->where('numero_operacion', $datos['numero_operacion'])
-            ->where('estado', '<>', PagoProveedor::ANULADO)
-            ->first();
-    }
-
-    private function yaRegistrada(PagoProveedor $existente): CompraException
-    {
-        return new CompraException('Ese número de operación ya está registrado en la cuenta.', 409, ['existente' => [
-            'id' => $existente->id,
-            'fecha' => $existente->fecha->toDateString(),
-            'monto' => $existente->monto,
-            'moneda' => $existente->moneda,
-            'proveedor' => $existente->proveedor?->razon_social,
-        ]]);
-    }
-
     private function validar(array $entrada): array
     {
-        // Mayúsculas y sin espacios, para que «op 123» y «OP123» sean la misma operación.
-        // Solo si es texto: otra cosa la rechaza la validación (string), sin romperse aquí. «0» vale.
-        if (isset($entrada['numero_operacion']) && is_string($entrada['numero_operacion'])) {
-            $normalizado = mb_strtoupper(preg_replace('/\s+/u', '', $entrada['numero_operacion']));
-            $entrada['numero_operacion'] = $normalizado === '' ? null : $normalizado;
-        }
+        $entrada = OrigenDineroService::normalizarOperacion($entrada);
+        $dolares = ($entrada['moneda'] ?? null) === 'USD';
         $banco = ($entrada['origen'] ?? null) === PagoProveedor::ORIGEN_BANCO;
         $caja = ($entrada['origen'] ?? null) === PagoProveedor::ORIGEN_CAJA;
 
@@ -497,6 +514,7 @@ class PagoProveedorService
             'moneda' => ['required', 'string', 'in:'.implode(',', CuentaBancaria::MONEDAS)],
             // El egreso de Caja es decimal(10,2).
             'monto' => ['required', 'numeric', 'gt:0', 'max:'.($caja ? '99999999.99' : '999999999999.99'), 'decimal:0,2'],
+            'tipo_cambio' => $dolares ? ['required', 'numeric', 'gt:0', 'max:999999', 'decimal:0,4'] : ['nullable'],
             'fecha' => $banco ? ['required', 'date_format:Y-m-d', 'before_or_equal:'.HoraPeru::hoyTexto()] : ['nullable'],
             'cuenta_bancaria_id' => $banco ? ['required', 'integer'] : ['nullable'],
             'numero_operacion' => $banco ? ['required', 'string', 'max:30'] : ['nullable'],
@@ -513,6 +531,9 @@ class PagoProveedorService
         } else {
             $datos['fecha'] = HoraPeru::hoyTexto();
         }
+        if (! $dolares) {
+            $datos['tipo_cambio'] = null;
+        }
         $datos['observaciones'] = $datos['observaciones'] ?? null;
         $datos['aplicaciones'] = $this->validarAplicaciones($entrada, false);
 
@@ -525,6 +546,9 @@ class PagoProveedorService
             'aplicaciones' => [$obligatorias ? 'required' : 'nullable', 'array', 'max:'.self::MAX_APLICACIONES],
             'aplicaciones.*.compra_id' => ['required', 'integer', 'distinct'],
             'aplicaciones.*.monto' => ['required', 'numeric', 'gt:0', 'max:999999999999.99', 'decimal:0,2'],
+            // Solo se usa si la compra está en otra moneda que el pago. 6 decimales (no 4 como el del
+            // pago): con 4, un pago en soles no siempre cancela exacto una factura en dólares.
+            'aplicaciones.*.tipo_cambio' => ['nullable', 'numeric', 'gt:0', 'max:999999', 'decimal:0,6'],
         ]);
 
         return array_values($datos['aplicaciones'] ?? []);
@@ -533,6 +557,12 @@ class PagoProveedorService
     private function comprobar(array $entrada, array $reglas): array
     {
         $validator = Validator::make($entrada, $reglas, [
+            // Antes que los genéricos: gana el primero que coincide.
+            'tipo_cambio.required' => 'En dólares se necesita el tipo de cambio.',
+            'tipo_cambio.gt' => 'El tipo de cambio debe ser mayor a cero.',
+            'tipo_cambio.decimal' => 'El tipo de cambio va con cuatro decimales como máximo.',
+            'aplicaciones.*.tipo_cambio.gt' => 'El tipo de cambio debe ser mayor a cero.',
+            'aplicaciones.*.tipo_cambio.decimal' => 'El tipo de cambio de la compra va con seis decimales como máximo.',
             'required' => 'Falta :attribute.',
             'integer' => ':Attribute no es válido.',
             'numeric' => ':Attribute debe ser un número.',
@@ -555,6 +585,8 @@ class PagoProveedorService
             'origen' => 'el origen',
             'moneda' => 'la moneda',
             'monto' => 'el monto',
+            'tipo_cambio' => 'el tipo de cambio',
+            'aplicaciones.*.tipo_cambio' => 'el tipo de cambio',
             'fecha' => 'la fecha del pago',
             'cuenta_bancaria_id' => 'la cuenta bancaria',
             'numero_operacion' => 'el número de operación',

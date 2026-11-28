@@ -33,6 +33,7 @@ export interface PagoProveedor {
     fecha: string;
     moneda: 'PEN' | 'USD';
     monto: string;
+    tipo_cambio: string | null;
     aplicado: string;
     a_cuenta: string;
     origen: OrigenPago;
@@ -45,23 +46,64 @@ export interface PagoProveedor {
     aplicaciones: {
         id: number;
         compra_id: number;
-        compra: { id: number; serie: string; numero: string } | null;
+        compra: { id: number; serie: string; numero: string; moneda: 'PEN' | 'USD'; tipo_cambio: string | null } | null;
+        /** En la moneda del pago; `monto_compra`, en la de la compra (T-140). */
         monto: string;
+        monto_compra: string;
+        tipo_cambio: string | null;
+        diferencia_cambio: string | null;
         desaplicada_at: string | null;
         motivo_desaplicacion: string | null;
     }[];
+    // Solo en la ficha (`compras/pagos/{id}`).
+    reembolsado?: string;
+    reembolsos?: Reembolso[];
+}
+
+/** T-140 — dinero que el proveedor devolvió. */
+export interface Reembolso {
+    id: number;
+    fecha: string;
+    moneda: 'PEN' | 'USD';
+    monto: string;
+    tipo_cambio: string | null;
+    origen: OrigenPago;
+    estado: 'vigente' | 'anulado';
+    metodo_pago: string | null;
+    cuenta: string | null;
+    numero_operacion: string | null;
+    observaciones: string | null;
+    registrado_por: string | null;
+    anulado_at: string | null;
+    anulado_por: string | null;
+    motivo_anulacion: string | null;
+}
+
+/** Lo que se puede reembolsar: el saldo a favor de una compra o lo «a cuenta» de un pago. */
+export interface DestinoReembolso {
+    proveedor_id: number;
+    compra_id?: number;
+    pago_proveedor_id?: number;
+    moneda: 'PEN' | 'USD';
+    maximo: string;
+    titulo: string;
 }
 
 /** Una aplicación vista desde la ficha de la compra. */
 export interface AplicacionDeCompra {
     id: number;
     monto: string;
+    monto_compra: string;
+    tipo_cambio: string | null;
+    diferencia_cambio: string | null;
     desaplicada_at: string | null;
     motivo_desaplicacion: string | null;
     pago: {
         id: number;
         fecha: string;
         monto: string;
+        moneda: 'PEN' | 'USD';
+        tipo_cambio: string | null;
         origen: OrigenPago;
         estado: EstadoDelPago;
         numero_operacion: string | null;

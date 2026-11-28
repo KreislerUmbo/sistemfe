@@ -1,5 +1,5 @@
 // T-135 — comprobantes de compra.
-import type { AplicacionDeCompra, CuentaParaPagar, EstadoPago, MetodoDeCaja } from '@/types/pagosProveedor';
+import type { AplicacionDeCompra, CuentaParaPagar, EstadoPago, MetodoDeCaja, Reembolso } from '@/types/pagosProveedor';
 
 export interface CompraProveedor {
     id: number;
@@ -37,6 +37,10 @@ export interface Compra {
     por_aprobar: string | null;
     /** Solo en el detalle. */
     aplicaciones_pago?: AplicacionDeCompra[];
+    // T-140, solo en la ficha.
+    diferencia_cambio_total?: string | null;
+    reembolsado?: string;
+    reembolsos?: Reembolso[];
     compra_referencia_id: number | null;
     con_credito_fiscal: boolean;
     /** Solo en el detalle (`GET compras/{id}`). */

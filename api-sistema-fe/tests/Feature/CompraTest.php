@@ -448,6 +448,9 @@ class CompraTest extends TestCase
             'GET api/compras/cuentas-por-pagar' => 'compras.ver',
             'GET api/compras/cuentas-por-pagar/detalle' => 'compras.ver',
             'GET api/compras/cuentas-por-pagar/excel' => 'compras.ver',
+            // T-140
+            'POST api/compras/reembolsos' => 'compras.pagar',
+            'POST api/compras/reembolsos/{id}/anular' => 'compras.anular',
         ];
 
         $reales = [];
