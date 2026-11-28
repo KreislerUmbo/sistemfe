@@ -31,6 +31,11 @@ todo es exactamente como en T-137.
 | Estado del pago al corte | anulado con `anulado_at ≤ fin` → **no existe**; hoy `pendiente_aprobacion` → **por aprobar**; anulado después del corte con su `cash_movement` en `rejected` (rechazado en Caja o retirado mientras esperaba, recorrido 99 §6-§7) → **por aprobar**; cualquier otro (vigente hoy, o anulado después del corte sin rechazo) → **vigente** |
 | Vencido y antigüedad | contra `corte` en lugar de hoy |
 | A cuenta | pagos vigentes al corte con `fecha ≤ corte`, menos sus aplicaciones activas al corte |
+| Reembolso (T-140) | `fecha ≤ corte`, `created_at ≤ fin` y (`anulado_at` nulo o `> fin`): suma al saldo de su compra o resta de lo «a cuenta» de su pago |
+
+> **Desde T-140 (recorrido 101):** el saldo suma `aplicación.monto_compra` (moneda de la compra) y
+> lo «a cuenta» resta `aplicación.monto` (moneda del pago); los dos difieren en una aplicación en
+> otra moneda. Los reembolsos entran en los dos cálculos, como en `saldos()` y `disponibles()`.
 
 **Límites conocidos (van en el recorrido, no se resuelven acá):**
 - Un pago que se aprobó en Caja **después** del corte sale vigente al corte: ni el pago ni el

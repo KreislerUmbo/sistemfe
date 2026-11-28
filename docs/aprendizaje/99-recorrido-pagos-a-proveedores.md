@@ -197,9 +197,11 @@ necesitan en todos los giros. Se resolvió como `proveedores` en T-132:
 
 ## 10. Lo que queda afuera (ver backlog)
 
-- Detracción, retención de 4ta y el aviso en Caja → T-163. Cuentas por pagar → T-137. Dólares y
-  reembolso de NC → T-140. Obligaciones y cuotas de mayoristas → T-142/T-143.
-- El umbral de aprobación compara el monto en su moneda contra un umbral en soles.
+- Detracción, retención de 4ta y el aviso en Caja → T-163. Cuentas por pagar → T-137 (recorrido
+  100). Obligaciones y cuotas de mayoristas → T-142/T-143.
+- ~~Dólares y reembolso de NC~~ → hecho en T-140 (recorrido 101): T.C. del pago, aplicación en
+  otra moneda (`monto_compra`), reembolsos y umbral de Caja en soles. Desde entonces `saldos()`
+  suma `monto_compra` y los reembolsos, y lo disponible de un pago sale de `disponibles()`.
 - `approve()` no bloquea la sesión al validar «no negativo» (ya pasaba con el egreso manual).
 - Una compra cuyo pago espera aprobación se muestra «Vencido» si pasó su fecha.
 - Tests que corren `tenants:migrate-verticales` sobre todos los tenants de la base de pruebas: un
