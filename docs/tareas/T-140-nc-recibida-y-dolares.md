@@ -477,6 +477,12 @@ permisos ni menú nuevos.
     null («sin T.C.») si a alguna aplicación activa de un pago vigente le falta; la ficha lo muestra.
     Test: `test_total_sin_tc_si_a_una_fila_le_falta`.
   - *Diferencia con los soles pagados* (ver D9 en «Cálculos»). Test: `test_diferencia_con_los_soles_pagados`.
+- **`/security-review` (1 hallazgo, corregido):** el umbral de Caja usaba el T.C. que escribe quien
+  paga, sin contrastarlo: un pago en USD 9,000 con T.C. 0.0001 salía de caja sin aprobación
+  (antes de T-140 quedaba por aprobar). **Decisión del usuario (cambia D4 y CA22):** el umbral
+  usa el **mayor** entre el T.C. del pago y la venta SUNAT de hoy; sin venta SUNAT, pide
+  aprobación aunque el pago traiga su T.C. Tests: `test_pago_usa_el_mayor_tipo_de_cambio` (CA22),
+  `test_tipo_de_cambio_bajo_no_saltea_la_aprobacion`, `test_sin_venta_sunat_el_pago_pide_aprobacion`.
 - **Trampa vista:** si la columna no se migra, Postgres redondea el T.C. a 4 decimales en silencio,
   mientras el monto ya se calculó con 6. La base de tests (`sistemafe_test_migrations`) se migra
   aparte: `migrate --database=pgsql --path=…` con `DB_DATABASE=sistemafe_test_migrations`.
